@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm -v)",
+      "Bash(npm -v)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(netstat -ano)",
+      "Bash(npm ls *)",
+      "Bash(curl -s -X POST http://localhost:3001/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"phone\":\"+998900000001\",\"password\":\"password123\"}')",
+      "Bash(pkill -f \"tsx watch\")",
+      "Bash(pkill -f \"vite\")",
+      "Bash(npx tsx *)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST http://localhost:3001/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"phone\":\"+998900000003\",\"password\":\"password123\"}')",
+      "Bash(curl -s -X POST http://localhost:3001/api/v1/puzzles/40fc4eb5-ba2a-4796-8152-8dc272076c8a/attempt -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3MjE0OTVkYy0wYmVmLTQxYzktYTY4OS02MzJhYTRmMzBiMzYiLCJ0ZW5hbnRJZCI6ImIzOGFlZjIzLTc0ODQtNDY2Ny05NDQzLTVmOGMwZWRmMWM0NSIsImJyYW5jaElkIjpudWxsLCJyb2xlIjoic3R1ZGVudCIsImlhdCI6MTc4MTE4Nzc1NCwiZXhwIjoxNzgxMTg4NjU0fQ.IOe5nx5adgFg5JtQpEQiXUEcRIImnpF7k4_Qa1DCnYk' -H 'Content-Type: application/json' -d '{\"moveIndex\":0,\"move\":\"e1e8\"}')",
+      "Bash(curl -s http://localhost:3001/api/v1/me/xp -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3MjE0OTVkYy0wYmVmLTQxYzktYTY4OS02MzJhYTRmMzBiMzYiLCJ0ZW5hbnRJZCI6ImIzOGFlZjIzLTc0ODQtNDY2Ny05NDQzLTVmOGMwZWRmMWM0NSIsImJyYW5jaElkIjpudWxsLCJyb2xlIjoic3R1ZGVudCIsImlhdCI6MTc4MTE4Nzc1NCwiZXhwIjoxNzgxMTg4NjU0fQ.IOe5nx5adgFg5JtQpEQiXUEcRIImnpF7k4_Qa1DCnYk')",
+      "Bash(curl -s http://localhost:3001/api/v1/leaderboard -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3MjE0OTVkYy0wYmVmLTQxYzktYTY4OS02MzJhYTRmMzBiMzYiLCJ0ZW5hbnRJZCI6ImIzOGFlZjIzLTc0ODQtNDY2Ny05NDQzLTVmOGMwZWRmMWM0NSIsImJyYW5jaElkIjpudWxsLCJyb2xlIjoic3R1ZGVudCIsImlhdCI6MTc4MTE4Nzc1NCwiZXhwIjoxNzgxMTg4NjU0fQ.IOe5nx5adgFg5JtQpEQiXUEcRIImnpF7k4_Qa1DCnYk')"
+    ]
+  }
+}

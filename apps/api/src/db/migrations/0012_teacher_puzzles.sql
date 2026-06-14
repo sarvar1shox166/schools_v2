@@ -1,0 +1,3 @@
+ALTER TABLE puzzles ADD COLUMN created_by UUID REFERENCES teachers(id) ON DELETE SET NULL;
+ALTER TABLE puzzles ADD COLUMN title TEXT;
+ALTER TABLE puzzles ADD COLUMN description TEXT;

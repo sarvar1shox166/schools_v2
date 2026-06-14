@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="uz" data-theme="light" data-accent="blue" data-density="normal">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shaxmat Online — O'qituvchi Paneli</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* Teacher-panel overrides */
+    .t-hero {
+      background: linear-gradient(135deg, #3F8CFF 0%, #6aa8ff 55%, #a0c4ff 100%);
+      border-radius: var(--r-xl);
+      padding: 28px 30px;
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 40px -10px rgba(63,140,255,.45);
+    }
+    [data-theme="dark"] .t-hero {
+      background: linear-gradient(135deg, #2563eb 0%, #3F8CFF 55%, #60a5fa 100%);
+    }
+    .t-hero::before {
+      content: "♞";
+      position: absolute; right: -10px; bottom: -30px;
+      font-size: 180px; line-height: 1; opacity: .07; color: #fff;
+      pointer-events: none;
+    }
+    .t-hero h2 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+    .t-hero p  { opacity: .82; font-size: 14px; margin: 0; }
+    .hero-stats {
+      display: flex; gap: 28px; margin-top: 22px; flex-wrap: wrap;
+    }
+    .hero-stat { text-align: center; }
+    .hero-stat .v { font-size: 26px; font-weight: 800; line-height: 1; }
+    .hero-stat .l { font-size: 12px; opacity: .78; margin-top: 4px; }
+    .hero-sep { width: 1px; background: rgba(255,255,255,.25); align-self: stretch; }
+
+    /* lesson card */
+    .lesson-card {
+      border-radius: var(--r-md); padding: 14px 16px;
+      border: 1px solid var(--border); background: var(--surface-2);
+      border-left: 3.5px solid var(--accent); transition: background .15s;
+      cursor: pointer;
+    }
+    .lesson-card:hover { background: var(--hover); }
+    .lesson-card.active { background: var(--accent-soft); border-color: var(--accent); }
+    .lesson-card .lc-time { font-size: 12.5px; color: var(--text-faint); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .lesson-card .lc-name { font-weight: 750; font-size: 15px; margin-top: 4px; }
+    .lesson-card .lc-meta { font-size: 12.5px; color: var(--text-dim); margin-top: 5px; display: flex; gap: 12px; align-items: center; }
+
+    /* student progress row */
+    .sp-row { display: flex; align-items: center; gap: 14px; padding: 11px 0; }
+    .sp-row + .sp-row { border-top: 1px solid var(--border); }
+    .sp-name { flex: 1; min-width: 0; }
+    .sp-name .nm { font-weight: 650; font-size: 14px; }
+    .sp-name .sub { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+    .sp-bar { width: 110px; }
+    .sp-pct { font-weight: 750; font-size: 13.5px; min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* rating stars */
+    .stars { display: flex; gap: 3px; color: var(--warn); }
+    .stars .ic.empty { color: var(--border-strong); }
+
+    /* quick att grid */
+    .att-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+    .att-row + .att-row { border-top: 1px solid var(--border); }
+    .att-btns { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+    .att-btn {
+      width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--border);
+      background: var(--surface-2); color: var(--text-faint); display: grid; place-items: center;
+      font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s;
+    }
+    .att-btn.p.sel { background: color-mix(in oklab, var(--success) 18%, var(--surface)); color: var(--success); border-color: var(--success); }
+    .att-btn.l.sel { background: color-mix(in oklab, var(--warn) 22%, var(--surface)); color: color-mix(in oklab, var(--warn) 70%, var(--text)); border-color: var(--warn); }
+    .att-btn.a.sel { background: color-mix(in oklab, var(--danger) 15%, var(--surface)); color: var(--danger); border-color: var(--danger); }
+
+    /* nav active dot */
+    .t-nav-item.active { background: var(--accent-soft); color: var(--accent-text); }
+    .t-nav-item.active::before {
+      content: ""; position: absolute; left: -14px; top: 50%; transform: translateY(-50%);
+      width: 3.5px; height: 20px; border-radius: 0 4px 4px 0; background: var(--accent);
+    }
+
+    /* message bubble */
+    .msg { padding: 11px 14px; border-radius: var(--r-md); max-width: 78%; font-size: 13.5px; line-height: 1.5; }
+    .msg.out { background: var(--accent); color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
+    .msg.in  { background: var(--surface-3); border-bottom-left-radius: 4px; }
+    .msg-row { display: flex; gap: 9px; align-items: flex-end; margin-bottom: 10px; }
+    .msg-row.out { flex-direction: row-reverse; }
+    .msg-time { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+
+    /* profile card */
+    .prof-bg {
+      height: 90px; border-radius: var(--r-lg) var(--r-lg) 0 0;
+      background: linear-gradient(135deg, #3F8CFF, #6aa8ff);
+    }
+    .prof-av-wrap { margin: -30px 0 0 24px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="icons.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+/* ── tiny design primitives ── */
+function Av({ name, size = 38, radius = 11 }) {
+  const AV_COLORS = [
+    "linear-gradient(140deg,#3F8CFF,#6aa8ff)",
+    "linear-gradient(140deg,#0ea5a4,#14b8a6)",
+    "linear-gradient(140deg,#f59e0b,#f97316)",
+    "linear-gradient(140deg,#ec4899,#f43f5e)",
+    "linear-gradient(140deg,#10b981,#84cc16)",
+    "linear-gradient(140deg,#8b5cf6,#d946ef)",
+  ];
+  function avColor(s) { let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return AV_COLORS[Math.abs(h)%AV_COLORS.length]; }
+  function ini(n) { const p=n.trim().split(/\s+/); return ((p[0]?.[0]||"")+(p[1]?.[0]||"")).toUpperCase(); }
+  return (
+    <div style={{ width: size, height: size, borderRadius: radius, background: avColor(name),
+      display: "grid", placeItems: "center", color: "#fff",
+      fontWeight: 700, fontSize: size * 0.35, flexShrink: 0, fontFamily: "inherit" }}>
+      {ini(name)}
+    </div>
+  );
+}
+
+function Ic({ n, size = 19, sw = 1.75, style, className = "" }) {
+  return <Icon name={n} size={size} sw={sw} style={style} className={className} />;
+}
+
+function Badge({ cls, icon, children }) {
+  return <span className={"badge " + cls} style={{ display:"inline-flex", alignItems:"center", gap:5 }}>
+    {icon && <Ic n={icon} size={12} />}{children}
+  </span>;
+}
+
+/* ── TEACHER DATA ── */
+const TEACHER = {
+  name: "Alisher Karimov", title: "FIDE Master", spec: "Debyut nazariyasi",
+  exp: "8 yil", joined: "2019", rating: 4.9, phone: "+998 90 123 45 67",
+  mail: "alisher@shaxmat.uz",
+  groups: window.DATA.GROUPS.slice(0, 3),
+};
+
+const MY_STUDENTS = window.DATA.STUDENTS.slice(0, 12).map((s, i) => ({
+  ...s,
+  progress: [62, 74, 88, 55, 91, 67, 83, 79, 70, 95, 60, 85][i],
+  rating: [4,5,4,3,5,4,5,4,3,5,4,5][i],
+  lastLesson: ["Kecha","2 kun oldin","Bugun","3 kun oldin","Bugun","Kecha","2 kun oldin","Bugun","Kecha","3 kun oldin","Kecha","Bugun"][i],
+}));
+
+const ATT_DATES2 = window.DATA.ATT_DATES;
+
+const NOTIFS2 = [
+  { id:1, icon:"user",     title:"Yangi o'quvchi qo'shildi",      body:"Asilbek Komilov siz guruhingizga biriktirildi",  when:"10 daqiqa oldin", unread:true },
+  { id:2, icon:"calendar", title:"Dars eslatmasi",                 body:"Bugun 14:00 — Bolalar C guruh (15 o'quvchi)",   when:"1 soat oldin",    unread:true },
+  { id:3, icon:"alert",    title:"Davomat belgilanmagan",          body:"02.06 uchun davomat hali kiritilinmagan",        when:"Kecha",           unread:true },
+  { id:4, icon:"message2", title:"Admin xabar yubordi",            body:"Yangi dars materiali yuklandi — taktika PDF",    when:"Kecha",           unread:false },
+  { id:5, icon:"star",     title:"Baholash eslatmasi",             body:"May oyi o'quvchilar bahosini kiriting",          when:"2 kun oldin",     unread:false },
+];
+
+const MESSAGES = [
+  { id:1, out:false, from:"Admin", text:"Salom Alisher aka, bugungi dars jadvalida o'zgarish bor. 16:00 da qo'shimcha guruh bor.", time:"09:14" },
+  { id:2, out:true,  from:"Men",   text:"Tushunarli, tayyor bo'laman. Qaysi xona?", time:"09:18" },
+  { id:3, out:false, from:"Admin", text:"3-zal. Talabalar 12 kishi. Rahmat!", time:"09:20" },
+  { id:4, out:true,  from:"Men",   text:"Yaxshi, ko'rishguncha.", time:"09:21" },
+];
+
+/* ── NAV ── */
+const T_NAV = [
+  { group:"Asosiy", items:[
+    { id:"dashboard", label:"Dashboard",       icon:"dashboard" },
+    { id:"schedule",  label:"Darslarim",        icon:"clock" },
+    { id:"students",  label:"O'quvchilarim",    icon:"students" },
+  ]},
+  { group:"Dars", items:[
+    { id:"attendance",label:"Davomat belgilash",icon:"attendance" },
+    { id:"progress",  label:"O'quvchi natijasi",icon:"trendingUp" },
+    { id:"materials", label:"Dars materiallari",icon:"book" },
+    { id:"puzzles",   label:"Boshqotirmalar",   icon:"target" },
+  ]},
+  { group:"Muloqot", items:[
+    { id:"messages",      label:"Xabarlar",        icon:"message2", badge:1 },
+    { id:"notifications", label:"Bildirishnomalar",icon:"bell",     badge:3 },
+  ]},
+  { group:"Profil", items:[
+    { id:"profile",   label:"Mening profilim",   icon:"user" },
+  ]},
+];
+
+const T_PAGE_META = {
+  dashboard:    { title:"Dashboard",            sub:"Mening ish kunligim" },
+  schedule:     { title:"Darslarim",            sub:"Haftalik jadval" },
+  students:     { title:"O'quvchilarim",         sub:"Guruh a'zolari" },
+  attendance:   { title:"Davomat belgilash",    sub:"Bugungi dars" },
+  progress:     { title:"O'quvchi natijalari",   sub:"Rivojlanish tahlili" },
+  materials:    { title:"Dars materiallari",     sub:"Yuklanganlar" },
+  messages:     { title:"Xabarlar",             sub:"Admin bilan muloqot" },
+  notifications:{ title:"Bildirishnomalar",     sub:"Yangiliklar" },
+  profile:      { title:"Mening profilim",      sub:"Shaxsiy ma'lumotlar" },
+  puzzles:      { title:"Boshqotirmalar",        sub:"Masalalar bazasi va tahlil" },
+};
+
+/* ── SIDEBAR ── */
+function TSidebar({ page, setPage, collapsed, setCollapsed }) {
+  return (
+    <aside className="sidebar">
+      <div className="brand">
+        <div className="brand-mark">♞</div>
+        <div className="brand-text">
+          <div className="brand-name">Shaxmat Online</div>
+          <div className="brand-sub"><Ic n="teacher" size={12} /> O'qituvchi paneli</div>
+        </div>
+      </div>
+
+      <nav className="nav">
+        {T_NAV.map(sec => (
+          <div key={sec.group}>
+            <div className="nav-group-label">{sec.group}</div>
+            {sec.items.map(it => (
+              <button key={it.id}
+                className={"nav-item t-nav-item" + (page === it.id ? " active" : "")}
+                onClick={() => setPage(it.id)} title={it.label}>
+                <Ic n={it.icon} size={19} sw={page===it.id?2:1.75} />
+                <span className="nav-label">{it.label}</span>
+                {it.badge && <span className="nav-badge">{it.badge}</span>}
+              </button>
+            ))}
+          </div>
+        ))}
+      </nav>
+
+      <div className="sidebar-foot">
+        <div className="userbox">
+          <Av name={TEACHER.name} />
+          <div className="userbox-text">
+            <div className="userbox-name">{TEACHER.name}</div>
+            <div className="userbox-role">{TEACHER.title}</div>
+          </div>
+          <Ic n="logout" size={17} style={{ color:"var(--text-faint)" }} />
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+/* ── TOPBAR ── */
+function TTopbar({ title, sub, theme, setTheme, collapsed, setCollapsed }) {
+  return (
+    <header className="topbar">
+      <button className="iconbtn" onClick={() => setCollapsed(!collapsed)}>
+        <Ic n="chevronsLeft" size={18} style={{ transform: collapsed?"rotate(180deg)":"none", transition:"transform .25s" }} />
+      </button>
+      <div>
+        <h1>{title}</h1>
+        {sub && <div className="sub">{sub}</div>}
+      </div>
+      <div className="spacer" />
+      <button className="iconbtn" onClick={() => setTheme(theme==="dark"?"light":"dark")}>
+        <Ic n={theme==="dark"?"sun":"moon"} size={18} />
+      </button>
+      <button className="iconbtn" style={{ position:"relative" }}>
+        <Ic n="bell" size={18} /><span className="dot" />
+      </button>
+      <button className="btn sm primary" style={{ gap:7 }}>
+        <Ic n="plus" size={15} /> Dars yaratish
+      </button>
+      <Av name={TEACHER.name} />
+    </header>
+  );
+}
+
+/* ──────────── PAGES ──────────── */
+
+/* DASHBOARD */
+function TDashboard({ go }) {
+  const today = window.DATA.TODAY_LESSONS.slice(0, 3);
+  const toneColor = { accent:"var(--accent)", success:"var(--success)", warn:"var(--warn)", info:"var(--info)" };
+  return (
+    <div className="content-inner page-enter">
+      {/* Hero */}
+      <div className="t-hero" style={{ marginBottom:"var(--gap)" }}>
+        <div style={{ display:"flex", alignItems:"flex-start", gap:20 }}>
+          <Av name={TEACHER.name} size={58} radius={16} />
+          <div>
+            <h2>Assalomu alaykum, {TEACHER.name.split(" ")[0]}! 👋</h2>
+            <p>Bugun {new Date().toLocaleDateString("uz-UZ",{weekday:"long",day:"numeric",month:"long"})} — 3 ta darsing bor</p>
+          </div>
+          <div style={{ marginLeft:"auto", display:"flex", gap:10 }}>
+            <a href="index.html" className="btn sm" style={{ background:"rgba(255,255,255,.18)", color:"#fff", border:"1px solid rgba(255,255,255,.3)", textDecoration:"none", display:"inline-flex", alignItems:"center", gap:7 }}>
+              <Ic n="layers" size={14} /> Admin panel
+            </a>
+          </div>
+        </div>
+        <div className="hero-stats">
+          {[
+            { v:"34", l:"O'quvchilar" }, { v:"3", l:"Guruhlar" },
+            { v:"4.9 ⭐", l:"Reyting" }, { v:"8 yil", l:"Tajriba" },
+          ].map((s, i) => (
+            <React.Fragment key={s.l}>
+              {i > 0 && <div className="hero-sep" />}
+              <div className="hero-stat"><div className="v">{s.v}</div><div className="l">{s.l}</div></div>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid cols-4" style={{ marginBottom:"var(--gap)" }}>
+        {[
+          { icon:"clock",   tone:"a", v:"3",   l:"Bugungi darslar" },
+          { icon:"students",tone:"i", v:"34",  l:"Jami o'quvchilar" },
+          { icon:"percent", tone:"s", v:"87%", l:"Davomat o'rtacha" },
+          { icon:"star",    tone:"w", v:"4.9", l:"O'rtacha reyting" },
+        ].map(s => (
+          <div key={s.l} className="card stat fade-up">
+            <div className={"stat-ic "+s.tone}><Ic n={s.icon} size={22} /></div>
+            <div>
+              <div className="stat-val tnum">{s.v}</div>
+              <div className="stat-lbl">{s.l}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid l-2-1">
+        {/* Today schedule */}
+        <div className="card fade-up">
+          <div className="card-head">
+            <div className="head-ic"><Ic n="calendar" size={18} /></div>
+            <div style={{ flex:1 }}><div className="ttl">Bugungi darslar</div><div className="sub">9 Iyun, 2026</div></div>
+            <button className="btn sm" onClick={() => go("schedule")}>Jadval <Ic n="arrowRight" size={14} /></button>
+          </div>
+          <div className="card-pad" style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {today.map((l, i) => (
+              <div className={"lesson-card" + (i===1?" active":"")} key={i}>
+                <div className="lc-time">{l.time} — {l.room}</div>
+                <div className="lc-name">{l.title}</div>
+                <div className="lc-meta">
+                  <span><Ic n="students" size={13} /> {l.count} o'quvchi</span>
+                  {i===1 && <Badge cls="acc" icon="zap">Hozir davom etmoqda</Badge>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick attendance */}
+        <div className="card fade-up">
+          <div className="card-head">
+            <div className="head-ic"><Ic n="attendance" size={18} /></div>
+            <div style={{ flex:1 }}><div className="ttl">Tezkor davomat</div><div className="sub">Boshlang'ich — A guruh</div></div>
+          </div>
+          <div className="card-pad" style={{ paddingTop:8, paddingBottom:16 }}>
+            <QuickAtt students={MY_STUDENTS.slice(0,6)} />
+            <button className="btn sm primary" style={{ width:"100%", justifyContent:"center", marginTop:14 }}
+              onClick={() => go("attendance")}>
+              <Ic n="check" size={15} /> Davomatni saqlash
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Top students */}
+      <div className="card fade-up" style={{ marginTop:"var(--gap)" }}>
+        <div className="card-head">
+          <div className="head-ic"><Ic n="trendingUp" size={18} /></div>
+          <div style={{ flex:1 }}><div className="ttl">O'quvchilar natijasi</div><div className="sub">Top 6 ta o'quvchi</div></div>
+          <button className="btn sm" onClick={() => go("progress")}>Batafsil</button>
+        </div>
+        <div className="card-pad" style={{ paddingTop:8 }}>
+          {MY_STUDENTS.slice(0,6).map(s => (
+            <div className="sp-row" key={s.id}>
+              <Av name={s.name} size={34} radius={10} />
+              <div className="sp-name">
+                <div className="nm">{s.name}</div>
+                <div className="sub">{s.level} · {s.group} guruh</div>
+              </div>
+              <div className="sp-bar"><div className="pbar"><span style={{ width:`${s.progress}%` }} /></div></div>
+              <div className="sp-pct" style={{ color: s.progress>=80?"var(--success)":s.progress>=60?"var(--warn)":"var(--danger)" }}>{s.progress}%</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* QUICK ATT component */
+function QuickAtt({ students }) {
+  const [marks, setMarks] = useState(() => Object.fromEntries(students.map(s => [s.id, "p"])));
+  const toggle = (id, v) => setMarks(m => ({ ...m, [id]: m[id]===v ? null : v }));
+  return (
+    <div>
+      {students.map(s => (
+        <div className="att-row" key={s.id}>
+          <Av name={s.name} size={30} radius={9} />
+          <div style={{ flex:1, fontSize:13.5, fontWeight:650 }}>{s.name}</div>
+          <div className="att-btns">
+            {[["p","✓"],["l","~"],["a","✗"]].map(([k,sym]) => (
+              <button key={k} className={"att-btn "+k+(marks[s.id]===k?" sel":"")}
+                onClick={() => toggle(s.id, k)} title={{ p:"Keldi", l:"Kechikdi", a:"Kelmadi" }[k]}>
+                {sym}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* SCHEDULE */
+function TSchedule() {
+  const [day, setDay] = useState("hafta");
+  return (
+    <div className="content-inner page-enter">
+      <div className="page-tools" style={{ marginBottom:"var(--gap)" }}>
+        <div className="ttl">Dars jadvali</div>
+        <div className="spacer" />
+        <div className="seg">
+          {["kun","hafta","oy"].map(v => (
+            <button key={v} className={day===v?"on":""} onClick={() => setDay(v)}>
+              {v==="kun"?"Kun":v==="hafta"?"Hafta":"Oy"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid l-2-1" style={{ marginBottom:"var(--gap)" }}>
+        <div className="card fade-up">
+          <div className="card-head">
+            <div className="head-ic"><Ic n="clock" size={18} /></div>
+            <div><div className="ttl">Bu hafta — 9–14 Iyun</div><div className="sub">Jami 9 ta dars</div></div>
+          </div>
+          <div className="card-pad" style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {[
+              { day:"Dushanba 10.06", time:"09:00–10:30", grp:"Boshlang'ich A", room:"1-zal", cnt:12, done:true },
+              { day:"Dushanba 10.06", time:"14:00–15:30", grp:"Bolalar C",       room:"1-zal", cnt:15, done:true },
+              { day:"Chorshanba 11.06", time:"09:00–10:30", grp:"Boshlang'ich A",room:"1-zal", cnt:12, done:false },
+              { day:"Chorshanba 11.06", time:"14:00–15:30", grp:"Bolalar C",     room:"1-zal", cnt:15, done:false },
+              { day:"Juma 13.06",     time:"09:00–10:30", grp:"Boshlang'ich A",  room:"1-zal", cnt:12, done:false },
+            ].map((l,i) => (
+              <div className="lesson-card" key={i}>
+                <div className="lc-time">{l.day} · {l.time}</div>
+                <div className="lc-name">{l.grp}</div>
+                <div className="lc-meta">
+                  <span><Ic n="pin" size={13} /> {l.room}</span>
+                  <span><Ic n="students" size={13} /> {l.cnt}</span>
+                  {l.done
+                    ? <Badge cls="suc" icon="check">Yakunlandi</Badge>
+                    : <Badge cls="warn" icon="clock">Kutilmoqda</Badge>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:"var(--gap)" }}>
+          <div className="card card-pad fade-up">
+            <div style={{ fontWeight:750, fontSize:15, marginBottom:14, display:"flex", alignItems:"center", gap:9 }}>
+              <Ic n="target" size={17} style={{ color:"var(--accent-text)" }} /> Haftalik yuklanma
+            </div>
+            <div className="kpi-grid">
+              {[{ v:"9", l:"Dars" },{ v:"13.5 soat", l:"Umumiy" },{ v:"3", l:"Guruh" },{ v:"34", l:"O'quvchi" }].map(k => (
+                <div className="kpi" key={k.l}><div className="v">{k.v}</div><div className="l">{k.l}</div></div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card card-pad fade-up">
+            <div style={{ fontWeight:750, fontSize:15, marginBottom:12, display:"flex", alignItems:"center", gap:9 }}>
+              <Ic n="groups" size={17} style={{ color:"var(--accent-text)" }} /> Mening guruhlarim
+            </div>
+            {TEACHER.groups.map(g => (
+              <div key={g.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid var(--border)" }}>
+                <div style={{ width:34, height:34, borderRadius:10, background:g.color, color:"#fff",
+                  display:"grid", placeItems:"center", fontWeight:800, fontSize:14, flexShrink:0 }}>{g.id}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:650, fontSize:14 }}>{g.name}</div>
+                  <div style={{ fontSize:12, color:"var(--text-faint)" }}>{g.days} · {g.time}</div>
+                </div>
+                <span className="badge neut">{g.count} ta</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* STUDENTS */
+function TStudents({ go }) {
+  const [q, setQ] = useState("");
+  const rows = MY_STUDENTS.filter(s => !q || s.name.toLowerCase().includes(q.toLowerCase()));
+  return (
+    <div className="content-inner page-enter">
+      <div className="page-tools" style={{ marginBottom:"var(--gap)" }}>
+        <div className="ttl">O'quvchilarim — 34 ta</div>
+        <div className="spacer" />
+        <label className="search" style={{ minWidth:220 }}>
+          <Ic n="search" size={16} />
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Ism bo'yicha qidirish…" />
+        </label>
+      </div>
+      <div className="card fade-up">
+        <div style={{ overflowX:"auto" }}>
+          <table className="tbl">
+            <thead><tr><th>O'quvchi</th><th>Guruh</th><th>Daraja</th><th>So'nggi dars</th><th>Progress</th><th>Reyting</th><th>To'lov</th></tr></thead>
+            <tbody>
+              {rows.map(s => (
+                <tr key={s.id}>
+                  <td>
+                    <div className="with-av">
+                      <Av name={s.name} size={32} radius={9} />
+                      <div><div className="cell-main">{s.name}</div><div className="cell-sub">{s.age} yosh</div></div>
+                    </div>
+                  </td>
+                  <td><span className="badge neut">{s.group}</span></td>
+                  <td style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{s.level}</td>
+                  <td className="cell-sub">{s.lastLesson}</td>
+                  <td style={{ minWidth:130 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+                      <div className="pbar" style={{ flex:1 }}><span style={{ width:`${s.progress}%` }} /></div>
+                      <span className="tnum" style={{ fontWeight:750, fontSize:12.5,
+                        color: s.progress>=80?"var(--success)":s.progress>=60?"var(--warn)":"var(--danger)" }}>{s.progress}%</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ display:"flex", gap:2 }}>
+                      {[1,2,3,4,5].map(i => <Ic key={i} n="star" size={13} style={{ color: i<=s.rating?"var(--warn)":"var(--border-strong)" }} />)}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={"badge "+(s.pay==="to'langan"?"suc":s.pay==="qarzdor"?"dang":"warn")}>
+                      {s.pay==="to'langan"?"To'langan":s.pay==="qarzdor"?"Qarzdor":"Kutilmoqda"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ATTENDANCE PAGE */
+function TAttendance() {
+  const [grp, setGrp] = useState(0);
+  const curGroup = TEACHER.groups[grp];
+  const students = MY_STUDENTS.slice(grp*4, grp*4+8);
+  return (
+    <div className="content-inner page-enter">
+      <div className="page-tools" style={{ marginBottom:"var(--gap)" }}>
+        <div className="ttl">Davomat belgilash</div>
+        <div className="spacer" />
+        <div className="seg">
+          {TEACHER.groups.map((g,i) => (
+            <button key={g.id} className={grp===i?"on":""} onClick={() => setGrp(i)}>{g.name.split(" — ")[0]}</button>
+          ))}
+        </div>
+        <span className="badge acc"><Ic n="calendar" size={12} /> 9 Iyun 2026</span>
+      </div>
+
+      <div className="grid l-2-1">
+        <div className="card fade-up">
+          <div className="card-head">
+            <div className="head-ic"><Ic n="attendance" size={18} /></div>
+            <div style={{ flex:1 }}>
+              <div className="ttl">{curGroup.name}</div>
+              <div className="sub">{curGroup.days} · {curGroup.time} · {curGroup.room}</div>
+            </div>
+          </div>
+          <div className="card-pad" style={{ paddingTop:8 }}>
+            <QuickAtt students={students} />
+            <div style={{ display:"flex", gap:10, marginTop:16 }}>
+              <button className="btn" style={{ flex:1, justifyContent:"center" }}><Ic n="x" size={15} /> Bekor qilish</button>
+              <button className="btn primary" style={{ flex:2, justifyContent:"center" }}><Ic n="check" size={15} /> Saqlash</button>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:"var(--gap)" }}>
+          <div className="card card-pad fade-up">
+            <div style={{ fontWeight:750, fontSize:15, marginBottom:14, display:"flex", alignItems:"center", gap:9 }}>
+              <Ic n="reports" size={17} style={{ color:"var(--accent-text)" }} /> Statistika
+            </div>
+            <div className="kpi-grid">
+              {[{ v:"8/12", l:"Keldilar" },{ v:"2", l:"Kechikdi" },{ v:"2", l:"Kelmadi" },{ v:"83%", l:"Davomat %" }].map(k => (
+                <div className="kpi" key={k.l}><div className="v">{k.v}</div><div className="l">{k.l}</div></div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card fade-up">
+            <div className="card-head">
+              <div className="head-ic"><Ic n="trendingUp" size={18} /></div>
+              <div><div className="ttl">Oxirgi 5 dars</div></div>
+            </div>
+            <div className="card-pad" style={{ paddingTop:8 }}>
+              {ATT_DATES2.slice(0,5).map((d,i) => (
+                <div key={d} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom: i<4?"1px solid var(--border)":"none" }}>
+                  <span className="mono cell-sub" style={{ minWidth:50 }}>{d}</span>
+                  <div className="pbar" style={{ flex:1 }}><span style={{ width:`${[88,92,75,96,83][i]}%` }} /></div>
+                  <span className="tnum" style={{ fontWeight:750, fontSize:13, minWidth:36 }}>{[88,92,75,96,83][i]}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* PROGRESS */
+function TProgress() {
+  const [sort, setSort] = useState("progress");
+  const sorted = [...MY_STUDENTS].sort((a,b) => sort==="progress" ? b.progress-a.progress : sort==="name" ? a.name.localeCompare(b.name) : b.rating-a.rating);
+  return (
+    <div className="content-inner page-enter">
+      <div className="page-tools" style={{ marginBottom:"var(--gap)" }}>
+        <div className="ttl">O'quvchi natijalari</div>
+        <div className="spacer" />
+        <div className="seg">
+          {[["progress","Progress"],["rating","Reyting"],["name","Ism"]].map(([v,l]) => (
+            <button key={v} className={sort===v?"on":""} onClick={() => setSort(v)}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid cols-4" style={{ marginBottom:"var(--gap)" }}>
+        {[
+          { icon:"award",  tone:"s", v:"5 ta",  l:"A'lo (90%+)" },
+          { icon:"target", tone:"a", v:"6 ta",  l:"Yaxshi (70–89%)" },
+          { icon:"zap",    tone:"w", v:"1 ta",  l:"O'rta (50–69%)" },
+          { icon:"alert",  tone:"d", v:"0 ta",  l:"Zaif (<50%)" },
+        ].map(s => (
+          <div key={s.l} className="card stat fade-up">
+            <div className={"stat-ic "+s.tone}><Ic n={s.icon} size={22} /></div>
+            <div><div className="stat-val">{s.v}</div><div className="stat-lbl">{s.l}</div></div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card fade-up">
+        <div className="card-head">
+          <div className="head-ic"><Ic n="trendingUp" size={18} /></div>
+          <div style={{ flex:1 }}><div className="ttl">Barcha o'quvchilar</div></div>
+        </div>
+        <div className="card-pad" style={{ paddingTop:8 }}>
+          {sorted.map(s => (
+            <div className="sp-row" key={s.id}>
+              <Av name={s.name} size={36} radius={10} />
+              <div className="sp-name">
+                <div className="nm">{s.name}</div>
+                <div className="sub">{s.level} · {s.group} guruh · So'nggi: {s.lastLesson}</div>
+              </div>
+              <div style={{ display:"flex", gap:2 }}>
+                {[1,2,3,4,5].map(i => <Ic key={i} n="star" size={13} style={{ color:i<=s.rating?"var(--warn)":"var(--border-strong)" }} />)}
+              </div>
+              <div style={{ width:160 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5, fontSize:12 }}>
+                  <span style={{ color:"var(--text-faint)", fontWeight:600 }}>Natija</span>
+                  <span className="tnum" style={{ fontWeight:750, color:s.progress>=80?"var(--success)":s.progress>=60?"var(--warn)":"var(--danger)" }}>{s.progress}%</span>
+                </div>
+                <div className="pbar"><span style={{ width:`${s.progress}%` }} /></div>
+              </div>
+              <button className="iconbtn" style={{ width:30, height:30 }}><Ic n="eye" size={15} /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* MATERIALS */
+function TMaterials() {
+  const files = [
+    { icon:"book",     nm:"Italyan ochilishi — nazariya",   tp:"PDF", sz:"2.4 MB", d:"05.06.2026", tag:"Boshlang'ich" },
+    { icon:"pieces",   nm:"Sichqoncha tuzog'i kombinatsiyasi", tp:"PDF", sz:"1.1 MB", d:"03.06.2026", tag:"Taktika" },
+    { icon:"crown",    nm:"Endshpil — qirol va piyoda",     tp:"PDF", sz:"3.0 MB", d:"01.06.2026", tag:"Endshpil" },
+    { icon:"flag",     nm:"Turnir tayyorgarlik rejasi",     tp:"DOCX",sz:"0.8 MB", d:"28.05.2026", tag:"Turnir" },
+    { icon:"calendar", nm:"Iyun oy dars reja",              tp:"XLSX",sz:"0.3 MB", d:"25.05.2026", tag:"Jadval" },
+    { icon:"book",     nm:"Qo'rg'oshin mudofaasi — chuqur", tp:"PDF", sz:"4.2 MB", d:"20.05.2026", tag:"Boshlang'ich" },
+  ];
+  return (
+    <div className="content-inner page-enter">
+      <div className="page-tools" style={{ marginBottom:"var(--gap)" }}>
+        <div className="ttl">Dars materiallari</div>
+        <div className="spacer" />
+        <button className="btn sm primary"><Ic n="plus" size={15} /> Material yuklash</button>
+      </div>
+      <div className="card fade-up">
+        {files.map((f,i) => (
+          <div key={i} style={{ display:"flex", alignItems:"center", gap:16, padding:"14px var(--pad-card)",
+            borderBottom: i<files.length-1?"1px solid var(--border)":"none", transition:"background .12s" }}
+            onMouseEnter={e=>e.currentTarget.style.background="var(--hover)"}
+            onMouseLeave={e=>e.currentTarget.style.background=""}>
+            <div className="head-ic" style={{ width:40, height:40, borderRadius:11 }}><Ic n={f.icon} size={19} /></div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontWeight:650, fontSize:14 }}>{f.nm}</div>
+              <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:3 }}>{f.tp} · {f.sz} · {f.d}</div>
+            </div>
+            <span className="badge acc">{f.tag}</span>
+            <button className="btn sm"><Ic n="download" size={14} /> Yuklab olish</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* MESSAGES */
+function TMessages() {
+  const [msg, setMsg] = useState("");
+  const [msgs, setMsgs] = useState(MESSAGES);
+  function send() {
+    if (!msg.trim()) return;
+    setMsgs(m => [...m, { id:Date.now(), out:true, from:"Men", text:msg, time: new Date().toLocaleTimeString("uz",{hour:"2-digit",minute:"2-digit"}) }]);
+    setMsg("");
+  }
+  return (
+    <div className="content-inner page-enter">
+      <div className="page-tools" style={{ marginBottom:"var(--gap)" }}>
+        <div className="ttl">Xabarlar</div>
+      </div>
+      <div className="grid l-1-2">
+        {/* contacts */}
+        <div className="card fade-up">
+          <div className="card-head"><div className="ttl">Kontaktlar</div></div>
+          <div className="list">
+            {[
+              { nm:"Admin Aliyev", role:"Bosh admin", unread:1, online:true },
+              { nm:"Malika Yusupova", role:"O'qituvchi", unread:0, online:false },
+              { nm:"Bobur Rahimov",   role:"O'qituvchi", unread:0, online:true },
+            ].map(c => (
+              <div key={c.nm} className="li" style={{ cursor:"pointer", background: c.nm==="Admin Aliyev"?"var(--accent-soft)":"" }}>
+                <div style={{ position:"relative" }}>
+                  <Av name={c.nm} size={40} radius={12} />
+                  {c.online && <span style={{ position:"absolute", bottom:1, right:1, width:10, height:10,
+                    borderRadius:"50%", background:"var(--success)", border:"2px solid var(--surface)" }} />}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:650, fontSize:14 }}>{c.nm}</div>
+                  <div style={{ fontSize:12, color:"var(--text-faint)" }}>{c.role}</div>
+                </div>
+                {c.unread > 0 && <span className="nav-badge">{c.unread}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* chat */}
+        <div className="card fade-up" style={{ display:"flex", flexDirection:"column" }}>
+          <div className="card-head">
+            <Av name="Admin Aliyev" size={36} radius={10} />
+            <div style={{ flex:1 }}><div className="ttl">Admin Aliyev</div><div className="sub" style={{ color:"var(--success)" }}>Online</div></div>
+            <button className="iconbtn"><Ic n="phone" size={18} /></button>
+          </div>
+          <div style={{ flex:1, padding:"16px var(--pad-card)", minHeight:280, display:"flex", flexDirection:"column", gap:0 }}>
+            {msgs.map(m => (
+              <div key={m.id} className={"msg-row"+(m.out?" out":"")}>
+                {!m.out && <Av name="Admin Aliyev" size={28} radius={9} />}
+                <div>
+                  <div className={"msg"+(m.out?" out":" in")}>{m.text}</div>
+                  <div className="msg-time" style={{ textAlign: m.out?"right":"left", marginTop:4 }}>{m.time}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding:"12px var(--pad-card)", borderTop:"1px solid var(--border)", display:"flex", gap:10 }}>
+            <input value={msg} onChange={e=>setMsg(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&send()}
+              placeholder="Xabar yozing…"
+              style={{ flex:1, height:38, border:"1px solid var(--border)", borderRadius:"var(--r-sm)",
+                background:"var(--surface-2)", color:"var(--text)", padding:"0 13px", font:"inherit", fontSize:14, outline:"none" }} />
+            <button className="btn primary" onClick={send}><Ic n="arrowRight" size={16} /></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* NOTIFICATIONS */
+function TNotifications() {
+  return (
+    <div className="content-inner page-enter">
+      <div className="page-tools" style={{ marginBottom:"var(--gap)" }}>
+        <div className="ttl">Bildirishnomalar</div>
+        <div className="spacer" />
+        <button className="btn sm"><Ic n="check" size={15} /> Barchasini o'qish</button>
+      </div>
+      <div className="card fade-up">
+        <div className="list">
+          {NOTIFS2.map(n => (
+            <div key={n.id} className="li" style={{ alignItems:"flex-start", background: n.unread?"var(--accent-soft)":"" }}>
+              <div style={{ width:42, height:42, borderRadius:12, display:"grid", placeItems:"center", flexShrink:0,
+                background:"var(--surface-3)", color:"var(--accent-text)" }}>
+                <Ic n={n.icon} size={19} />
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontWeight:700, fontSize:14 }}>{n.title}</span>
+                  {n.unread && <span className="sdot" style={{ background:"var(--accent)" }} />}
+                </div>
+                <div style={{ fontSize:13, color:"var(--text-dim)", marginTop:3 }}>{n.body}</div>
+                <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:5 }}>{n.when}</div>
+              </div>
+              {n.unread && <span className="badge acc" style={{ flexShrink:0, marginTop:2 }}>Yangi</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* PROFILE */
+function TProfile() {
+  return (
+    <div className="content-inner page-enter">
+      <div className="grid l-1-2">
+        <div>
+          <div className="card fade-up" style={{ marginBottom:"var(--gap)" }}>
+            <div className="prof-bg" />
+            <div className="prof-av-wrap">
+              <Av name={TEACHER.name} size={68} radius={20} />
+            </div>
+            <div className="card-pad" style={{ paddingTop:12 }}>
+              <div style={{ fontWeight:800, fontSize:20 }}>{TEACHER.name}</div>
+              <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:4 }}>{TEACHER.spec}</div>
+              <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" }}>
+                <span className="badge acc"><Ic n="award" size={12} /> {TEACHER.title}</span>
+                <span className="badge neut"><Ic n="clock" size={12} /> {TEACHER.exp}</span>
+                <span className="badge suc"><Ic n="star" size={12} /> {TEACHER.rating} reyting</span>
+              </div>
+              <div style={{ marginTop:18, display:"flex", flexDirection:"column", gap:11 }}>
+                {[["phone",TEACHER.phone],["mail",TEACHER.mail],["calendar","Qo'shilgan: "+TEACHER.joined]].map(([ic,v]) => (
+                  <div key={ic} style={{ display:"flex", alignItems:"center", gap:10, fontSize:14, color:"var(--text-dim)" }}>
+                    <Ic n={ic} size={16} style={{ color:"var(--accent-text)" }} /> {v}
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:"flex", gap:8, marginTop:18 }}>
+                <button className="btn" style={{ flex:1, justifyContent:"center" }}><Ic n="edit" size={15} /> Tahrirlash</button>
+                <button className="btn primary" style={{ flex:1, justifyContent:"center" }}><Ic n="download" size={15} /> CV yuklash</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:"var(--gap)" }}>
+          <div className="card card-pad fade-up">
+            <div style={{ fontWeight:750, fontSize:15, marginBottom:16, display:"flex", alignItems:"center", gap:9 }}>
+              <Ic n="trendingUp" size={17} style={{ color:"var(--accent-text)" }} /> Ish statistikasi
+            </div>
+            <div className="kpi-grid">
+              {[{ v:"34", l:"O'quvchilar" },{ v:"3", l:"Guruhlar" },{ v:"87%", l:"Davomat" },{ v:"9/hafta", l:"Darslar" }].map(k => (
+                <div className="kpi" key={k.l}><div className="v">{k.v}</div><div className="l">{k.l}</div></div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card card-pad fade-up">
+            <div style={{ fontWeight:750, fontSize:15, marginBottom:14, display:"flex", alignItems:"center", gap:9 }}>
+              <Ic n="star" size={17} style={{ color:"var(--warn)" }} /> Baholar
+            </div>
+            {[
+              { l:"Dars sifati",          v:4.9 },
+              { l:"O'quvchilar natijasi",  v:4.7 },
+              { l:"Vaqtga rioya",          v:5.0 },
+              { l:"Muloqot madaniyati",    v:4.8 },
+            ].map(r => (
+              <div key={r.l} style={{ marginBottom:13 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6, fontSize:13 }}>
+                  <span style={{ color:"var(--text-dim)", fontWeight:600 }}>{r.l}</span>
+                  <span style={{ fontWeight:750 }}>{r.v} / 5.0</span>
+                </div>
+                <div className="pbar"><span style={{ width:`${r.v/5*100}%` }} /></div>
+              </div>
+            ))}
+          </div>
+
+          <div className="card card-pad fade-up">
+            <div style={{ fontWeight:750, fontSize:15, marginBottom:14, display:"flex", alignItems:"center", gap:9 }}>
+              <Ic n="award" size={17} style={{ color:"var(--accent-text)" }} /> Yutuqlar
+            </div>
+            {[
+              { icon:"crown", t:"Yil eng yaxshi o'qituvchisi", d:"2025" },
+              { icon:"target",t:"100 ta o'quvchi tayyorladi",  d:"2024" },
+              { icon:"flag",  t:"Mintaqa turnir g'olibi",      d:"2023" },
+            ].map((a,i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:13, padding:"10px 0", borderBottom: i<2?"1px solid var(--border)":"none" }}>
+                <div style={{ width:36, height:36, borderRadius:10, background:"var(--accent-soft)", display:"grid", placeItems:"center", color:"var(--accent-text)" }}>
+                  <Ic n={a.icon} size={18} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:650, fontSize:14 }}>{a.t}</div>
+                  <div style={{ fontSize:12, color:"var(--text-faint)" }}>{a.d}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── PUZZLES ── */
+const WP_P={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙'};
+const BP_P={K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟'};
+const PZ_DIFF_LBL=['','Oson',"O'rta",'Qiyin','Murakkab','Ekspert'];
+const PZ_DIFF_CLR=['','var(--success)','var(--accent-text)','var(--warn)','var(--danger)','#8b5cf6'];
+const PZ_FILES='abcdefgh';
+
+function loadTchPz(){try{return JSON.parse(localStorage.getItem('sq_teacher_puzzles')||'[]');}catch(e){return[];}}
+function loadPzSt(){try{return JSON.parse(localStorage.getItem('sq_puzzle_stats')||'{}');}catch(e){return{};}}
+function emptyBrd(){return Array(8).fill(null).map(()=>Array(8).fill(null));}
+function startBrd(){
+  const b=emptyBrd();
+  b[0]=[{c:'b',t:'R'},{c:'b',t:'N'},{c:'b',t:'B'},{c:'b',t:'Q'},{c:'b',t:'K'},{c:'b',t:'B'},{c:'b',t:'N'},{c:'b',t:'R'}];
+  b[1]=Array(8).fill(null).map(()=>({c:'b',t:'P'}));
+  b[6]=Array(8).fill(null).map(()=>({c:'w',t:'P'}));
+  b[7]=[{c:'w',t:'R'},{c:'w',t:'N'},{c:'w',t:'B'},{c:'w',t:'Q'},{c:'w',t:'K'},{c:'w',t:'B'},{c:'w',t:'N'},{c:'w',t:'R'}];
+  return b;
+}
+const PPALETTE=[{c:'w',t:'K'},{c:'w',t:'Q'},{c:'w',t:'R'},{c:'w',t:'B'},{c:'w',t:'N'},{c:'w',t:'P'},{c:'b',t:'K'},{c:'b',t:'Q'},{c:'b',t:'R'},{c:'b',t:'B'},{c:'b',t:'N'},{c:'b',t:'P'}];
+
+function BoardEditor({board,setBoard,ansFrom,setAnsFrom,ansTo,setAnsTo}){
+  const [sel,setSel]=useState({c:'w',t:'Q'});
+  const [mode,setMode]=useState('place');
+  const click=(r,c)=>{
+    if(mode==='from'){setAnsFrom([r,c]);setMode('to');}
+    else if(mode==='to'){setAnsTo([r,c]);setMode('place');}
+    else{const nb=board.map(row=>[...row]);if(nb[r][c]&&nb[r][c].c===sel.c&&nb[r][c].t===sel.t)nb[r][c]=null;else nb[r][c]={c:sel.c,t:sel.t};setBoard(nb);}
+  };
+  const mCls={place:'var(--surface-2)',from:'#f59e0b',to:'#22c55e'};
+  return(
+    <div>
+      <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap',alignItems:'center'}}>
+        {[['place','Figur qo\'yish'],['from','Javob: dan ▶'],['to','Javob: gacha ◼']].map(([m,l])=>(
+          <button key={m} onClick={()=>setMode(m)}
+            style={{height:30,padding:'0 11px',borderRadius:8,border:'none',fontFamily:'inherit',fontSize:12,fontWeight:700,cursor:'pointer',
+              background:mode===m?mCls[m]:'var(--surface-2)',color:mode===m&&m!=='place'?'#fff':'var(--text)',transition:'all .15s'}}>
+            {l}
+          </button>
+        ))}
+        {ansFrom&&ansTo&&<span style={{fontSize:12,fontWeight:700,color:'var(--success)',marginLeft:4}}>✓ {PZ_FILES[ansFrom[1]]}{8-ansFrom[0]}→{PZ_FILES[ansTo[1]]}{8-ansTo[0]}</span>}
+      </div>
+      {mode==='place'&&(
+        <div style={{display:'flex',gap:5,marginBottom:10,flexWrap:'wrap',alignItems:'center'}}>
+          <span style={{fontSize:11,color:'var(--text-faint)',fontWeight:600,marginRight:2}}>Figur:</span>
+          {PPALETTE.map(({c,t})=>{const ch=c==='w'?WP_P[t]:BP_P[t];const is=sel.c===c&&sel.t===t;return(
+            <button key={c+t} onClick={()=>setSel({c,t})}
+              style={{width:32,height:32,border:is?'2px solid var(--accent)':'1px solid var(--border)',borderRadius:8,
+                background:is?'var(--accent-soft)':'var(--surface-2)',fontSize:19,cursor:'pointer',display:'grid',placeItems:'center',transition:'all .12s'}}>{ch}</button>
+          );})}
+          <button className="btn sm" onClick={()=>setBoard(emptyBrd())} style={{height:32,marginLeft:4}}>Tozalash</button>
+          <button className="btn sm" onClick={()=>setBoard(startBrd())} style={{height:32}}>Boshlang'ich</button>
+        </div>
+      )}
+      <div style={{display:'inline-block',border:'3px solid #5a3e1b',borderRadius:6,overflow:'hidden',cursor:mode!=='place'?'crosshair':'default'}}>
+        {board.map((row,r)=>(
+          <div key={r} style={{display:'flex'}}>
+            {row.map((cell,c)=>{
+              const lgt=(r+c)%2===0;
+              const isF=ansFrom&&ansFrom[0]===r&&ansFrom[1]===c;
+              const isT=ansTo&&ansTo[0]===r&&ansTo[1]===c;
+              const bg=isF?'#f6f669':isT?'#7fc97f':lgt?'#f0d9b5':'#b58863';
+              return(
+                <div key={c} onClick={()=>click(r,c)}
+                  style={{width:44,height:44,background:bg,display:'flex',alignItems:'center',justifyContent:'center',
+                    fontSize:28,lineHeight:1,position:'relative',userSelect:'none',
+                    filter:cell?'drop-shadow(0 1px 2px rgba(0,0,0,.5))':'none'}}>
+                  {cell?(cell.c==='w'?WP_P[cell.t]:BP_P[cell.t]):null}
+                  {r===7&&<span style={{position:'absolute',bottom:1,right:2,fontSize:8,fontWeight:700,color:lgt?'#b58863':'#f0d9b5',opacity:.8}}>{PZ_FILES[c]}</span>}
+                  {c===0&&<span style={{position:'absolute',top:1,left:2,fontSize:8,fontWeight:700,color:lgt?'#b58863':'#f0d9b5',opacity:.8}}>{8-r}</span>}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TPuzzles(){
+  const [tab,setTab]=useState('list');
+  const [puzzles,setPuzzles]=useState(loadTchPz);
+  const [stats]=useState(loadPzSt);
+  const [form,setForm]=useState({title:'',desc:'',diff:2,xp:50});
+  const [board,setBoard]=useState(emptyBrd);
+  const [ansFrom,setAnsFrom]=useState(null);
+  const [ansTo,setAnsTo]=useState(null);
+  const [saved,setSaved]=useState(false);
+  const [delId,setDelId]=useState(null);
+  const [fDiff,setFDiff]=useState(0);
+  const [selStu,setSelStu]=useState(null);
+
+  const savePz=list=>{setPuzzles(list);localStorage.setItem('sq_teacher_puzzles',JSON.stringify(list));};
+
+  const addPuzzle=()=>{
+    if(!form.title.trim()||!ansFrom||!ansTo)return;
+    const p={id:Date.now().toString(),title:form.title.trim(),desc:form.desc.trim(),diff:form.diff,xp:form.xp,board,ansFrom,ansTo,created:new Date().toLocaleDateString('uz-UZ')};
+    savePz([...puzzles,p]);setSaved(true);
+    setTimeout(()=>{setSaved(false);setTab('list');},1400);
+    setForm({title:'',desc:'',diff:2,xp:50});setBoard(emptyBrd());setAnsFrom(null);setAnsTo(null);
+  };
+
+  const stuStats=React.useMemo(()=>{
+    const map={};
+    Object.entries(stats).forEach(([,arr])=>arr.forEach(a=>{
+      if(!map[a.studentId])map[a.studentId]={id:a.studentId,name:a.studentName,total:0,correct:0,wrong:0,dates:[],maxDiff:0};
+      map[a.studentId].total++;
+      if(a.correct)map[a.studentId].correct++;else map[a.studentId].wrong++;
+      if(!map[a.studentId].dates.includes(a.date))map[a.studentId].dates.push(a.date);
+      if((a.diff||1)>map[a.studentId].maxDiff)map[a.studentId].maxDiff=a.diff||1;
+    }));
+    return Object.values(map);
+  },[stats]);
+
+  const demoStats=MY_STUDENTS.slice(0,8).map((s,i)=>{
+    const tot=[12,8,15,6,10,14,9,11][i],cor=[10,5,13,3,8,12,7,9][i];
+    return{id:s.id,name:s.name,total:tot,correct:cor,wrong:tot-cor,dates:['10.06','09.06','08.06'].slice(0,[3,2,3,1,2,3,2,2][i]),maxDiff:[3,2,4,1,3,4,2,3][i]};
+  });
+  const dispStats=stuStats.length>0?stuStats:demoStats;
+  const filtered=fDiff?puzzles.filter(p=>p.diff===fDiff):puzzles;
+
+  return(
+    <div className="content-inner page-enter">
+      <div className="page-tools" style={{marginBottom:'var(--gap)'}}>
+        <div className="ttl">Boshqotirmalar</div><div className="spacer"/>
+        <div className="seg">
+          {[['list','Baza'],['analytics','Tahlil'],['add',"+ Qo'shish"]].map(([v,l])=>(
+            <button key={v} className={tab===v?'on':''} onClick={()=>setTab(v)}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      {tab==='list'&&<>
+        <div className="grid cols-4" style={{marginBottom:'var(--gap)'}}>
+          {[
+            {icon:'target',tone:'a',v:`${puzzles.length} ta`,l:'Jami masala'},
+            {icon:'check', tone:'s',v:`${puzzles.filter(p=>p.diff<=2).length} ta`,l:"Oson / O'rta"},
+            {icon:'flag',  tone:'w',v:`${puzzles.filter(p=>p.diff>=3).length} ta`,l:'Qiyin / Murakkab'},
+            {icon:'eye',   tone:'d',v:`${dispStats.reduce((a,s)=>a+s.total,0)} ta`,l:'Jami yechimlar'},
+          ].map(s=>(
+            <div key={s.l} className="card stat fade-up">
+              <div className={`stat-ic ${s.tone}`}><Ic n={s.icon} size={22}/></div>
+              <div><div className="stat-val">{s.v}</div><div className="stat-lbl">{s.l}</div></div>
+            </div>
+          ))}
+        </div>
+        <div className="card fade-up">
+          <div className="card-head">
+            <div className="head-ic"><Ic n="target" size={18}/></div>
+            <div style={{flex:1}}><div className="ttl">Masalalar ro'yxati</div></div>
+            <div style={{display:'flex',gap:4}}>
+              {[0,1,2,3,4,5].map(d=>(
+                <button key={d} className={fDiff===d?'btn sm primary':'btn sm'} style={{height:27,fontSize:11,padding:'0 8px'}} onClick={()=>setFDiff(d)}>
+                  {d===0?'Barchasi':PZ_DIFF_LBL[d]}
+                </button>
+              ))}
+            </div>
+            <button className="btn sm primary" style={{height:32}} onClick={()=>setTab('add')}><Ic n="plus" size={14}/> Qo'shish</button>
+          </div>
+          <div className="card-pad" style={{paddingTop:8}}>
+            {filtered.length===0?(
+              <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-faint)'}}>
+                <div style={{fontSize:40,marginBottom:12}}>🧩</div>
+                <div style={{fontWeight:700,fontSize:15}}>Masala yo'q</div>
+                <div style={{fontSize:13,marginTop:6}}>Birinchi masalangizni qo'shing</div>
+                <button className="btn sm primary" style={{marginTop:14}} onClick={()=>setTab('add')}>+ Qo'shish</button>
+              </div>
+            ):filtered.map((p,i)=>(
+              <div key={p.id} style={{display:'flex',alignItems:'center',gap:14,padding:'11px 0',borderBottom:i<filtered.length-1?'1px solid var(--border)':'none'}}>
+                <div style={{width:40,height:40,borderRadius:10,background:'var(--accent-soft)',display:'grid',placeItems:'center',fontSize:18,flexShrink:0}}>🧩</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:750,fontSize:14}}>{p.title}</div>
+                  {p.desc&&<div style={{fontSize:12,color:'var(--text-faint)',marginTop:2}}>{p.desc}</div>}
+                  <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap',alignItems:'center'}}>
+                    <span style={{fontSize:11,fontWeight:700,color:PZ_DIFF_CLR[p.diff]}}>{PZ_DIFF_LBL[p.diff]}</span>
+                    <span style={{color:'var(--text-faint)',fontSize:11}}>·</span>
+                    <span style={{fontSize:11,fontWeight:700,color:'var(--warn)'}}>+{p.xp} XP</span>
+                    <span style={{color:'var(--text-faint)',fontSize:11}}>·</span>
+                    <span style={{fontSize:11,color:'var(--text-faint)'}}>{p.created}</span>
+                    {p.ansFrom&&p.ansTo&&<><span style={{color:'var(--text-faint)',fontSize:11}}>·</span>
+                      <span style={{fontSize:11,fontWeight:700,color:'var(--success)'}}>✓ {PZ_FILES[p.ansFrom[1]]}{8-p.ansFrom[0]}→{PZ_FILES[p.ansTo[1]]}{8-p.ansTo[0]}</span></>}
+                  </div>
+                </div>
+                <button className="iconbtn" style={{width:30,height:30}} onClick={()=>setDelId(p.id)}><Ic n="trash" size={14}/></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </>}
+
+      {tab==='add'&&(
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'var(--gap)',alignItems:'start'}}>
+          <div className="card fade-up">
+            <div className="card-head"><div className="head-ic"><Ic n="edit" size={18}/></div><div className="ttl">Masala ma'lumotlari</div></div>
+            <div className="card-pad" style={{display:'flex',flexDirection:'column',gap:14}}>
+              <div>
+                <label style={{fontSize:12,fontWeight:700,color:'var(--text-faint)',display:'block',marginBottom:5}}>Sarlavha *</label>
+                <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Masalan: 2 harakatda mat"
+                  style={{width:'100%',padding:'9px 12px',borderRadius:9,border:'1px solid var(--border)',background:'var(--surface-2)',color:'var(--text)',fontSize:14,fontFamily:'inherit',outline:'none'}}/>
+              </div>
+              <div>
+                <label style={{fontSize:12,fontWeight:700,color:'var(--text-faint)',display:'block',marginBottom:5}}>Ko'rsatma</label>
+                <textarea value={form.desc} onChange={e=>setForm(f=>({...f,desc:e.target.value}))} placeholder="O'quvchilarga ko'rsatma..." rows={2}
+                  style={{width:'100%',padding:'9px 12px',borderRadius:9,border:'1px solid var(--border)',background:'var(--surface-2)',color:'var(--text)',fontSize:14,fontFamily:'inherit',outline:'none',resize:'vertical'}}/>
+              </div>
+              <div style={{display:'flex',gap:16}}>
+                <div style={{flex:1}}>
+                  <label style={{fontSize:12,fontWeight:700,color:'var(--text-faint)',display:'block',marginBottom:5}}>Qiyinlik</label>
+                  <div style={{display:'flex',gap:5}}>
+                    {[1,2,3,4,5].map(d=>(
+                      <button key={d} onClick={()=>setForm(f=>({...f,diff:d}))}
+                        style={{width:34,height:34,borderRadius:8,cursor:'pointer',fontWeight:800,fontSize:13,
+                          background:form.diff===d?PZ_DIFF_CLR[d]:'var(--surface-2)',
+                          border:form.diff===d?'none':'1px solid var(--border)',
+                          color:form.diff===d?'#fff':'var(--text-faint)',transition:'all .15s'}}>{d}</button>
+                    ))}
+                  </div>
+                  <div style={{fontSize:11,color:PZ_DIFF_CLR[form.diff],fontWeight:700,marginTop:4}}>{PZ_DIFF_LBL[form.diff]}</div>
+                </div>
+                <div style={{flex:1}}>
+                  <label style={{fontSize:12,fontWeight:700,color:'var(--text-faint)',display:'block',marginBottom:5}}>XP mukofot</label>
+                  <div style={{display:'flex',gap:4}}>
+                    {[20,30,50,80].map(x=>(
+                      <button key={x} onClick={()=>setForm(f=>({...f,xp:x}))}
+                        style={{height:34,padding:'0 10px',borderRadius:8,cursor:'pointer',fontWeight:700,fontSize:12,
+                          background:form.xp===x?'var(--warn)':'var(--surface-2)',
+                          border:form.xp===x?'none':'1px solid var(--border)',
+                          color:form.xp===x?'#fff':'var(--text-faint)',transition:'all .15s'}}>+{x}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {!ansFrom&&form.title.trim()&&<div style={{fontSize:12,color:'var(--warn)',fontWeight:700,background:'color-mix(in oklab,var(--warn) 12%,var(--surface))',padding:'8px 12px',borderRadius:8}}>⚠ Taxtada javob belgilang: "Javob: dan" → "Javob: gacha"</div>}
+              <div style={{display:'flex',gap:10}}>
+                <button className="btn sm" style={{flex:1,justifyContent:'center',height:40}} onClick={()=>setTab('list')}>Bekor</button>
+                <button className={`btn sm${form.title.trim()&&ansFrom&&ansTo?' primary':''}`} onClick={addPuzzle}
+                  disabled={!form.title.trim()||!ansFrom||!ansTo}
+                  style={{flex:2,justifyContent:'center',height:40,fontSize:14}}>
+                  {saved?'✓ Saqlandi!':'✓ Saqlash'}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="card fade-up">
+            <div className="card-head"><div className="head-ic"><Ic n="grid" size={18}/></div><div className="ttl">Taxta muharriri</div></div>
+            <div className="card-pad">
+              <BoardEditor board={board} setBoard={setBoard} ansFrom={ansFrom} setAnsFrom={setAnsFrom} ansTo={ansTo} setAnsTo={setAnsTo}/>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab==='analytics'&&<>
+        <div className="grid cols-4" style={{marginBottom:'var(--gap)'}}>
+          {[
+            {icon:'user',  tone:'a',v:`${dispStats.length} ta`,l:"Faol o'quvchilar"},
+            {icon:'check', tone:'s',v:`${dispStats.reduce((a,s)=>a+s.correct,0)} ta`,l:"To'g'ri"},
+            {icon:'x',     tone:'d',v:`${dispStats.reduce((a,s)=>a+s.wrong,0)} ta`,l:"Noto'g'ri"},
+            {icon:'target',tone:'w',v:`${dispStats.length?Math.round(dispStats.reduce((a,s)=>a+(s.correct/(s.total||1)*100),0)/dispStats.length):0}%`,l:"O'rtacha aniqlik"},
+          ].map(s=>(
+            <div key={s.l} className="card stat fade-up">
+              <div className={`stat-ic ${s.tone}`}><Ic n={s.icon} size={22}/></div>
+              <div><div className="stat-val">{s.v}</div><div className="stat-lbl">{s.l}</div></div>
+            </div>
+          ))}
+        </div>
+        <div className="card fade-up">
+          <div className="card-head">
+            <div className="head-ic"><Ic n="trendingUp" size={18}/></div>
+            <div style={{flex:1}}><div className="ttl">O'quvchilar tahlili</div><div style={{fontSize:12,color:'var(--text-faint)'}}>Kim, qancha, qachon, qanday yechdi</div></div>
+          </div>
+          <div className="card-pad" style={{paddingTop:4}}>
+            <div style={{display:'grid',gridTemplateColumns:'2fr 55px 65px 55px 65px 110px',gap:8,padding:'5px 0 9px',borderBottom:'2px solid var(--border)',marginBottom:4}}>
+              {["O'quvchi","Jami","To'g'ri","Xato","Aniqlik","Kun(lar)"].map(h=>(
+                <div key={h} style={{fontSize:11,fontWeight:750,color:'var(--text-faint)',textTransform:'uppercase',letterSpacing:'.05em'}}>{h}</div>
+              ))}
+            </div>
+            {dispStats.map((s,i)=>{
+              const acc=s.total>0?Math.round(s.correct/s.total*100):0;
+              const aC=acc>=80?'var(--success)':acc>=60?'var(--warn)':'var(--danger)';
+              return(
+                <div key={s.id}
+                  style={{display:'grid',gridTemplateColumns:'2fr 55px 65px 55px 65px 110px',gap:8,padding:'10px 0',
+                    borderBottom:i<dispStats.length-1?'1px solid var(--border)':'none',cursor:'pointer',borderRadius:8,transition:'background .12s'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='var(--hover)'}
+                  onMouseLeave={e=>e.currentTarget.style.background=''}
+                  onClick={()=>setSelStu(selStu?.id===s.id?null:s)}>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <Av name={s.name} size={32} radius={9}/>
+                    <div style={{fontWeight:650,fontSize:13.5}}>{s.name}</div>
+                    {s.maxDiff>=4&&<span style={{fontSize:10,fontWeight:700,background:'color-mix(in oklab,var(--danger) 15%,var(--surface))',color:'var(--danger)',borderRadius:5,padding:'2px 6px'}}>{PZ_DIFF_LBL[s.maxDiff]}</span>}
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',fontWeight:750,fontSize:14}}>{s.total}</div>
+                  <div style={{display:'flex',alignItems:'center',fontWeight:750,fontSize:14,color:'var(--success)'}}>{s.correct}</div>
+                  <div style={{display:'flex',alignItems:'center',fontWeight:750,fontSize:14,color:'var(--danger)'}}>{s.wrong}</div>
+                  <div style={{display:'flex',alignItems:'center'}}><span style={{fontWeight:800,fontSize:14,color:aC}}>{acc}%</span></div>
+                  <div style={{display:'flex',alignItems:'center',gap:3,flexWrap:'wrap'}}>
+                    {s.dates.slice(-3).map(d=>(
+                      <span key={d} style={{fontSize:10,fontWeight:700,background:'var(--accent-soft)',color:'var(--accent-text)',borderRadius:5,padding:'2px 6px'}}>{d}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {selStu&&(
+          <div className="card fade-up" style={{marginTop:'var(--gap)'}}>
+            <div className="card-head">
+              <Av name={selStu.name} size={36} radius={10}/>
+              <div style={{flex:1}}><div className="ttl">{selStu.name}</div><div style={{fontSize:12,color:'var(--text-faint)'}}>Batafsil ko'rsatkich</div></div>
+              <button className="iconbtn" onClick={()=>setSelStu(null)}><Ic n="x" size={16}/></button>
+            </div>
+            <div className="card-pad">
+              <div style={{display:'flex',gap:28,flexWrap:'wrap',marginBottom:18}}>
+                {[
+                  {l:'Jami yechdi',v:selStu.total,c:'var(--text)'},
+                  {l:"To'g'ri",v:selStu.correct,c:'var(--success)'},
+                  {l:'Xato',v:selStu.wrong,c:'var(--danger)'},
+                  {l:'Aniqlik',v:Math.round(selStu.correct/(selStu.total||1)*100)+'%',c:'var(--accent-text)'},
+                  {l:'Faol kunlar',v:selStu.dates.length+' kun',c:'var(--warn)'},
+                  {l:"Eng qiyin",v:PZ_DIFF_LBL[selStu.maxDiff]||'—',c:PZ_DIFF_CLR[selStu.maxDiff]||'var(--text-faint)'},
+                ].map(s=>(
+                  <div key={s.l} style={{textAlign:'center'}}>
+                    <div style={{fontSize:22,fontWeight:900,color:s.c}}>{s.v}</div>
+                    <div style={{fontSize:11,color:'var(--text-faint)',marginTop:3}}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{marginBottom:5,fontSize:12.5,display:'flex',justifyContent:'space-between'}}>
+                <span style={{color:'var(--text-faint)'}}>To'g'ri yechimlar foizi</span>
+                <span style={{fontWeight:750}}>{Math.round(selStu.correct/(selStu.total||1)*100)}%</span>
+              </div>
+              <div className="pbar"><span style={{width:`${Math.round(selStu.correct/(selStu.total||1)*100)}%`}}/></div>
+            </div>
+          </div>
+        )}
+      </>}
+
+      {delId&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)'}}>
+          <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:18,padding:28,maxWidth:320,width:'90%',textAlign:'center'}}>
+            <div style={{fontSize:38,marginBottom:12}}>🗑️</div>
+            <div style={{fontWeight:800,fontSize:16,marginBottom:8}}>Masalani o'chirasizmi?</div>
+            <div style={{color:'var(--text-faint)',fontSize:13,marginBottom:22}}>Bu amalni ortga qaytarib bo'lmaydi</div>
+            <div style={{display:'flex',gap:10}}>
+              <button className="btn sm" style={{flex:1,justifyContent:'center',height:40}} onClick={()=>setDelId(null)}>Bekor</button>
+              <button className="btn sm" style={{flex:1,justifyContent:'center',height:40,background:'var(--danger)',color:'#fff',border:'none'}}
+                onClick={()=>{savePz(puzzles.filter(p=>p.id!==delId));setDelId(null);}}>O'chirish</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── APP ── */
+const TWEAK_DEFS = {
+  accent:  localStorage.getItem("tchess_accent")  || "blue",
+  density: localStorage.getItem("tchess_density") || "normal",
+  theme:   localStorage.getItem("tchess_theme")   || "light",
+};
+
+function App() {
+  const [page, setPage]           = useState(() => localStorage.getItem("tchess_page") || "dashboard");
+  const [collapsed, setCollapsed] = useState(false);
+  const [tweaks, setTweak]        = window.useTweaks(TWEAK_DEFS);
+
+  const accent  = tweaks.accent  || "blue";
+  const density = tweaks.density || "normal";
+  const theme   = tweaks.theme   || "light";
+
+  useEffect(() => {
+    const h = document.documentElement;
+    h.setAttribute("data-theme",   theme);
+    h.setAttribute("data-accent",  accent);
+    h.setAttribute("data-density", density);
+    localStorage.setItem("tchess_accent",  accent);
+    localStorage.setItem("tchess_density", density);
+    localStorage.setItem("tchess_theme",   theme);
+  }, [theme, accent, density]);
+
+  useEffect(() => { localStorage.setItem("tchess_page", page); }, [page]);
+
+  const meta = T_PAGE_META[page] || { title: page, sub: "" };
+  const PageMap = { dashboard:TDashboard, schedule:TSchedule, students:TStudents, attendance:TAttendance,
+    progress:TProgress, materials:TMaterials, messages:TMessages, notifications:TNotifications, profile:TProfile, puzzles:TPuzzles };
+  const PageComp = PageMap[page];
+
+  return (
+    <>
+      <div className={"app" + (collapsed ? " collapsed" : "")}>
+        <TSidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} />
+        <main className="main">
+          <TTopbar title={meta.title} sub={meta.sub} theme={theme}
+            setTheme={v => setTweak("theme", v)} collapsed={collapsed} setCollapsed={setCollapsed} />
+          <div className="content">
+            {PageComp
+              ? <PageComp key={page} go={setPage} />
+              : <div className="content-inner"><p style={{ color:"var(--text-faint)", padding:40 }}>Sahifa topilmadi</p></div>}
+          </div>
+        </main>
+      </div>
+
+      <window.TweaksPanel title="Tweaks">
+        <window.TweakSection label="Rang palitra" />
+        <window.TweakRadio label="Rang" value={accent}
+          options={["blue","emerald","indigo","amber","violet"]}
+          onChange={v => setTweak("accent", v)} />
+        <window.TweakSection label="Ko'rinish" />
+        <window.TweakRadio label="Mavzu" value={theme}
+          options={["light","dark"]} onChange={v => setTweak("theme", v)} />
+        <window.TweakRadio label="Zichlik" value={density}
+          options={["normal","compact"]} onChange={v => setTweak("density", v)} />
+      </window.TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

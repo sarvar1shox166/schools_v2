@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>Shaxmat Online</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;-webkit-font-smoothing:antialiased}
+body{background:#0f1117;color:#f0f0f8;overscroll-behavior:none}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+a{text-decoration:none;color:inherit}
+:root{
+  --blue:#3F8CFF;--blue2:#6aa8ff;--purple:#8b5cf6;--purple2:#a78bfa;
+  --green:#22c55e;--green2:#4ade80;--gold:#f59e0b;--gold2:#fbbf24;
+  --red:#ef4444;--pink:#ec4899;
+  --bg:#0f1117;--bg2:#161b27;--bg3:#1e2535;--bg4:#242f48;
+  --card:rgba(255,255,255,.06);--border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.13);
+  --text:#f0f0f8;--dim:#8892a4;--faint:#4a5568;
+  --r:14px;--r2:10px;--r3:20px;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bot:env(safe-area-inset-bottom,16px);
+}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:99px}
+
+/* ── LAYOUT ── */
+.app{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+
+/* ── HEADER ── */
+.hdr{
+  padding:calc(var(--safe-top) + 10px) 16px 10px;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;flex:none;
+}
+.hdr-logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--purple));display:grid;place-items:center;font-size:18px;flex:none;box-shadow:0 3px 12px rgba(63,140,255,.3)}
+.hdr-info{flex:1;min-width:0}
+.hdr-title{font-size:15px;font-weight:800;line-height:1}
+.hdr-sub{font-size:11px;color:var(--dim);margin-top:1px}
+.streak-pill{display:flex;align-items:center;gap:4px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:99px;padding:4px 10px;font-weight:700;font-size:12px;color:var(--gold2);flex:none}
+.fire{animation:fireA .5s infinite alternate;display:inline-block}
+@keyframes fireA{from{transform:scale(1) rotate(-5deg)}to{transform:scale(1.2) rotate(5deg)}}
+.notif-btn{width:32px;height:32px;border-radius:9px;background:var(--card);display:grid;place-items:center;position:relative;flex:none;font-size:17px}
+.notif-dot{position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--red);border:2px solid var(--bg2)}
+
+/* ── XP STRIP ── */
+.xp-strip{padding:7px 16px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex:none}
+.lv-chip{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1a1000;font-weight:900;font-size:10px;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.xp-bar{flex:1;height:5px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
+.xp-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--purple))}
+.xp-label{font-size:11px;font-weight:700;color:var(--blue2);white-space:nowrap}
+
+/* ── PAGES ── */
+.pages{flex:1;overflow:hidden;position:relative;min-height:0}
+.page{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.page.hidden{display:none}
+.pi{padding:14px 14px calc(var(--safe-bot) + 70px);display:flex;flex-direction:column;gap:12px}
+
+/* ── BOTTOM NAV ── */
+.bnav{
+  padding:6px 0 calc(var(--safe-bot));
+  background:var(--bg2);border-top:1px solid var(--border);
+  display:flex;justify-content:space-around;flex:none;
+}
+.bni{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border-radius:12px;min-width:54px;transition:background .15s;position:relative;cursor:pointer}
+.bni.on{background:rgba(63,140,255,.1)}
+.bni-ic{font-size:20px;line-height:1;transition:transform .2s}
+.bni.on .bni-ic{transform:scale(1.15)}
+.bni-lbl{font-size:9.5px;font-weight:600;color:var(--dim)}
+.bni.on .bni-lbl{color:var(--blue2)}
+.bni-badge{position:absolute;top:3px;right:6px;min-width:15px;height:15px;border-radius:99px;background:var(--red);color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;padding:0 3px;border:2px solid var(--bg2)}
+
+/* ── CARDS ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.card.b{border-color:rgba(63,140,255,.2);box-shadow:0 4px 20px rgba(63,140,255,.1)}
+.card.g{border-color:rgba(245,158,11,.2);box-shadow:0 4px 20px rgba(245,158,11,.08)}
+.card.p{border-color:rgba(139,92,246,.2);box-shadow:0 4px 20px rgba(139,92,246,.1)}
+.card.gr{border-color:rgba(34,197,94,.18);box-shadow:0 4px 20px rgba(34,197,94,.08)}
+
+/* hero */
+.hero{background:linear-gradient(135deg,#1a2d5a,#1e1a3a 60%,#0f1117);border:1px solid rgba(63,140,255,.2);border-radius:var(--r3);padding:20px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 15% 50%,rgba(63,140,255,.1),transparent 60%),radial-gradient(ellipse at 85% 20%,rgba(139,92,246,.08),transparent 50%);pointer-events:none}
+.hero-piece{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:90px;opacity:.08;line-height:1;animation:hf 5s ease-in-out infinite;pointer-events:none}
+@keyframes hf{0%,100%{transform:translateY(-50%) rotate(-5deg)}50%{transform:translateY(-55%) rotate(5deg)}}
+.hero h2{font-size:20px;font-weight:900;line-height:1.25;position:relative}
+.hero h2 span{background:linear-gradient(90deg,var(--blue2),var(--purple2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero-p{font-size:13px;color:rgba(240,240,248,.65);margin-top:6px;position:relative}
+.hero-row{display:flex;gap:0;margin-top:16px;background:rgba(0,0,0,.2);border-radius:12px;overflow:hidden}
+.hs{flex:1;padding:10px 12px;text-align:center;border-right:1px solid rgba(255,255,255,.07)}
+.hs:last-child{border-right:none}
+.hs-v{font-size:19px;font-weight:900;line-height:1}
+.hs-l{font-size:10px;color:var(--dim);margin-top:2px}
+.hero-btns{display:flex;gap:8px;margin-top:14px;position:relative}
+.btn-p{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:40px;padding:0 18px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;font-weight:700;font-size:13.5px;box-shadow:0 4px 16px rgba(63,140,255,.35);transition:all .2s;flex:1}
+.btn-p:active{transform:scale(.97);box-shadow:0 2px 8px rgba(63,140,255,.25)}
+.btn-s{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:40px;padding:0 16px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid var(--border2);color:var(--text);font-weight:600;font-size:13px;transition:all .2s;flex:1}
+.btn-s:active{background:rgba(255,255,255,.12)}
+
+/* stat mini cards */
+.sc-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sc{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;overflow:hidden;position:relative;transition:transform .15s}
+.sc:active{transform:scale(.98)}
+.sc-ic{font-size:28px;margin-bottom:8px;line-height:1}
+.sc-val{font-size:24px;font-weight:900;line-height:1;letter-spacing:-.02em}
+.sc-lbl{font-size:12px;color:var(--dim);margin-top:4px}
+.sc-d{font-size:11px;font-weight:700;margin-top:6px}
+.sc-bg{position:absolute;right:-6px;bottom:-14px;font-size:64px;opacity:.05;line-height:1;pointer-events:none}
+.sc.b{border-color:rgba(63,140,255,.2)}
+.sc.g{border-color:rgba(245,158,11,.2)}
+.sc.gr{border-color:rgba(34,197,94,.18)}
+.sc.p{border-color:rgba(139,92,246,.2)}
+
+/* section header */
+.sec{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sec-t{font-size:15px;font-weight:800}
+.sec-more{font-size:12.5px;color:var(--blue2);font-weight:600}
+
+/* lesson card */
+.lesson-live{background:linear-gradient(135deg,rgba(63,140,255,.13),rgba(139,92,246,.08));border:1px solid rgba(63,140,255,.25);border-left:3px solid var(--blue);border-radius:var(--r);padding:14px;position:relative}
+.live-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);border-radius:99px;padding:3px 9px;font-size:11px;font-weight:700;color:#fc8181;margin-bottom:8px}
+.live-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:lp 1s infinite}
+@keyframes lp{0%,100%{transform:scale(1)}50%{transform:scale(1.5)}}
+.lesson-name{font-size:16px;font-weight:800;margin-bottom:4px}
+.lesson-meta{font-size:12.5px;color:var(--dim)}
+
+/* sched item */
+.si{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.si:last-child{border-bottom:none}
+.si-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.si-time{font-size:12px;color:var(--dim);font-weight:700;min-width:48px;font-variant-numeric:tabular-nums}
+.si-name{flex:1;font-weight:650;font-size:14px}
+.si-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.tag-done{background:rgba(34,197,94,.12);color:var(--green2);border:1px solid rgba(34,197,94,.2)}
+.tag-soon{background:rgba(63,140,255,.12);color:var(--blue2);border:1px solid rgba(63,140,255,.2)}
+.tag-miss{background:rgba(239,68,68,.1);color:#fc8181;border:1px solid rgba(239,68,68,.2)}
+
+/* progress ring */
+.pr-wrap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pr-item{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.ring-svg{transform:rotate(-90deg)}
+.ring-center{text-align:center;margin-top:-4px}
+.ring-val{font-size:18px;font-weight:900;line-height:1}
+.ring-lbl{font-size:11px;color:var(--dim);margin-top:2px}
+
+/* achievement */
+.ach{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.ach:last-child{border-bottom:none}
+.ach-ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:20px;flex:none}
+.ach-name{font-weight:700;font-size:13.5px}
+.ach-desc{font-size:12px;color:var(--dim);margin-top:2px}
+.ach-pbar{height:4px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:6px}
+.ach-pfill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--purple))}
+
+/* leaderboard */
+.lb-row{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);transition:background .12s}
+.lb-row:last-child{border-bottom:none}
+.lb-row.me{background:linear-gradient(90deg,rgba(63,140,255,.08),transparent);border-left:2px solid var(--blue)}
+.lb-rank{width:24px;text-align:center;font-weight:900;font-size:14px;flex:none}
+.lb-av{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px;flex:none}
+.lb-name{flex:1;font-weight:650;font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-pts{font-weight:800;font-size:14px;color:var(--blue2);flex:none}
+.me-tag{background:rgba(63,140,255,.2);color:var(--blue2);border-radius:99px;padding:1px 6px;font-size:10px;font-weight:700}
+
+/* puzzle cards */
+.pz-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pz{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;transition:transform .15s}
+.pz:active{transform:scale(.97)}
+.pz-ic{font-size:36px;line-height:1}
+.pz-name{font-size:14px;font-weight:800}
+.pz-desc{font-size:12px;color:var(--dim)}
+.pz-xp{font-size:11px;font-weight:700;color:var(--gold2);background:rgba(245,158,11,.12);border-radius:99px;padding:3px 9px}
+.pz-btn{height:34px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;font-weight:700;font-size:13px;width:100%;transition:all .2s}
+.pz-btn:active{transform:scale(.97)}
+
+/* profile */
+.prof-card{background:linear-gradient(135deg,#1a2d5a,#1e1a3a);border:1px solid rgba(63,140,255,.2);border-radius:var(--r3);padding:24px;text-align:center;position:relative;overflow:hidden}
+.prof-card::after{content:"♟";position:absolute;right:-10px;bottom:-20px;font-size:120px;opacity:.05}
+.prof-av{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--blue),var(--purple));display:grid;place-items:center;color:#fff;font-weight:900;font-size:24px;margin:0 auto 12px;box-shadow:0 6px 24px rgba(63,140,255,.35)}
+.prof-name{font-size:20px;font-weight:900}
+.prof-role{font-size:13px;color:var(--dim);margin-top:4px}
+.prof-badges{display:flex;justify-content:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+.badge-pill{display:inline-flex;align-items:center;gap:5px;border-radius:99px;padding:5px 12px;font-size:12px;font-weight:700}
+.prof-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:rgba(0,0,0,.2);border-radius:12px;overflow:hidden;margin-top:16px}
+.ps{padding:11px 8px;text-align:center;border-right:1px solid rgba(255,255,255,.07)}
+.ps:last-child{border-right:none}
+.ps-v{font-size:18px;font-weight:900;line-height:1}
+.ps-l{font-size:10px;color:var(--dim);margin-top:3px}
+
+/* info list */
+.info-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+.info-row:last-child{border-bottom:none}
+.info-ic{font-size:18px;flex:none;width:26px;text-align:center}
+.info-lbl{color:var(--dim);flex:none;min-width:80px}
+.info-val{font-weight:650}
+
+/* chat */
+.chat-wrap{display:flex;flex-direction:column;height:100%}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.msg-row{display:flex;gap:8px;align-items:flex-end}
+.msg-row.out{flex-direction:row-reverse}
+.msg-bub{max-width:78%;padding:10px 13px;font-size:13.5px;line-height:1.45;border-radius:14px}
+.msg-bub.in{background:var(--bg3);border-bottom-left-radius:4px}
+.msg-bub.out{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;border-bottom-right-radius:4px}
+.msg-time{font-size:11px;color:var(--faint);white-space:nowrap;margin-bottom:2px}
+.chat-bar{padding:10px 14px calc(var(--safe-bot) + 70px);border-top:1px solid var(--border);display:flex;gap:8px;background:var(--bg2);flex:none}
+.chat-inp{flex:1;height:38px;border-radius:12px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);padding:0 13px;font:inherit;font-size:14px;outline:none}
+.chat-send{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;display:grid;place-items:center;font-size:18px;flex:none;transition:all .2s}
+.chat-send:active{transform:scale(.92)}
+
+/* confetti */
+.conf{position:fixed;width:8px;height:8px;border-radius:2px;pointer-events:none;z-index:9999;animation:confFall var(--d,2s) var(--dl,0s) forwards}
+@keyframes confFall{0%{transform:translateY(-10px) rotate(0);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
+
+/* xp toast */
+.toast{position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-20px);z-index:9999;background:linear-gradient(135deg,rgba(63,140,255,.92),rgba(139,92,246,.92));backdrop-filter:blur(10px);border-radius:14px;padding:10px 18px;color:#fff;font-weight:700;font-size:14px;box-shadow:0 6px 24px rgba(63,140,255,.35);opacity:0;transition:all .3s;white-space:nowrap;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* stars bg */
+.star{position:fixed;border-radius:50%;background:#fff;pointer-events:none;animation:twinkle var(--d,2s) var(--dl,0s) infinite}
+@keyframes twinkle{0%,100%{opacity:0;transform:scale(0)}50%{opacity:.5;transform:scale(1)}}
+
+/* page anim */
+.page-enter{animation:pIn .28s ease both}
+@keyframes pIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<!-- Stars bg -->
+<div id="starsWrap" style="position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden"></div>
+
+<!-- Toast -->
+<div class="toast" id="toast">⚡ +50 XP qo'shildi!</div>
+
+<div class="app" style="position:relative;z-index:1">
+
+  <!-- HEADER -->
+  <header class="hdr">
+    <div class="hdr-logo">♞</div>
+    <div class="hdr-info">
+      <div class="hdr-title">Shaxmat Online</div>
+      <div class="hdr-sub">O'quvchi paneli · Maktab</div>
+    </div>
+    <div class="streak-pill"><span class="fire">🔥</span> <span id="streakN">7</span> kun</div>
+    <button class="notif-btn" onclick="goPage('notifications')">🔔<span class="notif-dot"></span></button>
+  </header>
+
+  <!-- XP STRIP -->
+  <div class="xp-strip">
+    <div class="lv-chip">3-daraja</div>
+    <div class="xp-bar"><div class="xp-fill" style="width:62%"></div></div>
+    <div class="xp-label">620 / 1000 XP</div>
+  </div>
+
+  <!-- PAGES -->
+  <div class="pages">
+
+    <!-- HOME -->
+    <div class="page" id="page-home">
+      <div class="pi">
+
+        <!-- Hero -->
+        <div class="hero">
+          <div class="hero-piece">♟</div>
+          <h2>Salom, <span>Asilbek</span>! 👋</h2>
+          <p class="hero-p">7 kunlik streak davom etmoqda! Bugun 1 dars bor 📚</p>
+          <div class="hero-row">
+            <div class="hs"><div class="hs-v" style="color:var(--blue2)">1285</div><div class="hs-l">ELO</div></div>
+            <div class="hs"><div class="hs-v" style="color:var(--gold2)">47</div><div class="hs-l">Masala</div></div>
+            <div class="hs"><div class="hs-v" style="color:var(--green2)">84%</div><div class="hs-l">Davomat</div></div>
+            <div class="hs"><div class="hs-v" style="color:var(--purple2)">12</div><div class="hs-l">Yutuq</div></div>
+          </div>
+          <div class="hero-btns" style="margin-top:14px">
+            <button class="btn-p" onclick="goPage('puzzles')">♞ Mashq</button>
+            <button class="btn-s" onclick="goPage('schedule')">📅 Jadval</button>
+          </div>
+        </div>
+
+        <!-- Live lesson -->
+        <div class="lesson-live">
+          <div class="live-badge"><span class="live-dot"></span>LIVE hozir</div>
+          <div class="lesson-name">Boshlang'ich — A guruh</div>
+          <div class="lesson-meta">Bugun 14:00 · Alisher Karimov · 12 o'quvchi</div>
+          <button class="btn-p" style="margin-top:12px">Darsga kirish →</button>
+        </div>
+
+        <!-- Stats -->
+        <div class="sc-row">
+          <div class="sc b">
+            <div class="sc-ic">♛</div>
+            <div class="sc-val" style="color:var(--blue2)">1285</div>
+            <div class="sc-lbl">ELO Reyting</div>
+            <div class="sc-d" style="color:var(--green2)">▲ +45</div>
+            <div class="sc-bg">♛</div>
+          </div>
+          <div class="sc g">
+            <div class="sc-ic">🔥</div>
+            <div class="sc-val" style="color:var(--gold2)">7</div>
+            <div class="sc-lbl">Streak</div>
+            <div class="sc-d" style="color:var(--gold2)">Rekord: 14</div>
+            <div class="sc-bg">♞</div>
+          </div>
+          <div class="sc gr">
+            <div class="sc-ic">🎯</div>
+            <div class="sc-val" style="color:var(--green2)">47</div>
+            <div class="sc-lbl">Masalalar</div>
+            <div class="sc-d" style="color:var(--green2)">+8 hafta</div>
+            <div class="sc-bg">♝</div>
+          </div>
+          <div class="sc p">
+            <div class="sc-ic">🏆</div>
+            <div class="sc-val" style="color:var(--purple2)">12</div>
+            <div class="sc-lbl">Yutuqlar</div>
+            <div class="sc-d" style="color:var(--purple2)">+2 yangi</div>
+            <div class="sc-bg">♚</div>
+          </div>
+        </div>
+
+        <!-- Recent achievements -->
+        <div>
+          <div class="sec"><div class="sec-t">🏆 Yutuqlar</div><button class="sec-more" onclick="goPage('achievements')">Barchasi →</button></div>
+          <div class="card" id="achHome"></div>
+        </div>
+
+        <!-- Top-3 leaderboard preview -->
+        <div>
+          <div class="sec"><div class="sec-t">🏅 Reyting</div><button class="sec-more" onclick="goPage('leaderboard')">To'liq →</button></div>
+          <div class="card" id="lbHome"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SCHEDULE -->
+    <div class="page hidden" id="page-schedule">
+      <div class="pi">
+        <div class="hero" style="padding:16px 18px">
+          <div style="display:flex;gap:14px;align-items:center;position:relative">
+            <div style="font-size:40px">📅</div>
+            <div>
+              <div style="font-size:17px;font-weight:900">Bu hafta</div>
+              <div style="font-size:12.5px;color:rgba(240,240,248,.6);margin-top:3px">9–14 Iyun, 2026</div>
+            </div>
+          </div>
+          <div class="hero-row" style="margin-top:14px">
+            <div class="hs"><div class="hs-v">3</div><div class="hs-l">Dars</div></div>
+            <div class="hs"><div class="hs-v" style="color:var(--green2)">2</div><div class="hs-l">Bo'ldi</div></div>
+            <div class="hs"><div class="hs-v" style="color:var(--blue2)">1</div><div class="hs-l">Qoldi</div></div>
+            <div class="hs"><div class="hs-v" style="color:var(--green2)">84%</div><div class="hs-l">Davomat</div></div>
+          </div>
+        </div>
+        <div class="card" id="schedList"></div>
+        <div class="card" style="padding:16px">
+          <div style="font-weight:750;font-size:14px;margin-bottom:12px">📊 Oy statistikasi</div>
+          <div style="display:flex;flex-direction:column;gap:10px" id="statList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PUZZLES -->
+    <div class="page hidden" id="page-puzzles">
+      <div class="pi">
+        <div style="background:linear-gradient(135deg,rgba(139,92,246,.2),rgba(63,140,255,.15));border:1px solid rgba(139,92,246,.3);border-radius:var(--r);padding:16px;text-align:center">
+          <div style="font-size:36px;margin-bottom:8px">🧩</div>
+          <div style="font-weight:900;font-size:17px">Kunlik masala</div>
+          <div style="font-size:12.5px;color:var(--dim);margin-top:4px">Oq o'ynaydi va yutadi!</div>
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.25);border-radius:99px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--gold2);margin:10px 0">+50 XP mukofot</div>
+          <!-- mini board -->
+          <div id="miniBoard" style="display:grid;grid-template-columns:repeat(8,1fr);border-radius:8px;overflow:hidden;border:2px solid rgba(255,255,255,.1);max-width:240px;margin:0 auto 12px"></div>
+          <button class="btn-p" style="max-width:200px;margin:0 auto" onclick="showXP()">Masalani yechish ♟</button>
+        </div>
+        <div>
+          <div class="sec" style="margin-bottom:10px"><div class="sec-t">🎯 Barcha mashqlar</div></div>
+          <div class="pz-grid" id="puzzleGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div class="page hidden" id="page-progress">
+      <div class="pi">
+        <div class="hero" style="text-align:center;padding:20px">
+          <div style="font-size:48px;margin-bottom:6px;animation:hf 3s ease-in-out infinite">🥇</div>
+          <div style="font-size:26px;font-weight:900;position:relative">1285 ELO</div>
+          <div style="font-size:13px;color:rgba(240,240,248,.6);margin-top:4px;position:relative">O'sish: +45 bu oy · 2-o'rin guruhda</div>
+        </div>
+
+        <div class="pr-wrap" id="prWrap"></div>
+
+        <div class="card" style="padding:16px">
+          <div style="font-weight:750;font-size:14px;margin-bottom:14px">📚 Mavzular</div>
+          <div id="topicProg"></div>
+        </div>
+
+        <div class="card" style="padding:16px">
+          <div style="font-weight:750;font-size:14px;margin-bottom:12px">📊 Reyting o'sishi</div>
+          <div style="display:flex;align-items:flex-end;gap:6px;height:100px" id="rChart"></div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px">
+            <span style="font-size:11px;color:var(--faint)">Yan</span><span style="font-size:11px;color:var(--faint)">Fev</span><span style="font-size:11px;color:var(--faint)">Mar</span><span style="font-size:11px;color:var(--faint)">Apr</span><span style="font-size:11px;color:var(--faint)">May</span><span style="font-size:11px;color:var(--faint)">Iyu</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACHIEVEMENTS -->
+    <div class="page hidden" id="page-achievements">
+      <div class="pi">
+        <div style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(139,92,246,.1));border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:16px;display:flex;gap:14px;align-items:center">
+          <div style="font-size:44px;animation:hf 3s ease-in-out infinite">🏆</div>
+          <div>
+            <div style="font-size:17px;font-weight:900">12 ta yutuq!</div>
+            <div style="font-size:12.5px;color:var(--dim);margin-top:3px">8 ta qoldi · Davom ettiing!</div>
+            <div style="height:5px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:8px;width:160px"><div style="width:60%;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2));border-radius:99px"></div></div>
+          </div>
+        </div>
+        <div class="card" id="achAll"></div>
+      </div>
+    </div>
+
+    <!-- LEADERBOARD -->
+    <div class="page hidden" id="page-leaderboard">
+      <div class="pi">
+        <div class="hero" style="text-align:center;padding:20px">
+          <div style="font-size:50px;margin-bottom:6px">🥈</div>
+          <div style="font-size:20px;font-weight:900;position:relative">2-o'rin · A guruh</div>
+          <div style="font-size:13px;color:rgba(240,240,248,.6);margin-top:4px;position:relative">ELO: 1285 · Iyun 2026</div>
+        </div>
+        <div class="card" id="lbFull"></div>
+      </div>
+    </div>
+
+    <!-- CHAT -->
+    <div class="page hidden" id="page-chat">
+      <div class="chat-wrap">
+        <div class="chat-msgs" id="chatMsgs"></div>
+        <div class="chat-bar">
+          <input class="chat-inp" id="chatInp" placeholder="Xabar yozing…"/>
+          <button class="chat-send" onclick="sendMsg()">➤</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div class="page hidden" id="page-notifications">
+      <div class="pi">
+        <div class="card" id="notifList"></div>
+      </div>
+    </div>
+
+    <!-- PROFILE -->
+    <div class="page hidden" id="page-profile">
+      <div class="pi">
+        <div class="prof-card">
+          <div class="prof-av">AK</div>
+          <div class="prof-name">Asilbek Komilov</div>
+          <div class="prof-role">9 yosh · Boshlang'ich · A guruh</div>
+          <div class="prof-badges">
+            <span class="badge-pill" style="background:rgba(245,158,11,.15);color:var(--gold2);border:1px solid rgba(245,158,11,.25)">👑 3-daraja</span>
+            <span class="badge-pill" style="background:rgba(63,140,255,.15);color:var(--blue2);border:1px solid rgba(63,140,255,.2)">🔥 7 streak</span>
+          </div>
+          <div class="prof-stats">
+            <div class="ps"><div class="ps-v" style="color:var(--blue2)">1285</div><div class="ps-l">ELO</div></div>
+            <div class="ps"><div class="ps-v" style="color:var(--gold2)">12</div><div class="ps-l">Yutuq</div></div>
+            <div class="ps"><div class="ps-v" style="color:var(--green2)">620</div><div class="ps-l">XP</div></div>
+            <div class="ps"><div class="ps-v" style="color:var(--purple2)">47</div><div class="ps-l">Masala</div></div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:16px">
+          <div style="font-weight:750;font-size:14px;margin-bottom:12px">📋 Ma'lumotlar</div>
+          <div class="info-row"><span class="info-ic">📚</span><span class="info-lbl">Guruh</span><span class="info-val">Boshlang'ich — A</span></div>
+          <div class="info-row"><span class="info-ic">👨‍🏫</span><span class="info-lbl">O'qituvchi</span><span class="info-val">Alisher Karimov</span></div>
+          <div class="info-row"><span class="info-ic">📅</span><span class="info-lbl">Qo'shilgan</span><span class="info-val">1 mart 2026</span></div>
+          <div class="info-row"><span class="info-ic">🏅</span><span class="info-lbl">Maktab</span><span class="info-val" style="color:var(--blue2)">Shaxmat Online</span></div>
+        </div>
+
+        <div class="card" style="padding:16px">
+          <div style="font-weight:750;font-size:14px;margin-bottom:12px">⚡ Daraja yo'li</div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px"><span style="color:var(--dim)">620 / 1000 XP</span><span style="color:var(--blue2);font-weight:700">62%</span></div>
+          <div style="height:8px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;margin-bottom:14px"><div style="width:62%;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--purple))"></div></div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center">
+            <div style="opacity:.4"><div style="font-size:22px">🥉</div><div style="font-size:10px;color:var(--dim)">1</div></div>
+            <div style="opacity:.5"><div style="font-size:22px">🥈</div><div style="font-size:10px;color:var(--dim)">2</div></div>
+            <div><div style="font-size:26px;animation:hf 2s infinite">🥇</div><div style="font-size:10px;color:var(--gold2);font-weight:700">3 ✓</div></div>
+            <div style="opacity:.2"><div style="font-size:22px">🏆</div><div style="font-size:10px;color:var(--dim)">4</div></div>
+            <div style="opacity:.2"><div style="font-size:22px">👑</div><div style="font-size:10px;color:var(--dim)">5</div></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <a href="student.html" class="btn-s" style="height:44px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--r)">🎮 To'liq panel</a>
+          <a href="index.html" class="btn-s" style="height:44px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--r)">🛡 Admin panel</a>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /pages -->
+
+  <!-- BOTTOM NAV -->
+  <nav class="bnav" id="bnav"></nav>
+</div>
+
+<script>
+/* ── TG INIT ── */
+const tg = window.Telegram?.WebApp;
+if(tg){
+  tg.ready();
+  tg.expand();
+  tg.enableClosingConfirmation();
+}
+function haptic(type='light'){tg?.HapticFeedback?.impactOccurred?.(type);}
+
+/* ── NAV ── */
+const NAV=[
+  {id:"home",        ic:"🏠", lbl:"Bosh"},
+  {id:"schedule",    ic:"📅", lbl:"Darslar"},
+  {id:"puzzles",     ic:"🧩", lbl:"Mashq"},
+  {id:"leaderboard", ic:"🏅", lbl:"Reyting"},
+  {id:"profile",     ic:"👤", lbl:"Profil"},
+];
+let cur="home";
+const bnav=document.getElementById("bnav");
+NAV.forEach(n=>{
+  const d=document.createElement("div");
+  d.className="bni"+(n.id==="home"?" on":"");
+  d.dataset.id=n.id;
+  d.innerHTML=`<div class="bni-ic">${n.ic}</div><div class="bni-lbl">${n.lbl}</div>`;
+  d.onclick=()=>goPage(n.id);
+  bnav.appendChild(d);
+});
+
+function goPage(id){
+  haptic();
+  document.getElementById("page-"+cur).classList.add("hidden");
+  document.getElementById("page-"+id).classList.remove("hidden");
+  document.getElementById("page-"+id).classList.add("page-enter");
+  setTimeout(()=>document.getElementById("page-"+id).classList.remove("page-enter"),400);
+  document.querySelectorAll(".bni").forEach(b=>b.classList.toggle("on",b.dataset.id===id));
+  cur=id;
+  localStorage.setItem("tga_page",id);
+  if(tg) tg.BackButton[id==="home"?"hide":"show"]();
+}
+if(tg) tg.BackButton.onClick(()=>goPage("home"));
+
+const saved=localStorage.getItem("tga_page");
+if(saved&&saved!=="home") setTimeout(()=>goPage(saved),50);
+
+/* ── STARS ── */
+const sw=document.getElementById("starsWrap");
+for(let i=0;i<16;i++){
+  const s=document.createElement("div");
+  s.className="star";
+  s.style.cssText=`width:${2+Math.random()*2}px;height:${2+Math.random()*2}px;left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${1+Math.random()*3}s;--dl:${Math.random()*3}s`;
+  sw.appendChild(s);
+}
+
+/* ── MINI BOARD ── */
+const BOARD=[
+  [null,null,null,null,null,null,"♚",null],
+  [null,null,null,null,null,"♙","♙","♙"],
+  [null,null,null,null,null,null,null,null],
+  [null,null,null,null,"♟",null,null,null],
+  [null,null,null,null,null,null,null,null],
+  [null,null,null,null,null,null,null,null],
+  [null,null,null,null,null,"♟",null,null],
+  [null,"♔",null,null,null,null,null,null],
+];
+const mb=document.getElementById("miniBoard");
+BOARD.forEach((row,r)=>row.forEach((p,c)=>{
+  const d=document.createElement("div");
+  d.style.cssText=`aspect-ratio:1;display:grid;place-items:center;font-size:clamp(10px,2vw,18px);background:${(r+c)%2===0?"#b8cfe8":"#3F8CFF"};cursor:pointer;transition:filter .15s`;
+  if(p) d.textContent=p;
+  mb.appendChild(d);
+}));
+
+/* ── ACHIEVEMENTS DATA ── */
+const ACHS=[
+  {ic:"⭐",nm:"Birinchi g'alaba",desc:"Birinchi o'yinni yutdingiz",done:true,pct:100,bg:"rgba(245,158,11,.15)"},
+  {ic:"🔥",nm:"7 kun streak",desc:"7 kun ketma-ket mashq",done:true,pct:100,bg:"rgba(239,68,68,.15)"},
+  {ic:"🧩",nm:"Masala ustasi",desc:"50 ta masala yeching",done:false,pct:94,bg:"rgba(139,92,246,.15)"},
+  {ic:"🏆",nm:"Top-3 guruhda",desc:"Reyting top-3 ga kiring",done:true,pct:100,bg:"rgba(34,197,94,.15)"},
+  {ic:"⚡",nm:"Tez o'yinchi",desc:"1 daqiqada g'alaba",done:false,pct:0,bg:"rgba(63,140,255,.15)"},
+  {ic:"👑",nm:"Oy rekordi",desc:"100 ta masala yeching",done:false,pct:47,bg:"rgba(236,72,153,.15)"},
+  {ic:"🎯",nm:"Aniqlik",desc:"10 ta ketma-ket to'g'ri",done:true,pct:100,bg:"rgba(63,140,255,.15)"},
+  {ic:"🌟",nm:"ELO 1300",desc:"Reyting 1300 ga yet",done:false,pct:85,bg:"rgba(245,158,11,.15)"},
+];
+function achRow(a){
+  const d=document.createElement("div");
+  d.className="ach";
+  d.innerHTML=`
+    <div class="ach-ic" style="background:${a.bg};${a.done?'':'filter:grayscale(.6);opacity:.55'}">${a.ic}</div>
+    <div style="flex:1;min-width:0">
+      <div class="ach-name">${a.nm}</div>
+      <div class="ach-desc">${a.desc}</div>
+      ${a.done
+        ?`<div style="font-size:11px;color:var(--green2);margin-top:4px;font-weight:600">✓ Qo'lga kiritildi</div>`
+        :`<div class="ach-pbar"><div class="ach-pfill" style="width:${a.pct}%"></div></div><div style="font-size:11px;color:var(--faint);margin-top:3px">${a.pct}%</div>`
+      }
+    </div>
+    ${a.done?'<div style="font-size:20px">✅</div>':
+      `<div style="font-size:11px;font-weight:700;background:rgba(255,255,255,.06);border-radius:99px;padding:3px 8px;color:var(--dim)">${a.pct}%</div>`}`;
+  return d;
+}
+const achHome=document.getElementById("achHome");
+ACHS.filter(a=>a.done).slice(0,3).forEach(a=>achHome.appendChild(achRow(a)));
+const achAll=document.getElementById("achAll");
+ACHS.forEach(a=>achAll.appendChild(achRow(a)));
+
+/* ── LEADERBOARD DATA ── */
+const LB=[
+  {rank:1,nm:"Sardor Nazarov",pts:1520,ch:"+80",col:"#f59e0b",me:false},
+  {rank:2,nm:"Asilbek Komilov",pts:1285,ch:"+45",col:"#3F8CFF",me:true},
+  {rank:3,nm:"Kamola Yusupova",pts:1240,ch:"+30",col:"#8b5cf6",me:false},
+  {rank:4,nm:"Bobur Nazarov",pts:1180,ch:"+10",col:"#22c55e",me:false},
+  {rank:5,nm:"Gulnoza Tosheva",pts:1150,ch:"-5",col:"#ec4899",me:false},
+  {rank:6,nm:"Laylo Ismoilova",pts:1120,ch:"+25",col:"#14b8a6",me:false},
+];
+const rankIc=r=>r===1?"🥇":r===2?"🥈":r===3?"🥉":r;
+function lbRow(p){
+  const d=document.createElement("div");
+  d.className="lb-row"+(p.me?" me":"");
+  d.innerHTML=`
+    <div class="lb-rank">${rankIc(p.rank)}</div>
+    <div class="lb-av" style="background:${p.col}">${p.nm.split(" ").map(w=>w[0]).join("").slice(0,2)}</div>
+    <div class="lb-name">${p.nm}${p.me?' <span class="me-tag">Sen</span>':""}</div>
+    <div class="lb-pts">${p.pts}</div>
+    <div style="font-size:12px;font-weight:700;width:36px;text-align:right;color:${p.ch.startsWith("+")||p.ch==="0"?"var(--green2)":"var(--red)"}">${p.ch}</div>`;
+  return d;
+}
+LB.slice(0,3).forEach(p=>document.getElementById("lbHome").appendChild(lbRow(p)));
+LB.forEach(p=>document.getElementById("lbFull").appendChild(lbRow(p)));
+
+/* ── SCHEDULE ── */
+const SCHED=[
+  {time:"09:00",nm:"Boshlang'ich A",day:"Du 10.06",color:"#3F8CFF",status:"done"},
+  {time:"09:00",nm:"Boshlang'ich A",day:"Chor 11.06",color:"#3F8CFF",status:"soon"},
+  {time:"09:00",nm:"Boshlang'ich A",day:"Ju 13.06",color:"#3F8CFF",status:"soon"},
+];
+const sl=document.getElementById("schedList");
+SCHED.forEach(s=>{
+  const d=document.createElement("div");
+  d.className="si";
+  d.innerHTML=`
+    <div class="si-time">${s.time}</div>
+    <div class="si-dot" style="background:${s.color}"></div>
+    <div class="si-name" style="min-width:0"><div style="font-weight:650;font-size:14px">${s.nm}</div><div style="font-size:12px;color:var(--dim)">${s.day}</div></div>
+    <span class="si-tag ${s.status==="done"?"tag-done":s.status==="soon"?"tag-soon":"tag-miss"}">${s.status==="done"?"✓":"→"}</span>`;
+  sl.appendChild(d);
+});
+const statL=document.getElementById("statList");
+[["Jami darslar","24",""],["Kelganlar","20","color:var(--green2)"],["Kechikkanlar","3","color:var(--gold2)"],["Kelmaganlar","1","color:var(--red)"]].forEach(([l,v,st])=>{
+  const d=document.createElement("div");
+  d.style="display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0";
+  d.innerHTML=`<span style="color:var(--dim)">${l}</span><b style="${st}">${v}</b>`;
+  statL.appendChild(d);
+});
+
+/* ── PUZZLES ── */
+const PUZZLES=[
+  {ic:"⚡",nm:"Tezkor",desc:"1 daqiqa",diff:"Oson",xp:25,bc:"rgba(34,197,94,.15)",dc:"var(--green2)"},
+  {ic:"🧩",nm:"Kombinatsiya",desc:"2 harakatda mat",diff:"O'rta",xp:50,bc:"rgba(63,140,255,.15)",dc:"var(--blue2)"},
+  {ic:"🔥",nm:"Ilg'or",desc:"Pozitsion",diff:"Qiyin",xp:100,bc:"rgba(139,92,246,.15)",dc:"var(--purple2)"},
+  {ic:"🎯",nm:"Kunlik",desc:"Maxsus masala",diff:"O'rta",xp:50,bc:"rgba(245,158,11,.15)",dc:"var(--gold2)"},
+  {ic:"♜",nm:"Endshpil",desc:"Qirol+piyoda",diff:"O'rta",xp:40,bc:"rgba(236,72,153,.15)",dc:"var(--pink)"},
+  {ic:"♞",nm:"Ot",desc:"Sakrash ustasi",diff:"Oson",xp:30,bc:"rgba(20,184,166,.15)",dc:"#14b8a6"},
+];
+const pg=document.getElementById("puzzleGrid");
+PUZZLES.forEach(p=>{
+  const d=document.createElement("div");
+  d.className="pz";
+  d.style=`background:${p.bc};border:1px solid ${p.dc}30`;
+  d.innerHTML=`
+    <div class="pz-ic">${p.ic}</div>
+    <div class="pz-name">${p.nm}</div>
+    <div class="pz-desc">${p.desc}</div>
+    <div class="pz-xp">+${p.xp} XP</div>
+    <button class="pz-btn" onclick="showXP()">Boshlash</button>`;
+  pg.appendChild(d);
+});
+
+/* ── PROGRESS RINGS ── */
+const RINGS=[
+  {lbl:"Davomat",pct:84,c:"#22c55e",r:34},
+  {lbl:"Aniqlik",pct:72,c:"#3F8CFF",r:34},
+  {lbl:"Davom",pct:62,c:"#f59e0b",r:34},
+  {lbl:"XP",pct:62,c:"#8b5cf6",r:34},
+];
+const prW=document.getElementById("prWrap");
+RINGS.forEach(rg=>{
+  const c=2*Math.PI*rg.r, dash=c*rg.pct/100;
+  const d=document.createElement("div");
+  d.className="pr-item";
+  d.innerHTML=`
+    <svg class="ring-svg" width="80" height="80" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="${rg.r}" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="8"/>
+      <circle cx="40" cy="40" r="${rg.r}" fill="none" stroke="${rg.c}" stroke-width="8"
+        stroke-dasharray="${dash} ${c}" stroke-linecap="round"/>
+    </svg>
+    <div class="ring-center">
+      <div class="ring-val" style="color:${rg.c}">${rg.pct}%</div>
+      <div class="ring-lbl">${rg.lbl}</div>
+    </div>`;
+  prW.appendChild(d);
+});
+
+/* topic progress */
+const tp=document.getElementById("topicProg");
+[{nm:"Debyut",pct:72,c:"var(--blue)"},{nm:"Taktika",pct:55,c:"var(--purple)"},{nm:"Endshpil",pct:38,c:"var(--gold)"},{nm:"Pozitsion",pct:25,c:"var(--green)"}].forEach(t=>{
+  const d=document.createElement("div");
+  d.style="margin-bottom:12px";
+  d.innerHTML=`
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+      <span style="color:var(--dim)">${t.nm}</span><span style="font-weight:700;color:${t.c}">${t.pct}%</span>
+    </div>
+    <div style="height:6px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden">
+      <div style="width:${t.pct}%;height:100%;border-radius:99px;background:${t.c}"></div>
+    </div>`;
+  tp.appendChild(d);
+});
+
+/* rating chart */
+const rc=document.getElementById("rChart");
+[1150,1195,1220,1240,1270,1285].forEach((v,i,a)=>{
+  const mn=Math.min(...a)-30,mx=Math.max(...a)+10;
+  const b=document.createElement("div");
+  b.style=`flex:1;border-radius:5px 5px 2px 2px;background:${i===a.length-1?"linear-gradient(180deg,var(--blue),var(--purple))":"rgba(63,140,255,.3)"};height:${((v-mn)/(mx-mn)*100)}%;min-height:4px;position:relative`;
+  const lb=document.createElement("div");
+  lb.style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--dim);white-space:nowrap";
+  lb.textContent=v;
+  b.appendChild(lb);
+  rc.appendChild(b);
+});
+
+/* ── NOTIFICATIONS ── */
+const NOTIFS=[
+  {ic:"🔔",nm:"Dars eslatmasi",body:"Bugun 14:00 — A guruh",when:"10 daqiqa",unread:true},
+  {ic:"⚡",nm:"+50 XP qo'shildi",body:"Kunlik masalani yechdingiz!",when:"1 soat",unread:true},
+  {ic:"🏆",nm:"Yangi yutuq!",body:"7 kunlik streak — tabriklaymiz!",when:"2 soat",unread:true},
+  {ic:"📢",nm:"Admin xabar",body:"Yangi dars materiali yuklandi",when:"Kecha",unread:false},
+  {ic:"💡",nm:"Maslahat",body:"Endshpilni o'rganishni boshlang",when:"2 kun",unread:false},
+];
+const nl=document.getElementById("notifList");
+NOTIFS.forEach(n=>{
+  const d=document.createElement("div");
+  d.className="ach";
+  d.style=n.unread?"background:rgba(63,140,255,.05)":"";
+  d.innerHTML=`
+    <div class="ach-ic" style="background:${n.unread?"rgba(63,140,255,.15)":"rgba(255,255,255,.06)"};font-size:22px">${n.ic}</div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:7px">
+        <span style="font-weight:700;font-size:13.5px">${n.nm}</span>
+        ${n.unread?'<span style="width:7px;height:7px;border-radius:50%;background:var(--blue);display:inline-block;flex:none"></span>':""}
+      </div>
+      <div class="ach-desc">${n.body}</div>
+      <div style="font-size:11px;color:var(--faint);margin-top:3px">${n.when} oldin</div>
+    </div>
+    ${n.unread?'<span style="background:rgba(63,140,255,.15);color:var(--blue2);border-radius:99px;padding:2px 8px;font-size:11px;font-weight:700;flex:none">Yangi</span>':""}`;
+  nl.appendChild(d);
+});
+
+/* ── CHAT ── */
+const MSGS=[
+  {out:false,from:"O'qituvchi",text:"Salom Asilbek! Bugungi darsga tayyor bo'ldingmi? 😊",time:"09:10"},
+  {out:true,from:"Men",text:"Ha, tayyor! Kecha endshpil mashq qildim.",time:"09:14"},
+  {out:false,from:"O'qituvchi",text:"Zo'r! Bugun yangi taktikani o'rganamiz. 14:00 da bo'lasan?",time:"09:16"},
+  {out:true,from:"Men",text:"Albatta! Ko'rishguncha 👋",time:"09:17"},
+];
+const cm=document.getElementById("chatMsgs");
+MSGS.forEach(m=>{
+  const r=document.createElement("div");
+  r.className="msg-row"+(m.out?" out":"");
+  r.innerHTML=`
+    ${!m.out?`<div style="width:28px;height:28px;border-radius:9px;background:linear-gradient(135deg,var(--blue),var(--purple));display:grid;place-items:center;color:#fff;font-weight:700;font-size:11px;flex:none">AK</div>`:""}
+    <div>
+      <div class="msg-bub ${m.out?"out":"in"}">${m.text}</div>
+      <div class="msg-time" style="text-align:${m.out?"right":"left"};margin-top:3px">${m.time}</div>
+    </div>`;
+  cm.appendChild(r);
+});
+cm.scrollTop=cm.scrollHeight;
+function sendMsg(){
+  const inp=document.getElementById("chatInp");
+  const txt=inp.value.trim();
+  if(!txt) return;
+  haptic('light');
+  const r=document.createElement("div");
+  r.className="msg-row out";
+  r.innerHTML=`<div><div class="msg-bub out">${txt}</div><div class="msg-time" style="text-align:right;margin-top:3px">${new Date().toLocaleTimeString("uz",{hour:"2-digit",minute:"2-digit"})}</div></div>`;
+  cm.appendChild(r);
+  cm.scrollTop=cm.scrollHeight;
+  inp.value="";
+}
+document.getElementById("chatInp").addEventListener("keydown",e=>{if(e.key==="Enter")sendMsg();});
+
+/* ── XP POPUP ── */
+function showXP(){
+  haptic('medium');
+  const t=document.getElementById("toast");
+  t.classList.add("show");
+  spawnConf();
+  setTimeout(()=>t.classList.remove("show"),2500);
+}
+function spawnConf(){
+  const colors=["#3F8CFF","#8b5cf6","#f59e0b","#22c55e","#ec4899","#6aa8ff"];
+  for(let i=0;i<24;i++){
+    const c=document.createElement("div");
+    c.className="conf";
+    c.style.cssText=`background:${colors[Math.floor(Math.random()*colors.length)]};left:${Math.random()*100}%;top:0;--d:${1.5+Math.random()*1.5}s;--dl:${Math.random()*.4}s`;
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(),3500);
+  }
+}
+</script>
+</body>
+</html>
