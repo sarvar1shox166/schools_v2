@@ -102,6 +102,32 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
+  app.post("/auth/refresh", async (request, reply) => {
+    const { refreshToken } = request.body as { refreshToken?: string };
+    if (!refreshToken) {
+      return reply.code(400).send({ error: "refreshToken required" });
+    }
+
+    let payload: { sub: string; tenantId: string | null; branchId: string | null; role: "super_admin"|"admin"|"teacher"|"student" };
+    try {
+      payload = app.jwt.verify<typeof payload>(refreshToken);
+    } catch {
+      return reply.code(401).send({ error: "Invalid or expired refresh token" });
+    }
+
+    const newPayload = {
+      sub: payload.sub,
+      tenantId: payload.tenantId,
+      branchId: payload.branchId,
+      role: payload.role,
+    };
+
+    const accessToken = app.jwt.sign(newPayload, { expiresIn: "15m" });
+    const newRefreshToken = app.jwt.sign(newPayload, { expiresIn: "30d" });
+
+    return reply.send({ accessToken, refreshToken: newRefreshToken });
+  });
+
   app.get("/auth/me", { onRequest: [app.authenticate] }, async (request) => {
     return request.user;
   });

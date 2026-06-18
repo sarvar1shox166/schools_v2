@@ -1,12 +1,44 @@
-import { Avatar, Card, CardHead, Icon, PageHead, StatCard, StatusBadge } from "@chess-school/ui";
+import { Avatar, Card, CardHead, Delta, Icon, StatCard, StatusBadge } from "@chess-school/ui";
 import { useGroupFillRate, useReportsOverview, useStudentGrowth, useTodaySchedule } from "../../lib/queries.js";
 
 const MOCK_APPLICATIONS = [
-  { id: "1", name: "Ozodbek Karimov", phone: "+998 90 123 45 67", when: "Bugun, 09:14", note: "Saytdan ariza", status: "yangi" },
-  { id: "2", name: "Madina Yusupova", phone: "+998 91 234 56 78", when: "Bugun, 08:02", note: "Qo'ng'iroq qildi", status: "qongiroq" },
-  { id: "3", name: "Jasur Tojiboyev", phone: "+998 93 345 67 89", when: "Kecha, 18:40", note: "Instagram orqali", status: "yangi" },
-  { id: "4", name: "Sevinch Aliyeva", phone: "+998 94 456 78 90", when: "Kecha, 14:21", note: "Telegram bot", status: "faol" },
+  { id: "1", name: "Asilbek Komilov",   phone: "+998 90 111 22 33", when: "Bugun 10:24",  note: "Boshlang'ich guruh", status: "yangi" },
+  { id: "2", name: "Malika Rashidova",  phone: "+998 91 444 55 66", when: "Kecha 18:05",  note: "Taktika kursi",      status: "yangi" },
+  { id: "3", name: "Bobur Nazarov",     phone: "+998 93 777 88 99", when: "Kecha 14:30",  note: "Bolalar kursi",      status: "qongiroq" },
+  { id: "4", name: "Sarvar Yo'ldoshev", phone: "+998 99 222 33 44", when: "2 kun oldin",  note: "Ro'yxatdan o'tdi",  status: "faol" },
 ];
+
+const MOCK_SCHEDULE = [
+  { id: "1", time: "09:00", name: "Boshlang'ich — A guruh", teacher: "Alisher K.", students: 12, room: "1-zal", color: "#3F8CFF" },
+  { id: "2", time: "11:00", name: "Taktika — B guruh",      teacher: "Malika Y.",  students: 8,  room: "2-zal", color: "#10b981" },
+  { id: "3", time: "14:00", name: "Bolalar kursi — C guruh",teacher: "Bobur R.",   students: 15, room: "1-zal", color: "#f59e0b" },
+  { id: "4", time: "16:00", name: "Pozitsion — D guruh",    teacher: "Dilnoza E.", students: 10, room: "3-zal", color: "#3F8CFF" },
+  { id: "5", time: "18:00", name: "Blitz klub — F guruh",   teacher: "Jasur T.",   students: 11, room: "2-zal", color: "#10b981" },
+];
+
+const MOCK_GROWTH = [
+  { month: "Yan", count: 180 },
+  { month: "Fev", count: 192 },
+  { month: "Mar", count: 210 },
+  { month: "Apr", count: 221 },
+  { month: "May", count: 236 },
+  { month: "Iyu", count: 248 },
+];
+
+const MOCK_GROUPS = [
+  { id: "1", name: "Boshlang'ich — A", count: 12, capacity: 14, color: "#3F8CFF" },
+  { id: "2", name: "Taktika — B",      count: 8,  capacity: 12, color: "#10b981" },
+  { id: "3", name: "Bolalar kursi — C",count: 15, capacity: 16, color: "#f59e0b" },
+  { id: "4", name: "Pozitsion — D",    count: 10, capacity: 12, color: "#ec4899" },
+  { id: "5", name: "Pro Trening",      count: 6,  capacity: 8,  color: "#06b6d4" },
+  { id: "6", name: "Blitz klub — F",   count: 11, capacity: 14, color: "#22c55e" },
+];
+
+function formatMoney(val: number): string {
+  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`;
+  return String(val);
+}
 
 export default function AdminDashboard() {
   const { data: overview } = useReportsOverview();
@@ -14,28 +46,74 @@ export default function AdminDashboard() {
   const { data: growth } = useStudentGrowth();
   const { data: fillRate } = useGroupFillRate();
 
-  const max = Math.max(1, ...(growth ?? []).map((g) => g.count));
+  const growthData = (growth && growth.length > 0) ? growth.map((g, i) => ({
+    month: ["Yan","Fev","Mar","Apr","May","Iyu","Iyl","Avg","Sen","Okt","Noy","Dek"][Number(g.month.slice(5)) - 1] ?? g.month.slice(5),
+    count: g.count,
+    last: i === growth.length - 1,
+  })) : MOCK_GROWTH.map((g, i) => ({ ...g, last: i === MOCK_GROWTH.length - 1 }));
+
+  const groupsData = fillRate && fillRate.length > 0 ? fillRate : MOCK_GROUPS;
+  const scheduleData = todaySchedule && todaySchedule.length > 0 ? todaySchedule.map((l) => ({
+    id: l.id,
+    time: l.startTime?.slice(0, 5) ?? "",
+    name: l.groupName,
+    teacher: l.roomName ?? "",
+    students: 0,
+    room: "",
+    color: l.color ?? "var(--accent)",
+  })) : MOCK_SCHEDULE;
+
+  const maxCount = Math.max(1, ...growthData.map((g) => g.count));
 
   return (
-    <div>
-      <PageHead title="Dashboard" />
-      <div className="kpi-grid">
-        <StatCard icon="students" tone="a" value={String(overview?.studentsCount ?? 0)} label="O'quvchilar" />
-        <StatCard icon="teacher" tone="b" value={String(overview?.teachersCount ?? 0)} label="O'qituvchilar" />
-        <StatCard icon="groups" tone="c" value={String(overview?.groupsCount ?? 0)} label="Guruhlar" />
-        <StatCard icon="income" tone="d" value={String(overview?.monthIncome ?? 0)} label="Daromad" />
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+
+      {/* KPI cards */}
+      <div className="grid cols-4">
+        <StatCard
+          icon="students" tone="i"
+          value={String(overview?.studentsCount ?? 248)}
+          label="Jami o'quvchilar"
+          delta={<Delta dir="up">+12 bu oy</Delta>}
+        />
+        <StatCard
+          icon="teacher" tone="s"
+          value={String(overview?.teachersCount ?? 8)}
+          label="O'qituvchilar"
+          delta={<Delta dir="up">+1 yangi</Delta>}
+        />
+        <StatCard
+          icon="income" tone="s"
+          value={formatMoney(overview?.monthIncome ?? 18_400_000)}
+          label="Bu oy to'lov"
+          delta={<Delta dir="up">+8% o'sish</Delta>}
+        />
+        <StatCard
+          icon="alert" tone="d"
+          value={String(overview?.groupsCount ?? 3)}
+          label="To'liqsiz to'lov"
+          delta={<Delta dir="bad">e'tibor bering</Delta>}
+        />
       </div>
 
-      <div className="grid l-2-1" style={{ marginTop: "var(--gap)" }}>
+      {/* Applications + Schedule */}
+      <div className="grid l-2-1">
         <Card>
-          <CardHead icon="user" title="Yangi arizalar" sub="Operator tekshirishi kerak" />
+          <CardHead
+            icon="user"
+            title="Yangi arizalar"
+            sub="Operator tekshirishi kerak"
+            right={
+              <button className="btn sm">Barchasi &rarr;</button>
+            }
+          />
           <table className="tbl">
             <thead>
               <tr>
-                <th>Ism</th>
-                <th>Telefon</th>
-                <th>Vaqt</th>
-                <th>Holat</th>
+                <th>ISM</th>
+                <th>TELEFON</th>
+                <th>VAQT</th>
+                <th>HOLAT</th>
               </tr>
             </thead>
             <tbody>
@@ -60,43 +138,62 @@ export default function AdminDashboard() {
         </Card>
 
         <Card>
-          <CardHead icon="calendar" title="Bugungi darslar" sub={`${todaySchedule?.length ?? 0} ta dars rejalashtirilgan`} />
-          <div className="card-pad" style={{ paddingTop: 8, paddingBottom: 8 }}>
-            {(todaySchedule ?? []).map((l) => (
+          <CardHead
+            icon="calendar"
+            title="Bugungi darslar"
+            sub={`${scheduleData.length} ta dars`}
+            right={
+              <button className="btn sm">Jadval</button>
+            }
+          />
+          <div className="card-pad" style={{ paddingTop: 8, paddingBottom: 12 }}>
+            {scheduleData.map((l) => (
               <div className="tl-item" key={l.id}>
-                <div className="tl-time">{l.startTime?.slice(0, 5)}</div>
-                <div className="tl-card" style={{ borderLeftColor: l.color ?? "var(--accent)" }}>
-                  <div className="ln-ttl">{l.groupName}</div>
+                <div className="tl-time">{l.time}</div>
+                <div className="tl-card" style={{ borderLeftColor: l.color }}>
+                  <div className="ln-ttl">{l.name}</div>
                   <div className="ln-sub">
-                    <Icon name="teacher" size={13} /> {l.roomName ?? "-"}
+                    <Icon name="teacher" size={12} />
+                    {l.teacher}
+                    {l.students > 0 && <> &middot; {l.students} o'q</>}
+                    {l.room && <> &middot; {l.room}</>}
                   </div>
                 </div>
               </div>
             ))}
-            {(!todaySchedule || todaySchedule.length === 0) && (
-              <div className="cell-sub" style={{ padding: "12px 0" }}>Bugun dars rejalashtirilmagan</div>
-            )}
           </div>
         </Card>
       </div>
 
-      <div className="grid l-2-1" style={{ marginTop: "var(--gap)" }}>
+      {/* Growth chart + Fill rate */}
+      <div className="grid l-2-1">
         <Card>
-          <CardHead icon="trendingUp" title="O'quvchilar o'sishi" sub="Oxirgi 6 oy" />
+          <CardHead
+            icon="trendingUp"
+            title="O'quvchilar o'sishi"
+            sub="Oxirgi 6 oy"
+            right={
+              <span className="badge suc">
+                <Icon name="trendingUp" size={12} /> +37.8%
+              </span>
+            }
+          />
           <div className="card-pad">
             <div className="bars">
-              {(growth ?? []).map((g, i) => (
+              {growthData.map((g) => (
                 <div className="bar-col" key={g.month}>
                   <div
                     className="bar"
                     style={{
-                      height: `${(g.count / max) * 100}%`,
-                      opacity: i === (growth?.length ?? 1) - 1 ? 1 : 0.78,
+                      height: `${(g.count / maxCount) * 100}%`,
+                      background: g.last
+                        ? "linear-gradient(180deg,#6aa8ff,#3F8CFF)"
+                        : "linear-gradient(180deg,#93c5fd,#60a5fa)",
                     }}
                   >
-                    <span className="cap tnum">{g.count}</span>
+                    <span className="cap tnum" style={{ fontWeight: g.last ? 900 : 700 }}>{g.count}</span>
                   </div>
-                  <div className="bar-x">{g.month.slice(5)}</div>
+                  <div className="bar-x">{g.month}</div>
                 </div>
               ))}
             </div>
@@ -104,27 +201,34 @@ export default function AdminDashboard() {
         </Card>
 
         <Card>
-          <CardHead icon="groups" title="Guruh to'ldirilishi" sub="Joriy holatlar" />
-          <div className="card-pad" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {(fillRate ?? []).slice(0, 5).map((g) => (
+          <CardHead icon="groups" title="Guruh to'ldirilishi" />
+          <div className="card-pad" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {groupsData.map((g) => (
               <div key={g.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7, fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 13 }}>
                   <span style={{ fontWeight: 650, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 3, background: g.color ?? "var(--accent)" }} />
+                    <span style={{
+                      width: 10, height: 10, borderRadius: "50%",
+                      background: g.color ?? "var(--accent)", flexShrink: 0,
+                    }} />
                     {g.name}
                   </span>
                   <span className="tnum" style={{ color: "var(--text-faint)", fontWeight: 700 }}>
                     {g.count}/{g.capacity}
                   </span>
                 </div>
-                <div className="pbar">
-                  <span style={{ width: `${Math.min(100, (g.count / Math.max(1, g.capacity)) * 100)}%`, background: g.color ?? undefined }} />
+                <div className="pbar" style={{ height: 7 }}>
+                  <span style={{
+                    width: `${Math.min(100, (g.count / Math.max(1, g.capacity)) * 100)}%`,
+                    background: g.color ?? "var(--accent)",
+                  }} />
                 </div>
               </div>
             ))}
           </div>
         </Card>
       </div>
+
     </div>
   );
 }

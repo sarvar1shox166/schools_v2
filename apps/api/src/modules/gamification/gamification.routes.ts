@@ -265,18 +265,62 @@ export async function gamificationRoutes(app: FastifyInstance) {
     return { correct, incorrect, accuracyPct, byDifficulty: byDiffRes.rows };
   });
 
+  // ---- ELO history ----
+
+  app.get("/me/elo-history", { onRequest: [app.requireRole("student")] }, async (request) => {
+    const studentId = await getStudentIdForUser(request.user.sub);
+    if (!studentId) return [];
+
+    const { rows } = await pool.query(
+      `SELECT elo, recorded_at AS "recordedAt"
+       FROM elo_history
+       WHERE student_id = $1
+       ORDER BY recorded_at ASC
+       LIMIT 50`,
+      [studentId]
+    );
+    return rows;
+  });
+
+  // ---- Game stats ----
+
+  app.get("/me/game-stats", { onRequest: [app.requireRole("student")] }, async (request) => {
+    const studentId = await getStudentIdForUser(request.user.sub);
+    if (!studentId) return { wins: 0, draws: 0, losses: 0, total: 0, recent: [] };
+
+    const totalsRes = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
+         COUNT(*) FILTER (WHERE result = 'draw')::int AS draws,
+         COUNT(*) FILTER (WHERE result = 'loss')::int AS losses,
+         COUNT(*)::int AS total
+       FROM game_results WHERE student_id = $1`,
+      [studentId]
+    );
+    const totals = totalsRes.rows[0];
+
+    const recentRes = await pool.query(
+      `SELECT opponent_name AS "opponentName", result, elo_change AS "eloChange", played_at AS "playedAt"
+       FROM game_results WHERE student_id = $1
+       ORDER BY played_at DESC LIMIT 10`,
+      [studentId]
+    );
+
+    return { ...totals, recent: recentRes.rows };
+  });
+
   // ---- Leaderboard ----
 
   app.get("/leaderboard", async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT u.full_name AS "fullName", sx.xp, sx.level, sx.streak
+      `SELECT u.full_name AS "fullName", sx.xp, sx.level, sx.streak, sx.elo
        FROM student_xp sx
        JOIN students s ON s.id = sx.student_id
        JOIN users u ON u.id = s.user_id
        WHERE s.tenant_id = $1
        ORDER BY sx.xp DESC
-       LIMIT 20`,
+       LIMIT 50`,
       [tenantId]
     );
     return rows;

@@ -3,6 +3,7 @@ import type { WebSocket } from "ws";
 import { Chess } from "@chess-school/chess-engine";
 import { pool } from "../../db/pool.js";
 import type { JwtPayload } from "../../plugins/auth.js";
+import { getComputerMove, difficultyToSkill } from "./stockfish.service.js";
 
 interface QueuedPlayer {
   socket: WebSocket;
@@ -99,14 +100,28 @@ async function updateElo(game: Game, reason: string) {
   const newEloWhite = Math.round(eloWhite + K * (scoreWhite - expectedWhite));
   const newEloBlack = Math.round(eloBlack + K * ((1 - scoreWhite) - (1 - expectedWhite)));
 
-  for (const [studentId, elo] of [
-    [game.white.studentId, newEloWhite],
-    [game.black.studentId, newEloBlack],
-  ] as const) {
+  const updates: [string, number, number, "win"|"draw"|"loss", string, number][] = [
+    [game.white.studentId, newEloWhite, newEloWhite - eloWhite,
+      scoreWhite === 1 ? "win" : scoreWhite === 0 ? "loss" : "draw",
+      game.black.fullName, eloBlack],
+    [game.black.studentId, newEloBlack, newEloBlack - eloBlack,
+      scoreWhite === 0 ? "win" : scoreWhite === 1 ? "loss" : "draw",
+      game.white.fullName, eloWhite],
+  ];
+
+  for (const [studentId, elo, eloChange, result, opponentName] of updates) {
     await pool.query(
       `INSERT INTO student_xp (student_id, elo) VALUES ($1, $2)
        ON CONFLICT (student_id) DO UPDATE SET elo = $2`,
       [studentId, elo]
+    );
+    await pool.query(
+      `INSERT INTO elo_history (student_id, elo) VALUES ($1, $2)`,
+      [studentId, elo]
+    );
+    await pool.query(
+      `INSERT INTO game_results (student_id, opponent_name, result, elo_change) VALUES ($1, $2, $3, $4)`,
+      [studentId, opponentName, result, eloChange]
     );
   }
 }
@@ -149,6 +164,87 @@ async function getStudent(userId: string): Promise<{ studentId: string; fullName
 }
 
 export async function pvpRoutes(app: FastifyInstance) {
+  /* ── Record game result (computer games) ──────────────────────────────── */
+  app.post("/pvp/game-result", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const { opponentName, result, opponentElo } = request.body as {
+      opponentName: string;
+      result: "win" | "draw" | "loss";
+      opponentElo: number;
+    };
+
+    if (!opponentName || !["win","draw","loss"].includes(result)) {
+      return reply.code(400).send({ error: "invalid params" });
+    }
+
+    const payload = request.user as { sub: string };
+    const { rows: sRows } = await pool.query(
+      `SELECT s.id FROM students s JOIN users u ON u.id = s.user_id WHERE u.id = $1`,
+      [payload.sub]
+    );
+    const studentId: string | undefined = sRows[0]?.id;
+    if (!studentId) return reply.code(404).send({ error: "student not found" });
+
+    const { rows: xpRows } = await pool.query(
+      `SELECT elo FROM student_xp WHERE student_id = $1`,
+      [studentId]
+    );
+    const myElo = xpRows[0]?.elo ?? 1200;
+    const oppElo = opponentElo ?? 1200;
+
+    const score = result === "win" ? 1 : result === "draw" ? 0.5 : 0;
+    const expected = 1 / (1 + 10 ** ((oppElo - myElo) / 400));
+    const K = 16;
+    const eloChange = Math.round(K * (score - expected));
+    const newElo = myElo + eloChange;
+
+    await pool.query(
+      `INSERT INTO student_xp (student_id, elo) VALUES ($1, $2)
+       ON CONFLICT (student_id) DO UPDATE SET elo = $2`,
+      [studentId, newElo]
+    );
+    await pool.query(
+      `INSERT INTO elo_history (student_id, elo) VALUES ($1, $2)`,
+      [studentId, newElo]
+    );
+    await pool.query(
+      `INSERT INTO game_results (student_id, opponent_name, result, elo_change) VALUES ($1, $2, $3, $4)`,
+      [studentId, opponentName, result, eloChange]
+    );
+
+    return reply.send({ newElo, eloChange });
+  });
+
+  /* ── Computer move HTTP endpoint ──────────────────────────────────────── */
+  app.post("/pvp/computer-move", async (request, reply) => {
+    const { fen, difficulty, unbeatable } = request.body as {
+      fen: string;
+      difficulty: number;
+      unbeatable?: boolean;
+    };
+
+    if (!fen || typeof fen !== "string") {
+      return reply.code(400).send({ error: "fen required" });
+    }
+
+    // Validate FEN via chess.js
+    let chess: Chess;
+    try {
+      chess = new Chess(fen);
+    } catch {
+      return reply.code(400).send({ error: "invalid fen" });
+    }
+    if (chess.isGameOver()) {
+      return reply.send({ move: null, gameOver: true });
+    }
+
+    const skillLevel = unbeatable ? 20 : difficultyToSkill(difficulty ?? 5);
+    // Stronger = more think time; unbeatable gets 3 seconds
+    const movetime = unbeatable ? 3000 : Math.min(200 + difficulty * 80, 1200);
+
+    const move = await getComputerMove(fen, skillLevel, movetime);
+    return reply.send({ move });
+  });
+
   app.get("/ws/pvp", { websocket: true }, async (socket, request) => {
     const { token } = request.query as { token?: string };
     if (!token) {

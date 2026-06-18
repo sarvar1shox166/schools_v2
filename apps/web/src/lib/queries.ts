@@ -443,6 +443,7 @@ export interface LeaderboardEntry {
   xp: number;
   level: number;
   streak: number;
+  elo: number;
 }
 
 export function useDailyPuzzle() {
@@ -543,6 +544,41 @@ export function useLeaderboard() {
   return useQuery({
     queryKey: ["leaderboard"],
     queryFn: async () => (await api.get<LeaderboardEntry[]>("/leaderboard")).data,
+  });
+}
+
+export interface EloPoint { elo: number; recordedAt: string; }
+
+export function useEloHistory() {
+  return useQuery({
+    queryKey: ["eloHistory"],
+    queryFn: async () => (await api.get<EloPoint[]>("/me/elo-history")).data,
+  });
+}
+
+export interface GameStats {
+  wins: number; draws: number; losses: number; total: number;
+  recent: { opponentName: string; result: "win"|"draw"|"loss"; eloChange: number; playedAt: string }[];
+}
+
+export function useGameStats() {
+  return useQuery({
+    queryKey: ["gameStats"],
+    queryFn: async () => (await api.get<GameStats>("/me/game-stats")).data,
+  });
+}
+
+export function useRecordGameResult() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { opponentName: string; result: "win"|"draw"|"loss"; opponentElo: number }) =>
+      (await api.post<{ newElo: number; eloChange: number }>("/pvp/game-result", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["myXp"] });
+      qc.invalidateQueries({ queryKey: ["eloHistory"] });
+      qc.invalidateQueries({ queryKey: ["gameStats"] });
+      qc.invalidateQueries({ queryKey: ["leaderboard"] });
+    },
   });
 }
 

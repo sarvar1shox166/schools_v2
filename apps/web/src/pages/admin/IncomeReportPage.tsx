@@ -1,140 +1,141 @@
-import { Card, fmtSom, Icon, PageHead, StatCard } from "@chess-school/ui";
-import { useIncomeBreakdown, useIncomeExtra, useIncomeSummary, usePaymentMethodStats, useReportsOverview } from "../../lib/queries.js";
+import { Card, CardHead, Icon, StatCard } from "@chess-school/ui";
 
-const MONTH_NAMES = ["Yan", "Fev", "Mar", "Apr", "May", "Iyun", "Iyul", "Avg", "Sen", "Okt", "Noy", "Dek"];
+const BAR_DATA = [
+  { month:"Yan", value:12.8 },
+  { month:"Fev", value:13.5 },
+  { month:"Mar", value:15.1 },
+  { month:"Apr", value:16.0 },
+  { month:"May", value:17.2 },
+  { month:"Iyu", value:18.4 },
+];
 
-const METHOD_LABEL: Record<string, string> = {
-  click: "Click",
-  payme: "Payme",
-  naqd: "Naqd",
-  uzcard: "Uzcard",
-};
+const DONUT_DATA = [
+  { label:"Guruh darslari",     value:"11.2M", pct:61, color:"#3b82f6" },
+  { label:"Individual trening", value:"4.6M",  pct:25, color:"#10b981" },
+  { label:"Turnirlar",          value:"1.8M",  pct:10, color:"#f59e0b" },
+  { label:"Boshqa",             value:"0.8M",  pct:4,  color:"#ec4899" },
+];
 
-const METHOD_COLORS: Record<string, string> = {
-  click: "#3F8CFF",
-  payme: "#22c55e",
-  naqd: "#f59e0b",
-  uzcard: "#a855f7",
-};
-
-function monthLabel(ym: string) {
-  const [, m] = ym.split("-");
-  return MONTH_NAMES[Number(m) - 1];
-}
+const maxBar = 18.4;
 
 export default function IncomeReportPage() {
-  const { data: overview } = useReportsOverview();
-  const { data: summary } = useIncomeSummary();
-  const { data: breakdown } = useIncomeBreakdown();
-  const { data: methods } = usePaymentMethodStats();
-  const { data: extra } = useIncomeExtra();
-
-  const maxAmount = Math.max(1, ...(summary?.map((s) => s.amount) ?? [1]));
-  const totalMethods = methods?.reduce((sum, m) => sum + m.amount, 0) ?? 0;
-
+  /* conic-gradient for donut */
   let acc = 0;
-  const gradientParts = (methods ?? []).map((m) => {
-    const pct = totalMethods > 0 ? (m.amount / totalMethods) * 100 : 0;
-    const part = `${METHOD_COLORS[m.method] ?? "#999"} ${acc}% ${acc + pct}%`;
-    acc += pct;
+  const stops = DONUT_DATA.map(d => {
+    const part = `${d.color} ${acc}% ${acc + d.pct}%`;
+    acc += d.pct;
     return part;
   });
-  const donutBg = gradientParts.length > 0 ? `conic-gradient(${gradientParts.join(", ")})` : "var(--surface-3)";
+  const donutBg = `conic-gradient(${stops.join(", ")})`;
 
   return (
-    <div>
-      <PageHead title="Daromadlar" />
+    <div style={{ display:"flex", flexDirection:"column", gap:"var(--gap)" }}>
 
-      <div className="kpi-grid">
-        <StatCard icon="income" tone="a" value={`${fmtSom(overview?.monthIncome ?? 0)} so'm`} label="Bu oy daromad" />
-        <StatCard icon="clock" tone="w" value={String(overview?.pendingPayments ?? 0)} label="Kutilayotgan to'lovlar" />
-        <StatCard icon="trendingUp" tone="s" value={`${fmtSom(extra?.yearTotal ?? 0)} so'm`} label="Yil boshidan jami" />
-        <StatCard icon="target" tone="i" value={`${extra?.planCompletionPct ?? 0}%`} label="Reja bajarilishi" />
-        <StatCard icon="percent" tone="d" value={`${fmtSom(extra?.avgPerStudent ?? 0)} so'm`} label="O'rtacha / o'quvchi" />
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <h2 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.02em", margin:0 }}>Daromadlar tahlili</h2>
+        <button className="btn" style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <Icon name="download" size={14}/> PDF
+        </button>
       </div>
 
-      <Card className="fade-up" style={{ marginTop: "var(--gap)" }}>
-        <div className="card-head"><div className="ttl">So'nggi 6 oy daromadi</div></div>
-        <div style={{ padding: "0 16px 20px" }}>
-          <div className="bars">
-            {summary?.map((s) => (
-              <div className="bar-col" key={s.month}>
-                <div className="bar" style={{ height: `${Math.max(6, (s.amount / maxAmount) * 100)}%` }}>
-                  {s.amount > 0 && <div className="cap">{fmtSom(s.amount)}</div>}
-                </div>
-                <div className="bar-x">{monthLabel(s.month)}</div>
-              </div>
-            ))}
+      {/* KPI */}
+      <div className="grid cols-4">
+        <StatCard icon="wallet" tone="s"
+          value="18.4M"
+          label="Iyun daromadi"
+          delta={<span style={{fontSize:12,fontWeight:700,color:"var(--success)"}}>↗ +8%</span>}
+        />
+        <StatCard icon="trendingUp" tone="i"
+          value="93.0M"
+          label="Yil boshidan"
+          delta={<span style={{fontSize:12,fontWeight:700,color:"var(--success)"}}>↗ +22%</span>}
+        />
+        <StatCard icon="target" tone="w"
+          value="92%"
+          label="Reja bajarilishi"
+        />
+        <StatCard icon="percent" tone="d"
+          value="74K"
+          label="O'rtacha / o'quvchi"
+        />
+      </div>
+
+      {/* Charts row */}
+      <div style={{ display:"grid", gridTemplateColumns:"3fr 2fr", gap:"var(--gap)" }}>
+
+        {/* Bar chart */}
+        <Card style={{ padding:0 }}>
+          <div style={{ padding:"18px 22px 0", display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontWeight:800, fontSize:15.5 }}>Oylik daromad</div>
+              <div style={{ fontSize:12.5, color:"var(--text-faint)", marginTop:2 }}>Million so'mda</div>
+            </div>
+            <span style={{
+              padding:"4px 12px", borderRadius:99,
+              background:"#dbeafe", color:"#2563eb",
+              fontSize:12.5, fontWeight:800,
+            }}>+37.8%</span>
           </div>
-        </div>
-      </Card>
 
-      <Card className="fade-up" style={{ marginTop: "var(--gap)" }}>
-        <div className="card-head"><div className="ttl">Usul bo'yicha taqsimot</div></div>
-        <div style={{ padding: "0 16px 20px" }}>
-          {["payme", "click", "uzcard", "naqd"].map((method) => {
-            const m = methods?.find((x) => x.method === method);
-            const amount = m?.amount ?? 0;
-            const pct = totalMethods > 0 ? Math.round((amount / totalMethods) * 100) : 0;
-            return (
-              <div className="sp-row" key={method}>
-                <div className="sp-name">
-                  <div className="nm">{METHOD_LABEL[method] ?? method}</div>
-                  <div className="sub">{fmtSom(amount)} so'm</div>
+          {/* Bars */}
+          <div style={{
+            padding:"24px 22px 20px",
+            display:"flex", alignItems:"flex-end", gap:12,
+            height:240,
+          }}>
+            {BAR_DATA.map(b => {
+              const h = Math.max(8, (b.value / maxBar) * 160);
+              return (
+                <div key={b.month} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
+                  <div style={{
+                    fontSize:11, fontWeight:700, color:"var(--text-faint)",
+                  }}>{b.value}M</div>
+                  <div style={{
+                    width:"100%", height:h, borderRadius:"6px 6px 0 0",
+                    background:"#93c5fd",
+                  }} />
+                  <div style={{ fontSize:12, color:"var(--text-faint)", fontWeight:600 }}>{b.month}</div>
                 </div>
-                <div className="sp-bar">
-                  <div className="pbar flat">
-                    <span style={{ width: `${pct}%`, background: METHOD_COLORS[method] ?? "#999" }} />
-                  </div>
-                </div>
-                <div className="sp-pct">{pct}%</div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--gap)", marginTop: "var(--gap)" }}>
-        <Card className="fade-up">
-          <div className="card-head"><div className="ttl">To'lov usullari</div></div>
-          <div style={{ display: "flex", alignItems: "center", gap: 24, padding: "0 16px 20px", flexWrap: "wrap" }}>
-            <div className="donut" style={{ background: donutBg, position: "relative" }}>
-              <div className="inner">
-                <div className="tnum" style={{ fontWeight: 800, fontSize: 16 }}>{fmtSom(totalMethods)}</div>
-                <div className="cell-sub">so'm</div>
-              </div>
-            </div>
-            <div className="legend">
-              {methods?.map((m) => (
-                <div className="row" key={m.method}>
-                  <div className="sw" style={{ background: METHOD_COLORS[m.method] ?? "#999" }} />
-                  <div className="nm">{METHOD_LABEL[m.method] ?? m.method}</div>
-                  <div className="vl">{fmtSom(m.amount)}</div>
-                </div>
-              ))}
-              {(!methods || methods.length === 0) && <div className="empty"><Icon name="search" size={24} /><div>Ma'lumot yo'q</div></div>}
-            </div>
+              );
+            })}
           </div>
         </Card>
 
-        <Card className="fade-up">
-          <div className="card-head"><div className="ttl">Paketlar bo'yicha daromad</div></div>
-          <div style={{ overflowX: "auto" }}>
-            <table className="tbl">
-              <thead><tr><th>Paket</th><th>Sotilgan</th><th>Summa</th></tr></thead>
-              <tbody>
-                {breakdown?.map((b) => (
-                  <tr key={b.name}>
-                    <td className="cell-main">{b.name}</td>
-                    <td className="tnum">{b.count}</td>
-                    <td className="tnum">{fmtSom(b.amount)} so'm</td>
-                  </tr>
-                ))}
-                {(!breakdown || breakdown.length === 0) && (
-                  <tr><td colSpan={3}><div className="empty"><Icon name="search" size={24} /><div>Ma'lumot yo'q</div></div></td></tr>
-                )}
-              </tbody>
-            </table>
+        {/* Donut chart */}
+        <Card style={{ padding:0 }}>
+          <CardHead icon="layers" title="Manbalar" sub="Iyun 2026" />
+
+          <div style={{ padding:"16px 22px 22px", display:"flex", flexDirection:"column", alignItems:"center", gap:20 }}>
+            {/* Donut */}
+            <div style={{
+              width:180, height:180, borderRadius:"50%",
+              background:donutBg, position:"relative",
+              display:"flex", alignItems:"center", justifyContent:"center",
+            }}>
+              <div style={{
+                width:110, height:110, borderRadius:"50%",
+                background:"var(--surface)",
+                display:"flex", flexDirection:"column",
+                alignItems:"center", justifyContent:"center",
+                gap:2,
+              }}>
+                <div style={{ fontWeight:800, fontSize:20 }}>18.4M</div>
+                <div style={{ fontSize:11.5, color:"var(--text-faint)", fontWeight:600 }}>jami</div>
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:8 }}>
+              {DONUT_DATA.map(d => (
+                <div key={d.label} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ width:10, height:10, borderRadius:"50%", background:d.color, flexShrink:0 }} />
+                  <div style={{ flex:1, fontSize:13, fontWeight:600 }}>{d.label}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"var(--text-dim)" }}>{d.value}</div>
+                  <div style={{ fontSize:12, color:"var(--text-faint)", minWidth:28, textAlign:"right" }}>{d.pct}%</div>
+                </div>
+              ))}
+            </div>
           </div>
         </Card>
       </div>

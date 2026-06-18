@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Avatar, Card, Icon, PageHead, Segmented } from "@chess-school/ui";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
+import type { PvpGameState } from "./PvpGamePage.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { CoordinateTrainer } from "../../components/CoordinateTrainer.js";
 import { useAuthStore } from "../../lib/auth-store.js";
@@ -18,26 +20,293 @@ const RESULT_LABELS: Record<string, string> = {
   opponent_disconnected: "Raqib o'yindan chiqdi",
 };
 
+/* ── Time controls ───────────────────────────────────────────────────────── */
 const TIME_CONTROLS = [
-  { tc: "1+0", type: "Bullet", cls: "tc-bullet" },
-  { tc: "3+0", type: "Blits", cls: "tc-blitz" },
-  { tc: "5+0", type: "Blits", cls: "tc-blitz" },
-  { tc: "10+0", type: "Rapid", cls: "tc-rapid" },
-  { tc: "15+10", type: "Rapid", cls: "tc-rapid" },
-  { tc: "30+0", type: "Klassik", cls: "tc-klassik" },
+  { tc:"1+0",  type:"BULLET",  color:"#ef4444" },
+  { tc:"2+1",  type:"BULLET",  color:"#f97316" },
+  { tc:"3+0",  type:"BLITS",   color:"#f59e0b" },
+  { tc:"3+2",  type:"BLITS",   color:"#f59e0b" },
+  { tc:"5+0",  type:"BLITS",   color:"#f59e0b" },
+  { tc:"5+3",  type:"BLITS",   color:"#f59e0b" },
+  { tc:"10+0", type:"RAPID",   color:"#3b82f6" },
+  { tc:"10+5", type:"RAPID",   color:"#3b82f6" },
+  { tc:"15+10",type:"RAPID",   color:"#3b82f6" },
+  { tc:"30+0", type:"KLASSIK", color:"#22c55e" },
+  { tc:"30+20",type:"KLASSIK", color:"#22c55e" },
+  { tc:"...",  type:"BOSHQA",  color:"rgba(255,255,255,.25)" },
 ];
 
-const TABS = [
-  { v: "pvp", label: "Jonli o'yin" },
-  { v: "coords", label: "Koordinata mashqi" },
+/* ── Demo online players ─────────────────────────────────────────────────── */
+const DEMO_PLAYERS = [
+  { id:"d1", name:"Sardor Nazarov",  elo:1520, tc:"3+2 Blits",   color:"#f59e0b" },
+  { id:"d2", name:"Kamola Yusupova", elo:1240, tc:"1+0 Bullet",  color:"#7c3aed" },
+  { id:"d3", name:"Bobur Nazarov",   elo:1180, tc:"10+0 Rapid",  color:"#22c55e" },
 ];
+
+function initials(name: string) {
+  return name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+}
+
+/* ── Difficulty ELO map ──────────────────────────────────────────────────── */
+const DIFF_ELO: Record<number, number> = {
+  1:720, 2:840, 3:960, 4:1080, 5:1200, 6:1320, 7:1440, 8:1560, 9:1680, 10:1800,
+};
+
+/* ── Computer modal ──────────────────────────────────────────────────────── */
+function ComputerModal({ tc, tcType, tcColor, onClose, onStart }:{
+  tc: string; tcType: string; tcColor: string;
+  onClose: () => void;
+  onStart: (difficulty: number, color: "white"|"random"|"black", unbeatable: boolean) => void;
+}) {
+  const [diff, setDiff]         = useState(3);
+  const [sideColor, setSide]    = useState<"white"|"random"|"black">("white");
+  const [unbeatable, setUnbeat] = useState(false);
+
+  const COLORS = [
+    { v:"white"  as const, label:"Oq",      icon:"⚪" },
+    { v:"random" as const, label:"Tasodif", icon:"🎲" },
+    { v:"black"  as const, label:"Qora",    icon:"⚫" },
+  ];
+
+  const overlay = (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"grid", placeItems:"center", zIndex:2000 }}
+      onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div style={{ background:"#1a1f35", borderRadius:22, width:440, maxWidth:"95vw", overflow:"hidden", boxShadow:"0 24px 64px rgba(0,0,0,.6)" }}>
+        {/* Header */}
+        <div style={{ background: unbeatable ? "linear-gradient(135deg,#92400e,#f59e0b)" : "linear-gradient(135deg,#2563eb,#3b82f6)", padding:"20px 22px", display:"flex", alignItems:"center", gap:14, transition:"background .3s" }}>
+          <div style={{ width:46,height:46,borderRadius:14,background:"rgba(255,255,255,.2)",display:"grid",placeItems:"center",fontSize:24,flexShrink:0 }}>
+            {unbeatable ? "👑" : "🤖"}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:900, fontSize:17, color:"#fff" }}>
+              {unbeatable ? "Yengilmas rejim" : "Kompyuterga qarshi o'yin"}
+            </div>
+            <div style={{ fontSize:12.5, color:"rgba(255,255,255,.7)", marginTop:3, display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ width:7,height:7,borderRadius:"50%",background:tcColor,display:"inline-block" }}/>
+              {tc} · {tcType}
+            </div>
+          </div>
+          <button onClick={onClose}
+            style={{ width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"grid",placeItems:"center",flexShrink:0 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding:"22px 22px 26px" }}>
+
+          {/* Unbeatable toggle */}
+          <button onClick={()=>setUnbeat(u=>!u)}
+            style={{ width:"100%", padding:"14px 16px", borderRadius:14, marginBottom:18,
+              border:`1.5px solid ${unbeatable ? "#f59e0b" : "rgba(255,255,255,.1)"}`,
+              background: unbeatable ? "rgba(245,158,11,.15)" : "rgba(255,255,255,.04)",
+              cursor:"pointer", display:"flex", alignItems:"center", gap:12, transition:"all .2s" }}>
+            <div style={{ fontSize:28 }}>👑</div>
+            <div style={{ flex:1, textAlign:"left" }}>
+              <div style={{ fontWeight:800, fontSize:14, color: unbeatable ? "#fbbf24" : "rgba(255,255,255,.8)" }}>
+                Yengilmas rejim
+              </div>
+              <div style={{ fontSize:11.5, color:"rgba(255,255,255,.4)", marginTop:2 }}>
+                Dunyoning eng kuchli shaxmat dasturi · ~3500 ELO
+              </div>
+            </div>
+            <div style={{
+              width:22, height:22, borderRadius:6,
+              background: unbeatable ? "#f59e0b" : "rgba(255,255,255,.1)",
+              display:"grid", placeItems:"center", fontSize:14, flexShrink:0,
+            }}>
+              {unbeatable ? "✓" : ""}
+            </div>
+          </button>
+
+          {/* Difficulty (disabled when unbeatable) */}
+          <div style={{ opacity: unbeatable ? 0.35 : 1, transition:"opacity .2s", pointerEvents: unbeatable ? "none" : "auto" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"rgba(255,255,255,.55)", marginBottom:12 }}>🖥 Kompyuter kuchi</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginBottom:22 }}>
+              {[1,2,3,4,5,6,7,8,9,10].map(n => {
+                const sel = diff === n;
+                return (
+                  <button key={n} onClick={()=>setDiff(n)}
+                    style={{ padding:"10px 6px", borderRadius:12, border:`1.5px solid ${sel?"#3b82f6":"rgba(255,255,255,.1)"}`,
+                      background: sel ? "#3b82f6" : "rgba(255,255,255,.05)",
+                      cursor:"pointer", textAlign:"center", transition:"all .12s" }}>
+                    <div style={{ fontSize:20, fontWeight:900, color: sel?"#fff":"rgba(255,255,255,.85)", lineHeight:1 }}>{n}</div>
+                    <div style={{ fontSize:10, color: sel?"rgba(255,255,255,.8)":"rgba(255,255,255,.3)", marginTop:3 }}>{DIFF_ELO[n]}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Color pick */}
+          <div style={{ fontSize:13, fontWeight:700, color:"rgba(255,255,255,.55)", marginBottom:12 }}>👤 Qaysi rangda o'ynaysiz?</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:24 }}>
+            {COLORS.map(c => {
+              const sel = sideColor === c.v;
+              return (
+                <button key={c.v} onClick={()=>setSide(c.v)}
+                  style={{ padding:"16px 8px", borderRadius:14, border:`1.5px solid ${sel?"#3b82f6":"rgba(255,255,255,.1)"}`,
+                    background: sel ? "rgba(37,99,235,.25)" : "rgba(255,255,255,.04)",
+                    cursor:"pointer", textAlign:"center", transition:"all .12s" }}>
+                  <div style={{ fontSize:28, marginBottom:6 }}>{c.icon}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color: sel?"#60a5fa":"rgba(255,255,255,.7)" }}>{c.label}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Start */}
+          <button onClick={()=>onStart(diff, sideColor, unbeatable)}
+            style={{ width:"100%", padding:"14px", borderRadius:14, border:"none",
+              background: unbeatable ? "#f59e0b" : "#22c55e",
+              color:"#fff", fontWeight:800, fontSize:15, cursor:"pointer", transition:"background .2s" }}>
+            {unbeatable ? "👑 Yengilmas rejimda boshlash" : "▶ O'yinni boshlash"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  return createPortal(overlay, document.body);
+}
 
 type Status = "idle" | "connecting" | "queued" | "playing" | "finished";
 type OnlinePlayer = { studentId: string; fullName: string };
 
+/* ── Idle screen ─────────────────────────────────────────────────────────── */
+function IdleScreen({ timeControl, setTimeControl, onStart, onlinePlayers, onChallenge }:{
+  timeControl: string;
+  setTimeControl: (tc: string) => void;
+  onStart: () => void;
+  onlinePlayers: OnlinePlayer[];
+  onChallenge: (id: string) => void;
+}) {
+  const navigate = useNavigate();
+  const [modal, setModal] = useState<{ tc:string; type:string; color:string }|null>(null);
+
+  const players = onlinePlayers.length > 0
+    ? onlinePlayers.map((p, i) => ({ id:p.studentId, name:p.fullName, elo:1200, tc:"5+0 Blits", color:["#f59e0b","#7c3aed","#22c55e","#3b82f6"][i%4] }))
+    : DEMO_PLAYERS;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {/* Time controls card */}
+      <div style={{ background:"rgba(255,255,255,.03)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:18, overflow:"hidden" }}>
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", gap:14, padding:"16px 20px", borderBottom:"1px solid rgba(255,255,255,.07)" }}>
+          <div style={{ width:38,height:38,borderRadius:10,background:"rgba(99,102,241,.2)",border:"1px solid rgba(99,102,241,.3)",display:"grid",placeItems:"center",fontSize:18 }}>⏱</div>
+          <div>
+            <div style={{ fontWeight:800, fontSize:15 }}>Vaqt nazoratini tanlang</div>
+            <div style={{ fontSize:12.5, color:"rgba(255,255,255,.4)", marginTop:2 }}>O'yin turini bosib boshlang</div>
+          </div>
+        </div>
+
+        {/* Grid */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)" }}>
+          {TIME_CONTROLS.map(({ tc, type, color }, i) => {
+            const isLast = tc === "...";
+            return (
+              <button key={tc}
+                onClick={()=>{ if(!isLast){ setTimeControl(tc); setModal({ tc, type, color }); } }}
+                style={{ padding:"22px 16px", textAlign:"center", cursor:isLast?"default":"pointer",
+                  background:"transparent",
+                  borderTop: i >= 3 ? "1px solid rgba(255,255,255,.06)" : "none",
+                  borderLeft: i%3 !== 0 ? "1px solid rgba(255,255,255,.06)" : "none",
+                  borderRight:"none", borderBottom:"none",
+                  transition:"background .15s" }}
+                onMouseEnter={e=>{ if(!isLast)(e.currentTarget as HTMLButtonElement).style.background=`${color}10`; }}
+                onMouseLeave={e=>{ (e.currentTarget as HTMLButtonElement).style.background="transparent"; }}>
+                {isLast ? (
+                  <div style={{ fontSize:22, fontWeight:900, color:"rgba(255,255,255,.25)", letterSpacing:4, marginBottom:6 }}>· · ·</div>
+                ) : (
+                  <div style={{ fontSize:32, fontWeight:900, color, marginBottom:5, lineHeight:1, letterSpacing:-1 }}>{tc}</div>
+                )}
+                <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.12em", color:"rgba(255,255,255,.35)" }}>{type}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Footer stats */}
+        <div style={{ display:"flex", alignItems:"center", gap:24, padding:"12px 20px",
+          borderTop:"1px solid rgba(255,255,255,.07)", background:"rgba(0,0,0,.15)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, color:"rgba(255,255,255,.55)" }}>
+            <span style={{ width:8,height:8,borderRadius:"50%",background:"#4ade80",display:"inline-block",flexShrink:0 }}/>
+            <b style={{ color:"#fff" }}>94 929</b> ta o'yinchi
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, color:"rgba(255,255,255,.55)" }}>
+            <span style={{ fontSize:14 }}>✂</span>
+            <b style={{ color:"#fff" }}>41 204</b> ta o'yin o'yinalmoqda
+          </div>
+        </div>
+      </div>
+
+      {/* Online players */}
+      <div style={{ background:"rgba(255,255,255,.03)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:18, overflow:"hidden" }}>
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", gap:14, padding:"16px 20px", borderBottom:"1px solid rgba(255,255,255,.07)" }}>
+          <div style={{ width:38,height:38,borderRadius:10,background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.25)",display:"grid",placeItems:"center",fontSize:18 }}>👤</div>
+          <div>
+            <div style={{ fontWeight:800, fontSize:15 }}>Online o'yinchilar</div>
+            <div style={{ fontSize:12.5, color:"rgba(255,255,255,.4)", marginTop:2 }}>Taklif yuboring — o'yin boshlang</div>
+          </div>
+          <div style={{ marginLeft:"auto", padding:"4px 12px", borderRadius:99, background:"rgba(34,197,94,.15)", border:"1px solid rgba(34,197,94,.3)", fontSize:12, fontWeight:700, color:"#4ade80" }}>
+            {players.length} online
+          </div>
+        </div>
+
+        {/* Player rows */}
+        <div>
+          {players.map((p, i) => (
+            <div key={p.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px",
+              borderTop: i > 0 ? "1px solid rgba(255,255,255,.06)" : "none" }}>
+              {/* Avatar */}
+              <div style={{ width:42,height:42,borderRadius:12,background:p.color,display:"grid",placeItems:"center",
+                fontSize:14,fontWeight:800,color:"#fff",flexShrink:0 }}>
+                {initials(p.name)}
+              </div>
+              {/* Info */}
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:700, fontSize:14 }}>{p.name}</div>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,.4)", marginTop:2 }}>
+                  {p.elo} ELO · {p.tc}
+                </div>
+              </div>
+              {/* Online dot */}
+              <span style={{ width:8,height:8,borderRadius:"50%",background:"#4ade80",flexShrink:0 }}/>
+              {/* Challenge button */}
+              <button onClick={()=>onChallenge(p.id)}
+                style={{ display:"flex",alignItems:"center",gap:6,padding:"8px 18px",borderRadius:10,border:"none",
+                  background:"linear-gradient(135deg,#2563eb,#3b82f6)",color:"#fff",
+                  fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0 }}>
+                ✈ O'ynash
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Computer modal */}
+      {modal && (
+        <ComputerModal
+          tc={modal.tc} tcType={modal.type} tcColor={modal.color}
+          onClose={()=>setModal(null)}
+          onStart={(diff, color, unbeatable)=>{
+            setModal(null);
+            const gameState: PvpGameState = {
+              tc: modal.tc, tcType: modal.type, tcColor: modal.color,
+              difficulty: diff, playerColor: color,
+              computerElo: unbeatable ? 3500 : (DIFF_ELO[diff] ?? 960),
+              unbeatable,
+            };
+            navigate("/student/pvp/game", { state: gameState });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Page ────────────────────────────────────────────────────────────────── */
 export default function PvpPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
-  const [tab, setTab] = useState("pvp");
   const [status, setStatus] = useState<Status>("idle");
   const [color, setColor] = useState<"w" | "b" | null>(null);
   const [opponent, setOpponent] = useState<string | null>(null);
@@ -50,20 +319,14 @@ export default function PvpPage() {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    return () => {
-      wsRef.current?.close();
-    };
+    return () => { wsRef.current?.close(); };
   }, []);
 
   function startSearch() {
     if (!accessToken) return;
-    setError(null);
-    setResult(null);
-    setColor(null);
-    setOpponent(null);
-    setFen(START_FEN);
-    setOnlinePlayers([]);
-    setIncomingChallenge(null);
+    setError(null); setResult(null); setColor(null);
+    setOpponent(null); setFen(START_FEN);
+    setOnlinePlayers([]); setIncomingChallenge(null);
     setStatus("connecting");
 
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
@@ -76,46 +339,30 @@ export default function PvpPage() {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-      if (msg.type === "queued") {
-        setStatus("queued");
-      } else if (msg.type === "online_list") {
-        setOnlinePlayers(msg.players);
-      } else if (msg.type === "challenge_received") {
-        setIncomingChallenge({ fromStudentId: msg.fromStudentId, fromName: msg.fromName });
-      } else if (msg.type === "challenge_declined") {
-        setError(`${msg.byName} taklifni rad etdi`);
-      } else if (msg.type === "matched") {
-        setIncomingChallenge(null);
-        setColor(msg.color);
-        setOpponent(msg.opponent);
-        setFen(msg.fen);
-        setStatus("playing");
+      if (msg.type === "queued")             setStatus("queued");
+      else if (msg.type === "online_list")   setOnlinePlayers(msg.players);
+      else if (msg.type === "challenge_received") setIncomingChallenge({ fromStudentId:msg.fromStudentId, fromName:msg.fromName });
+      else if (msg.type === "challenge_declined") setError(`${msg.byName} taklifni rad etdi`);
+      else if (msg.type === "matched") {
+        setIncomingChallenge(null); setColor(msg.color);
+        setOpponent(msg.opponent); setFen(msg.fen); setStatus("playing");
       } else if (msg.type === "move") {
         setFen(msg.fen);
-        if (msg.gameOver) {
-          setResult(msg.result);
-          setStatus("finished");
-        }
-      } else if (msg.type === "error") {
-        setError(msg.message);
-      } else if (msg.type === "ended") {
-        setResult(msg.reason);
-        setStatus("finished");
-      }
+        if (msg.gameOver) { setResult(msg.result); setStatus("finished"); }
+      } else if (msg.type === "error") setError(msg.message);
+      else if (msg.type === "ended")  { setResult(msg.reason); setStatus("finished"); }
     };
   }
 
   function handleMove(from: string, to: string) {
     setError(null);
-    wsRef.current?.send(JSON.stringify({ type: "move", from, to, promotion: "q" }));
+    wsRef.current?.send(JSON.stringify({ type:"move", from, to, promotion:"q" }));
   }
 
-  function resign() {
-    wsRef.current?.send(JSON.stringify({ type: "resign" }));
-  }
+  function resign() { wsRef.current?.send(JSON.stringify({ type:"resign" })); }
 
   function sendChallenge(targetStudentId: string) {
-    wsRef.current?.send(JSON.stringify({ type: "challenge", targetStudentId }));
+    wsRef.current?.send(JSON.stringify({ type:"challenge", targetStudentId }));
   }
 
   function respondChallenge(accept: boolean) {
@@ -129,111 +376,100 @@ export default function PvpPage() {
 
   return (
     <div>
-      <PageHead title="Jonli o'yin (PvP)">
-        <Segmented value={tab} onChange={setTab} options={TABS} />
-      </PageHead>
+      {/* Banner */}
+      <div className="kid-banner kb-chess" style={{ marginBottom:20 }}>
+        <div className="kb-ico">♟</div>
+        <div><h2>Shaxmat o'yini</h2><p>Kompyuter bilan o'ynash</p></div>
+      </div>
 
-      {tab === "coords" && (
-        <Card className="card-pad fade-up">
-          <CoordinateTrainer />
-        </Card>
+      {status === "idle" && (
+        <IdleScreen
+          timeControl={timeControl}
+          setTimeControl={setTimeControl}
+          onStart={startSearch}
+          onlinePlayers={onlinePlayers}
+          onChallenge={sendChallenge}
+        />
       )}
 
-      {tab === "pvp" && (
-        <>
-          {status === "idle" && (
-            <Card className="card-pad fade-up">
-              <p className="cell-sub" style={{ marginBottom: 12 }}>
-                Boshqa o'quvchi bilan jonli shaxmat o'ynang.
-              </p>
-              <div className="tc-grid-wrap" style={{ marginBottom: 14, maxWidth: 360 }}>
-                <div className="tc-grid">
-                  {TIME_CONTROLS.map(({ tc, type, cls }) => (
-                    <button
-                      key={tc}
-                      className={"tc-btn " + cls + (timeControl === tc ? " active" : "")}
-                      onClick={() => setTimeControl(tc)}
-                      style={timeControl === tc ? { background: "var(--hover)", fontWeight: 700 } : undefined}
-                    >
-                      <div className="tc-num">{tc}</div>
-                      <div className="tc-type">{type}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <button className="btn primary" onClick={startSearch}>
-                <Icon name="zap" size={14} /> Raqib qidirish
-              </button>
-            </Card>
-          )}
-
-          {(status === "connecting" || status === "queued") && (
-            <>
-              <Card className="card-pad fade-up">
-                <div className="empty">
-                  <Icon name="refresh" size={28} />
-                  <div>Raqib qidirilmoqda...</div>
-                </div>
-              </Card>
-              <Card className="fade-up">
-                <div className="online-stat-bar">
-                  <Icon name="students" size={16} />
-                  <span className="cell-main">Onlayn o'quvchilar: {onlinePlayers.length}</span>
-                </div>
-                <div className="list">
-                  {onlinePlayers.map((p) => (
-                    <div className="op-row" key={p.studentId}>
-                      <Avatar name={p.fullName} size="sm" />
-                      <div className="cell-main" style={{ flex: 1 }}>{p.fullName}</div>
-                      <button className="btn sm" onClick={() => sendChallenge(p.studentId)}>
-                        <Icon name="swords" size={14} /> Chaqirish
-                      </button>
-                    </div>
-                  ))}
-                  {onlinePlayers.length === 0 && <div className="empty">Boshqa o'quvchilar onlayn emas</div>}
-                </div>
-              </Card>
-            </>
-          )}
-
-          {(status === "playing" || status === "finished") && (
-            <Card className="card-pad fade-up">
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-                <ChessBoard fen={fen} onMove={handleMove} disabled={status !== "playing"} flipped={color === "b"} />
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <div className="cell-main" style={{ marginBottom: 6 }}>
-                    Siz: {color === "w" ? "Oq" : "Qora"}
+      {(status === "connecting" || status === "queued") && (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <div style={{ background:"rgba(255,255,255,.04)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:18, padding:"48px 24px", textAlign:"center" }}>
+            <div style={{ fontSize:40, marginBottom:16 }}>⏳</div>
+            <div style={{ fontWeight:800, fontSize:18, marginBottom:8 }}>Raqib qidirilmoqda...</div>
+            <div style={{ fontSize:13, color:"rgba(255,255,255,.4)", marginBottom:24 }}>Vaqt nazorati: <b style={{ color:"#fff" }}>{timeControl}</b></div>
+            <button onClick={()=>{ wsRef.current?.close(); setStatus("idle"); }}
+              style={{ padding:"10px 24px", borderRadius:10, border:"1.5px solid rgba(255,255,255,.15)", background:"transparent", color:"rgba(255,255,255,.7)", fontWeight:700, cursor:"pointer", fontSize:14 }}>
+              Bekor qilish
+            </button>
+          </div>
+          {onlinePlayers.length > 0 && (
+            <div style={{ background:"rgba(255,255,255,.03)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:18, padding:16 }}>
+              <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:"rgba(255,255,255,.5)" }}>Online o'quvchilar</div>
+              {onlinePlayers.map(p => (
+                <div key={p.studentId} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderTop:"1px solid rgba(255,255,255,.06)" }}>
+                  <div style={{ width:36,height:36,borderRadius:10,background:"#7c3aed",display:"grid",placeItems:"center",fontSize:12,fontWeight:800,color:"#fff" }}>
+                    {initials(p.fullName)}
                   </div>
-                  {opponent && <div className="cell-sub">Raqib: {opponent}</div>}
-                  {error && <div className="badge dang" style={{ marginTop: 8 }}>{error}</div>}
-                  {result && <div className="badge suc" style={{ marginTop: 8 }}>{RESULT_LABELS[result] ?? result}</div>}
-                  {status === "playing" && (
-                    <button className="btn" style={{ marginTop: 12 }} onClick={resign}>
-                      Taslim bo'lish
-                    </button>
-                  )}
-                  {status === "finished" && (
-                    <button className="btn primary" style={{ marginTop: 12 }} onClick={startSearch}>
-                      Yana o'ynash
-                    </button>
-                  )}
+                  <div style={{ flex:1, fontWeight:700 }}>{p.fullName}</div>
+                  <button onClick={()=>sendChallenge(p.studentId)}
+                    style={{ padding:"6px 16px",borderRadius:8,border:"none",background:"#3b82f6",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer" }}>
+                    Chaqirish
+                  </button>
                 </div>
-              </div>
-            </Card>
+              ))}
+            </div>
           )}
+        </div>
+      )}
 
-          <div className={"chal-overlay" + (incomingChallenge ? " show" : "")}>
-            <div className="chal-box">
-              <div className="cell-main" style={{ marginBottom: 8 }}>
-                {incomingChallenge?.fromName} sizni o'yinga taklif qilmoqda
-              </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                <button className="btn primary" onClick={() => respondChallenge(true)}>Qabul qilish</button>
-                <button className="btn" onClick={() => respondChallenge(false)}>Rad etish</button>
-              </div>
+      {(status === "playing" || status === "finished") && (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 280px", gap:16 }}>
+          <div style={{ background:"rgba(255,255,255,.04)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:18, padding:20 }}>
+            <ChessBoard fen={fen} onMove={handleMove} disabled={status !== "playing"} flipped={color === "b"} />
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <div style={{ background:"rgba(255,255,255,.04)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:16, padding:18 }}>
+              <div style={{ fontWeight:800, fontSize:15, marginBottom:8 }}>Siz: {color === "w" ? "⬜ Oq" : "⬛ Qora"}</div>
+              {opponent && <div style={{ fontSize:13, color:"rgba(255,255,255,.5)" }}>Raqib: <b style={{ color:"#fff" }}>{opponent}</b></div>}
+              {error && <div style={{ marginTop:10, padding:"8px 12px", borderRadius:10, background:"rgba(239,68,68,.15)", border:"1px solid rgba(239,68,68,.3)", color:"#f87171", fontSize:13 }}>{error}</div>}
+              {result && <div style={{ marginTop:10, padding:"8px 12px", borderRadius:10, background:"rgba(34,197,94,.15)", border:"1px solid rgba(34,197,94,.3)", color:"#4ade80", fontSize:13 }}>{RESULT_LABELS[result] ?? result}</div>}
+              {status === "playing" && (
+                <button onClick={resign}
+                  style={{ marginTop:14, width:"100%", padding:"10px", borderRadius:10, border:"1.5px solid rgba(239,68,68,.3)", background:"rgba(239,68,68,.1)", color:"#f87171", fontWeight:700, cursor:"pointer" }}>
+                  Taslim bo'lish
+                </button>
+              )}
+              {status === "finished" && (
+                <button onClick={startSearch}
+                  style={{ marginTop:14, width:"100%", padding:"10px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#4f46e5,#7c3aed)", color:"#fff", fontWeight:700, cursor:"pointer" }}>
+                  ♟ Yana o'ynash
+                </button>
+              )}
             </div>
           </div>
-        </>
+        </div>
+      )}
+
+      {incomingChallenge && createPortal(
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", display:"grid", placeItems:"center", zIndex:1000 }}>
+          <div style={{ background:"#1e2235", border:"1.5px solid rgba(255,255,255,.15)", borderRadius:20, padding:"32px 28px", textAlign:"center", minWidth:320 }}>
+            <div style={{ fontSize:36, marginBottom:12 }}>⚔️</div>
+            <div style={{ fontWeight:800, fontSize:18, marginBottom:8 }}>{incomingChallenge.fromName}</div>
+            <div style={{ fontSize:13, color:"rgba(255,255,255,.5)", marginBottom:24 }}>sizni o'yinga taklif qilmoqda</div>
+            <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+              <button onClick={()=>respondChallenge(true)}
+                style={{ padding:"10px 24px", borderRadius:10, border:"none", background:"#22c55e", color:"#fff", fontWeight:700, cursor:"pointer" }}>
+                ✓ Qabul
+              </button>
+              <button onClick={()=>respondChallenge(false)}
+                style={{ padding:"10px 24px", borderRadius:10, border:"1.5px solid rgba(255,255,255,.15)", background:"transparent", color:"rgba(255,255,255,.7)", fontWeight:700, cursor:"pointer" }}>
+                ✕ Rad
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

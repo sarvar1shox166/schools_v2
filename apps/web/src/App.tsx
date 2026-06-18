@@ -10,6 +10,8 @@ import PaymentsPage from "./pages/admin/PaymentsPage.js";
 import IncomeReportPage from "./pages/admin/IncomeReportPage.js";
 import NotificationsPage from "./pages/admin/NotificationsPage.js";
 import ReportsPage from "./pages/admin/ReportsPage.js";
+import ApplicationsPage from "./pages/admin/ApplicationsPage.js";
+import TeacherRatingPage from "./pages/admin/TeacherRatingPage.js";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard.js";
 import TeacherIncomePage from "./pages/teacher/TeacherIncomePage.js";
 import TStudentsPage from "./pages/teacher/TStudentsPage.js";
@@ -25,9 +27,12 @@ import StudentDashboard from "./pages/student/StudentDashboard.js";
 import PuzzlesPage from "./pages/student/PuzzlesPage.js";
 import LeaderboardPage from "./pages/student/LeaderboardPage.js";
 import PvpPage from "./pages/student/PvpPage.js";
+import PvpGamePage from "./pages/student/PvpGamePage.js";
 import VideosPage from "./pages/student/VideosPage.js";
+import VideoWatchPage from "./pages/student/VideoWatchPage.js";
 import LessonsPage from "./pages/student/LessonsPage.js";
 import LearnPage from "./pages/student/LearnPage.js";
+import LearnLessonPage from "./pages/student/LearnLessonPage.js";
 import ProfilePage from "./pages/student/ProfilePage.js";
 import { RequireAuth } from "./layouts/RequireAuth.js";
 import { AppShell } from "./layouts/AppShell.js";
@@ -36,20 +41,37 @@ import type { NavSection } from "./layouts/Sidebar.js";
 const ADMIN_NAV: NavSection[] = [
   {
     group: "Asosiy",
-    items: [{ to: "/admin", label: "Dashboard", icon: "dashboard" }],
+    items: [
+      { to: "/admin",          label: "Dashboard",    icon: "dashboard" },
+      { to: "/admin/schedule", label: "Dars vaqtlari", icon: "clock" },
+    ],
   },
   {
     group: "Boshqaruv",
     items: [
-      { to: "/admin/teachers", label: "O'qituvchilar", icon: "teacher" },
-      { to: "/admin/students", label: "O'quvchilar", icon: "students" },
-      { to: "/admin/groups", label: "Guruhlar", icon: "groups" },
-      { to: "/admin/schedule", label: "Dars vaqtlari", icon: "clock" },
-      { to: "/admin/attendance", label: "Davomat", icon: "attendance" },
-      { to: "/admin/payments", label: "To'lovlar", icon: "payments" },
-      { to: "/admin/income", label: "Daromadlar", icon: "income" },
-      { to: "/admin/notifications", label: "Bildirishnomalar", icon: "bell" },
-      { to: "/admin/reports", label: "Hisobotlar", icon: "reports" },
+      { to: "/admin/applications", label: "Arizalar",        icon: "user",       badge: 2 },
+      { to: "/admin/teachers",    label: "O'qituvchilar",   icon: "teacher" },
+      { to: "/admin/students",    label: "O'quvchilar",     icon: "students",   badge: 12 },
+      { to: "/admin/groups",      label: "Guruhlar",        icon: "groups" },
+      { to: "/admin/attendance",  label: "Davomat",         icon: "attendance" },
+      { to: "/admin/reports",     label: "Video darsliklar", icon: "video" },
+      { to: "/admin/teacher-rating", label: "Ustoz reytingi", icon: "award" },
+    ],
+  },
+  {
+    group: "Moliya",
+    items: [
+      { to: "/admin/payments", label: "To'lovlar",  icon: "payments", badge: 3 },
+      { to: "/admin/income",   label: "Daromadlar", icon: "income" },
+    ],
+  },
+  {
+    group: "Tizim",
+    items: [
+      { to: "/admin/notifications", label: "Ommaviy xabar",    icon: "message" },
+      { to: "/admin/notifications", label: "Bildirishnomalar", icon: "bell",    badge: 3 },
+      { to: "/admin/reports",       label: "Hisobotlar",       icon: "reports" },
+      { to: "/admin/reports",       label: "Sozlamalar",       icon: "settings" },
     ],
   },
 ];
@@ -92,14 +114,14 @@ const STUDENT_NAV: NavSection[] = [
   {
     group: "Asosiy",
     items: [
-      { to: "/student", label: "Dashboard", icon: "dashboard" },
-      { to: "/student/learn", label: "O'rganish", icon: "bookOpen" },
-      { to: "/student/lessons", label: "Darslarim", icon: "calendarCheck" },
-      { to: "/student/puzzles", label: "Boshqotirmalar", icon: "pieces" },
-      { to: "/student/videos", label: "Video darslar", icon: "video" },
-      { to: "/student/pvp", label: "Jonli o'yin", icon: "zap" },
-      { to: "/student/leaderboard", label: "Reyting", icon: "award" },
-      { to: "/student/profile", label: "Profilim", icon: "user" },
+      { to: "/student", label: "Bosh sahifa", icon: "dashboard", emoji: "🏠", navId: "home" },
+      { to: "/student/lessons", label: "Darslarim", icon: "calendarCheck", emoji: "📅", navId: "schedule" },
+      { to: "/student/videos", label: "Video darslar", icon: "video", emoji: "🎬", navId: "video" },
+      { to: "/student/learn", label: "O'rganish", icon: "bookOpen", emoji: "📚", navId: "learn" },
+      { to: "/student/puzzles", label: "Boshqotirmalar", icon: "pieces", emoji: "🧩", navId: "puzzle" },
+      { to: "/student/pvp", label: "O'ynash", icon: "zap", emoji: "♟", navId: "chess" },
+      { to: "/student/leaderboard", label: "Reyting", icon: "award", emoji: "🏆", navId: "leaderboard" },
+      { to: "/student/profile", label: "Profilim", icon: "user", emoji: "👤", navId: "profile" },
     ],
   },
 ];
@@ -119,6 +141,8 @@ export default function App() {
           <Route path="/admin/attendance" element={<AttendancePage />} />
           <Route path="/admin/payments" element={<PaymentsPage />} />
           <Route path="/admin/income" element={<IncomeReportPage />} />
+          <Route path="/admin/applications" element={<ApplicationsPage />} />
+          <Route path="/admin/teacher-rating" element={<TeacherRatingPage />} />
           <Route path="/admin/notifications" element={<NotificationsPage />} />
           <Route path="/admin/reports" element={<ReportsPage />} />
         </Route>
@@ -144,10 +168,13 @@ export default function App() {
         <Route element={<AppShell title="O'quvchi paneli" nav={STUDENT_NAV} />}>
           <Route path="/student" element={<StudentDashboard />} />
           <Route path="/student/learn" element={<LearnPage />} />
+          <Route path="/student/learn/:lessonId" element={<LearnLessonPage />} />
           <Route path="/student/lessons" element={<LessonsPage />} />
           <Route path="/student/puzzles" element={<PuzzlesPage />} />
           <Route path="/student/videos" element={<VideosPage />} />
+          <Route path="/student/videos/watch/:videoId" element={<VideoWatchPage />} />
           <Route path="/student/pvp" element={<PvpPage />} />
+          <Route path="/student/pvp/game" element={<PvpGamePage />} />
           <Route path="/student/leaderboard" element={<LeaderboardPage />} />
           <Route path="/student/profile" element={<ProfilePage />} />
         </Route>
