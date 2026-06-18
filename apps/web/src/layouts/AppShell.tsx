@@ -17,13 +17,23 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   const { data: unread } = useUnreadNotifications();
   const isStudent = user?.role === "student";
   const { data: xpData } = useMyXp();
+
   const [theme, setTheme] = useState<"light" | "dark">(
-    () => (document.body.getAttribute("data-theme") as "light" | "dark") || "light"
+    () => (localStorage.getItem("chess_theme") as "light" | "dark") || "dark"
+  );
+  const [gender, setGender] = useState<"boy" | "girl">(
+    () => (localStorage.getItem("chess_gender") as "boy" | "girl") || "boy"
   );
 
   useEffect(() => {
     document.body.setAttribute("data-theme", theme);
+    localStorage.setItem("chess_theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.body.setAttribute("data-gender", gender);
+    localStorage.setItem("chess_gender", gender);
+  }, [gender]);
 
   const notifRoute = user ? NOTIFICATIONS_ROUTE[user.role] : undefined;
 
@@ -36,7 +46,16 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   return (
     <div className={"app" + (isStudent ? " kid-theme" : "")}>
       <XpToastHost />
-      {nav && <Sidebar sections={nav} brandSub={title} />}
+      {nav && (
+        <Sidebar
+          sections={nav}
+          brandSub={title}
+          theme={theme}
+          onThemeToggle={setTheme}
+          gender={gender}
+          onGenderChange={setGender}
+        />
+      )}
       <div className="main">
         <header className="topbar">
           <div className="brand-mark">♞</div>
@@ -62,9 +81,11 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
             <Icon name="search" size={17} />
             <input placeholder="Qidirish…" />
           </label>
-          <button className="iconbtn" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} title="Mavzu">
-            <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
-          </button>
+          {!isStudent && (
+            <button className="iconbtn" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} title="Mavzu">
+              <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
+            </button>
+          )}
           <button
             className="iconbtn"
             onClick={() => notifRoute && navigate(notifRoute)}

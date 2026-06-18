@@ -15,9 +15,19 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export function Sidebar({ sections, brandSub }: { sections: NavSection[]; brandSub: string }) {
+interface SidebarProps {
+  sections: NavSection[];
+  brandSub: string;
+  theme?: "light" | "dark";
+  onThemeToggle?: (theme: "light" | "dark") => void;
+  gender?: "boy" | "girl";
+  onGenderChange?: (gender: "boy" | "girl") => void;
+}
+
+export function Sidebar({ sections, brandSub, theme, onThemeToggle, gender, onGenderChange }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const isStudent = user?.role === "student";
 
   return (
     <aside className="sidebar">
@@ -71,10 +81,35 @@ export function Sidebar({ sections, brandSub }: { sections: NavSection[]; brandS
               <Icon name="logout" size={16} />
             </button>
           </div>
-          {user.role === "student" && (
-            <div className="kid-mascot-row">
-              <span className="kid-mascot-pill">🧑‍🦱😄</span>
-              <span className="kid-mascot-pill">🐴🌟</span>
+
+          {isStudent && onThemeToggle && onGenderChange && (
+            <div className="kid-controls">
+              <div className="kid-controls-label">Rejim</div>
+              <div className="kid-controls-row">
+                <button
+                  className={"kid-ctrl-btn" + (theme === "light" ? " on" : "")}
+                  onClick={() => onThemeToggle("light")}
+                  title="Yorug' rejim"
+                >☀️</button>
+                <button
+                  className={"kid-ctrl-btn" + (theme === "dark" ? " on" : "")}
+                  onClick={() => onThemeToggle("dark")}
+                  title="Qorong'i rejim"
+                >🌙</button>
+              </div>
+              <div className="kid-controls-label">Platforma</div>
+              <div className="kid-controls-row">
+                <button
+                  className={"kid-ctrl-btn" + (gender === "boy" ? " on" : "")}
+                  onClick={() => onGenderChange("boy")}
+                  title="O'g'il bola"
+                >👦</button>
+                <button
+                  className={"kid-ctrl-btn" + (gender === "girl" ? " on" : "")}
+                  onClick={() => onGenderChange("girl")}
+                  title="Qiz bola"
+                >👧</button>
+              </div>
             </div>
           )}
         </div>

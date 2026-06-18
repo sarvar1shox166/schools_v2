@@ -719,98 +719,287 @@ svg.ic { display: block; flex: none; }
 .menu-pop button.danger { color: var(--danger); }
 
 /* ============================================================
-   Kid theme — pink/cream restyle for student panel
+   Kid theme — student panel, 4 gender×mode palettes
    ============================================================ */
+
+/* === CSS VARIABLES per gender+theme === */
+
+/* Boy Dark (default) */
+body[data-theme="dark"][data-gender="boy"] {
+  --kb: #1a2035;
+  --kb2: #212b45;
+  --kb3: #273354;
+  --kcard: #1e2840;
+  --kcard2: #273354;
+  --kborder: rgba(255,255,255,.07);
+  --kborder2: rgba(255,255,255,.13);
+  --ktext: #e8edf8;
+  --kdim: #7a8aaa;
+  --kfaint: #3d4f6a;
+  --kacc: #3F8CFF;
+  --kacc2: #6aa8ff;
+  --kacc3: #1a5fd4;
+  --kacc-s: rgba(63,140,255,.14);
+  --ksuc: #22c55e;
+  --kwarn: #f59e0b;
+  --kdng: #ef4444;
+}
+
+/* Boy Light */
+body[data-theme="light"][data-gender="boy"] {
+  --kb: #eef5ff;
+  --kb2: #ddeaff;
+  --kb3: #c8dcff;
+  --kcard: #fff;
+  --kcard2: #eef5ff;
+  --kborder: rgba(0,0,0,.07);
+  --kborder2: rgba(0,0,0,.12);
+  --ktext: #152040;
+  --kdim: #4a6488;
+  --kfaint: #8aaac8;
+  --kacc: #1a7fd4;
+  --kacc2: #3F8CFF;
+  --kacc3: #0d56a0;
+  --kacc-s: rgba(26,127,212,.1);
+  --ksuc: #16a34a;
+  --kwarn: #d97706;
+  --kdng: #dc2626;
+}
+
+/* Girl Dark */
+body[data-theme="dark"][data-gender="girl"] {
+  --kb: #1e0f24;
+  --kb2: #281430;
+  --kb3: #331a3e;
+  --kcard: #281430;
+  --kcard2: #331a3e;
+  --kborder: rgba(255,150,200,.07);
+  --kborder2: rgba(255,150,200,.13);
+  --ktext: #fce8f5;
+  --kdim: #b07898;
+  --kfaint: #6a3a58;
+  --kacc: #ff6b9d;
+  --kacc2: #ff9ec0;
+  --kacc3: #d43870;
+  --kacc-s: rgba(255,107,157,.14);
+  --ksuc: #22c55e;
+  --kwarn: #f59e0b;
+  --kdng: #ef4444;
+}
+
+/* Girl Light */
+body[data-theme="light"][data-gender="girl"] {
+  --kb: #fff5fb;
+  --kb2: #ffe0f0;
+  --kb3: #ffc8e4;
+  --kcard: #fff;
+  --kcard2: #fff5fb;
+  --kborder: rgba(200,50,120,.07);
+  --kborder2: rgba(200,50,120,.14);
+  --ktext: #400030;
+  --kdim: #8a2860;
+  --kfaint: #c080a0;
+  --kacc: #d43870;
+  --kacc2: #ff6b9d;
+  --kacc3: #a02050;
+  --kacc-s: rgba(212,56,112,.1);
+  --ksuc: #16a34a;
+  --kwarn: #d97706;
+  --kdng: #dc2626;
+}
+
+/* === Main area backgrounds === */
 .kid-theme,
 .kid-theme .main,
 .kid-theme .content {
-  background: linear-gradient(160deg, #fdf2f6 0%, #fef7f0 100%);
-}
-[data-theme="dark"].kid-theme,
-[data-theme="dark"].kid-theme .main,
-[data-theme="dark"].kid-theme .content {
-  background: linear-gradient(160deg, #2a1f26 0%, #2a2420 100%);
+  background: var(--kb, #eef5ff);
+  color: var(--ktext, #152040);
 }
 
-/* Sidebar nav icon badges */
-.kid-theme .sidebar .nav-ico-badge {
-  display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border-radius: 8px; flex: none;
-  color: #fff; transition: transform .15s;
+/* === Cards in kid-theme === */
+.kid-theme .card {
+  background: var(--kcard, #fff);
+  border-color: var(--kborder, rgba(0,0,0,.07));
+  border-radius: 20px;
 }
-.kid-theme .sidebar .nav-item { gap: 12px; border-radius: 14px; }
+
+/* === SIDEBAR: always dark wood === */
+.kid-theme .sidebar {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent,transparent 3px,
+      rgba(255,255,255,.012) 3px,rgba(255,255,255,.012) 4px
+    ),
+    linear-gradient(180deg,#2c2b29 0%,#312e2b 40%,#2a2724 100%);
+  border-right: 1px solid rgba(0,0,0,.4);
+  box-shadow: 3px 0 20px rgba(0,0,0,.4);
+}
+
+/* Sidebar text */
+.kid-theme .sidebar .nav-group-label {
+  color: rgba(255,255,255,.3);
+  font-size: 9.5px;
+  letter-spacing: .08em;
+}
+.kid-theme .sidebar .nav-item {
+  color: rgba(255,255,255,.7);
+  gap: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.kid-theme .sidebar .nav-item:hover {
+  background: rgba(255,255,255,.07);
+  color: rgba(255,255,255,.95);
+}
 .kid-theme .sidebar .nav-item.active {
-  background: #7bb845; color: #fff; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(129,182,76,.25), rgba(129,182,76,.12));
+  color: #d4f59a;
+  border: 1px solid rgba(129,182,76,.2);
+  border-radius: 10px;
 }
 .kid-theme .sidebar .nav-item.active::before { display: none; }
-.kid-theme .sidebar .nav-item.active .nav-label { color: #fff; font-weight: 800; }
-.kid-theme .sidebar .nav-item.active .nav-ico-badge { background: rgba(255,255,255,.25) !important; color: #fff; }
+.kid-theme .sidebar .nav-item.active .nav-label { color: #d4f59a; font-weight: 800; }
+.kid-theme .sidebar .nav-item.active .nav-ico-badge {
+  background: rgba(255,255,255,.15) !important;
+  filter: drop-shadow(0 0 6px rgba(129,182,76,.6));
+}
 
-/* Per-item badge colors, matching STUDENT_NAV order:
-   1 Dashboard, 2 O'rganish, 3 Darslarim, 4 Boshqotirmalar,
-   5 Video darslar, 6 Jonli o'yin (pvp), 7 Reyting, 8 Profilim */
+/* Brand */
+.kid-theme .sidebar .brand-name { color: #fff; font-size: 16px; font-weight: 900; }
+.kid-theme .sidebar .brand-sub { color: #81b64c; font-weight: 600; }
+.kid-theme .sidebar .brand-mark {
+  background: linear-gradient(135deg, #5a9a2e, #81b64c);
+  box-shadow: 0 3px 12px rgba(129,182,76,.4);
+}
+.kid-theme .sidebar .brand-mark:hover { transform: scale(1.08); }
+
+/* User box */
+.kid-theme .sidebar .userbox-name { color: #fff; font-size: 13px; font-weight: 700; }
+.kid-theme .sidebar .userbox-role { color: rgba(255,255,255,.45); font-size: 11px; }
+.kid-theme .sidebar .userbox:hover { background: rgba(255,255,255,.07); }
+.kid-theme .sidebar .sidebar-foot { border-top-color: rgba(255,255,255,.08); }
+.kid-theme .sidebar .iconbtn {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.12);
+  color: rgba(255,255,255,.65);
+}
+.kid-theme .sidebar .iconbtn:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+/* Nav icon badges */
+.kid-theme .sidebar .nav-ico-badge {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 12px; flex: none;
+  font-size: 18px; transition: transform .15s;
+}
+.kid-theme .sidebar .nav-item:hover .nav-ico-badge { transform: scale(1.12); }
 .kid-theme .sidebar .nav-item:nth-child(1) .nav-ico-badge { background: #a3d977; color: #2f5d1a; }
 .kid-theme .sidebar .nav-item:nth-child(2) .nav-ico-badge { background: linear-gradient(135deg,#4ecdc4,#a8e6cf); color: #145a52; }
-.kid-theme .sidebar .nav-item:nth-child(3) .nav-ico-badge { background: #5b9bd5; color: #173a5e; }
+.kid-theme .sidebar .nav-item:nth-child(3) .nav-ico-badge { background: #5b9bd5; color: #fff; }
 .kid-theme .sidebar .nav-item:nth-child(4) .nav-ico-badge { background: #8e6fc1; color: #fff; }
 .kid-theme .sidebar .nav-item:nth-child(5) .nav-ico-badge { background: #c0392b; color: #fff; }
 .kid-theme .sidebar .nav-item:nth-child(6) .nav-ico-badge { background: #5a8f3c; color: #fff; }
 .kid-theme .sidebar .nav-item:nth-child(7) .nav-ico-badge { background: #d4a843; color: #4a3503; }
 .kid-theme .sidebar .nav-item:nth-child(8) .nav-ico-badge { background: #3a4a6b; color: #fff; }
 
-/* Sidebar mascot row */
-.kid-mascot-row { display: flex; gap: 8px; padding: 10px 14px 14px; }
-.kid-mascot-pill {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
-  background: #fbd5e3; border-radius: 999px; padding: 7px 10px; font-size: 16px;
-}
-
-/* Topbar student pills */
+/* === Topbar pills === */
 .kid-topbar-pills { display: flex; align-items: center; gap: 10px; margin-right: 12px; }
 .kid-topbar-pills .pill {
   display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px;
   font-size: 12.5px; font-weight: 800; white-space: nowrap;
 }
-.pill-level { background: linear-gradient(135deg, #f3c969, #d4a843); color: #4a3503; }
-.pill-streak { background: linear-gradient(135deg, #f7a85c, #e8973a); color: #4a2a03; }
-.kid-xp-bar { width: 90px; }
+.pill-level { background: linear-gradient(135deg,#f3c969,#d4a843); color: #1a0800; font-weight: 900; font-size: 10.5px; }
+.pill-streak {
+  display: flex; align-items: center; gap: 4px; font-weight: 700; font-size: 12px;
+  color: var(--kwarn, #f59e0b);
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.2);
+  border-radius: 999px; padding: 4px 10px;
+}
+.kid-xp-bar { width: 120px; }
 .kid-xp-bar .lv-bar {
-  display: block; height: 8px; width: 100%; border-radius: 999px;
-  background: var(--surface-3); overflow: hidden; border: 1px solid var(--border);
+  display: block; height: 6px; width: 100%; border-radius: 999px;
+  background: var(--kborder2, rgba(255,255,255,.13)); overflow: hidden;
 }
 .kid-xp-bar .lv-bar > span {
   display: block; height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, #e85d8a, #f48fb1);
+  background: linear-gradient(90deg, var(--kacc,#3F8CFF), var(--kacc2,#6aa8ff));
 }
 
-/* Stat cards with colored top border */
+/* === Hero === */
+.kids-hero {
+  background: linear-gradient(135deg, var(--kacc3,#1a5fd4) 0%, var(--kacc,#3F8CFF) 55%, var(--kacc2,#6aa8ff) 100%);
+}
+
+/* Boy hero keeps sky-green gradient */
+body[data-gender="boy"] .kids-hero {
+  background: linear-gradient(180deg,#48c6ef 0%,#6dd5fa 28%,#93e07a 65%,#5a9a2e 100%);
+}
+
+/* Girl hero: pink-purple */
+body[data-gender="girl"] .kids-hero {
+  background: linear-gradient(135deg, var(--kacc3,#a02050) 0%, var(--kacc,#d43870) 55%, var(--kacc2,#ff6b9d) 100%);
+}
+
+/* === Stat cards === */
 .kid-theme .kid-stat-card,
 .kid-theme .cols-4 > * {
-  border-top: 4px solid transparent; border-radius: var(--r-md);
+  border-top: 4px solid transparent;
+  border-radius: 20px;
 }
-.kid-theme .cols-4 > *:nth-child(1) { border-top-color: #5b9bd5; }
-.kid-theme .cols-4 > *:nth-child(2) { border-top-color: #e8973a; }
-.kid-theme .cols-4 > *:nth-child(3) { border-top-color: #7bb845; }
-.kid-theme .cols-4 > *:nth-child(4) { border-top-color: #8e6fc1; }
+.kid-theme .cols-4 > *:nth-child(1) { border-top-color: #3F8CFF; }
+.kid-theme .cols-4 > *:nth-child(2) { border-top-color: #f59e0b; }
+.kid-theme .cols-4 > *:nth-child(3) { border-top-color: #22c55e; }
+.kid-theme .cols-4 > *:nth-child(4) { border-top-color: #8b5cf6; }
 
-/* Topic progress bars -> pink */
+/* Girl stat card accents */
+body[data-gender="girl"] .kid-theme .cols-4 > *:nth-child(1) { border-top-color: #ff6b9d; }
+body[data-gender="girl"] .kid-theme .cols-4 > *:nth-child(2) { border-top-color: #ff9ec0; }
+body[data-gender="girl"] .kid-theme .cols-4 > *:nth-child(3) { border-top-color: #c084fc; }
+body[data-gender="girl"] .kid-theme .cols-4 > *:nth-child(4) { border-top-color: #fb923c; }
+
+/* === Progress bars === */
 .kid-theme .pbar > span {
-  background: linear-gradient(90deg, #e85d8a, #f48fb1) !important;
+  background: linear-gradient(90deg, var(--kacc,#3F8CFF), var(--kacc2,#6aa8ff)) !important;
 }
 
-/* Recent achievements pink pills */
+/* === Achievements === */
 .kid-theme .achievement-pill {
-  background: #fde4ed !important; color: #b3275f; border-radius: 999px !important;
+  background: var(--kacc-s, rgba(63,140,255,.14)) !important;
+  color: var(--kacc2, #6aa8ff);
+  border-radius: 999px !important;
 }
-.kid-theme .achievement-pill svg { color: #e85d8a; }
+.kid-theme .achievement-pill svg { color: var(--kacc, #3F8CFF); }
 
-/* kid-banner pink/cream variant */
-.kid-theme .kid-banner {
-  background: linear-gradient(135deg, #fbd5e3, #fef0e6);
-  color: #6b3550;
+/* === Controls (theme/gender switcher) in sidebar === */
+.kid-controls { padding: 10px 8px 4px; }
+.kid-controls-label {
+  font-size: 9px; font-weight: 700; color: rgba(255,255,255,.3);
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 0 4px; margin-bottom: 5px;
 }
+.kid-controls-row { display: flex; gap: 4px; margin-bottom: 7px; }
+.kid-ctrl-btn {
+  flex: 1; height: 32px; border-radius: 99px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.06); color: rgba(255,255,255,.5);
+  font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s; font-family: inherit;
+}
+.kid-ctrl-btn:hover { background: rgba(255,255,255,.12); color: rgba(255,255,255,.85); }
+.kid-ctrl-btn.on {
+  background: var(--kacc, #3F8CFF);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(63,140,255,.35);
+}
+body[data-gender="girl"] .kid-ctrl-btn.on {
+  background: var(--kacc, #d43870);
+  box-shadow: 0 2px 8px rgba(212,56,112,.35);
+}
+
+/* === Kid banner variants === */
 .kid-theme .kid-banner h2,
-.kid-theme .kid-banner p {
-  text-shadow: none;
-  color: #6b3550;
-}
+.kid-theme .kid-banner p { text-shadow: none; }
