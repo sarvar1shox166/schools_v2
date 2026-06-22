@@ -1,70 +1,16 @@
 import { useState } from "react";
 import { Avatar, Card, CardHead, Icon, StatCard } from "@chess-school/ui";
+import {
+  useGroups,
+  useSchedule,
+  useAttendanceStats,
+  useAttendanceHistoryMatrix,
+  useMarkAttendance,
+  useStudents,
+} from "../../lib/queries.js";
 
 /* ─── Types ─── */
 type AttStatus = "keldi" | "kech" | "kelmadi";
-
-type AttRow = {
-  id: string;
-  name: string;
-  group: string;
-  level: string;
-  attendance: AttStatus[];
-};
-
-/* ─── Mock data ─── */
-const DATES = ["12.05", "14.05", "16.05", "19.05", "21.05", "23.05", "26.05", "28.05"];
-
-const MOCK_ROWS: AttRow[] = [
-  { id:"1",  name:"Asilbek Komilov",   group:"A", level:"Boshlang'ich", attendance:["keldi","keldi","keldi","keldi","keldi","kech","keldi","kelmadi"] },
-  { id:"2",  name:"Malika Rashidova",  group:"B", level:"3-razryad",    attendance:["keldi","keldi","keldi","keldi","keldi","keldi","keldi","kelmadi"] },
-  { id:"3",  name:"Bobur Nazarov",     group:"C", level:"Boshlang'ich", attendance:["keldi","kelmadi","keldi","keldi","keldi","keldi","keldi","keldi"] },
-  { id:"4",  name:"Sarvar Yo'ldoshev", group:"F", level:"1-razryad",    attendance:["keldi","keldi","keldi","kech","kelmadi","keldi","keldi","kelmadi"] },
-  { id:"5",  name:"Gulnoza Tosheva",   group:"A", level:"Boshlang'ich", attendance:["keldi","keldi","keldi","kelmadi","kech","kelmadi","keldi","keldi"] },
-  { id:"6",  name:"Javohir Saidov",    group:"D", level:"2-razryad",    attendance:["keldi","keldi","keldi","kelmadi","keldi","kelmadi","kech","keldi"] },
-  { id:"7",  name:"Madina Aliyeva",    group:"B", level:"3-razryad",    attendance:["kech","kech","kelmadi","keldi","keldi","keldi","keldi","keldi"] },
-  { id:"8",  name:"Diyor Karimov",     group:"E", level:"Nomzod",       attendance:["keldi","kelmadi","keldi","keldi","kelmadi","keldi","keldi","keldi"] },
-  { id:"9",  name:"Sevara Mirzayeva",  group:"C", level:"Boshlang'ich", attendance:["keldi","keldi","keldi","keldi","keldi","kech","keldi","keldi"] },
-  { id:"10", name:"Otabek Rahimov",    group:"F", level:"1-razryad",    attendance:["keldi","keldi","kelmadi","keldi","keldi","keldi","kech","keldi"] },
-  { id:"11", name:"Laylo Ismoilova",   group:"A", level:"Boshlang'ich", attendance:["keldi","keldi","keldi","keldi","kech","keldi","keldi","keldi"] },
-  { id:"12", name:"Aziz Tojiboyev",    group:"D", level:"2-razryad",    attendance:["keldi","keldi","keldi","keldi","keldi","keldi","keldi","keldi"] },
-];
-
-const GROUP_STUDENTS: Record<string, { id: string; name: string; level: string }[]> = {
-  A: [
-    { id:"1", name:"Asilbek Komilov",  level:"Boshlang'ich" },
-    { id:"5", name:"Gulnoza Tosheva",  level:"Boshlang'ich" },
-    { id:"11",name:"Laylo Ismoilova",  level:"Boshlang'ich" },
-  ],
-  B: [
-    { id:"2", name:"Malika Rashidova", level:"3-razryad" },
-    { id:"7", name:"Madina Aliyeva",   level:"3-razryad" },
-  ],
-  C: [
-    { id:"3", name:"Bobur Nazarov",    level:"Boshlang'ich" },
-    { id:"9", name:"Sevara Mirzayeva", level:"Boshlang'ich" },
-  ],
-  D: [
-    { id:"6", name:"Javohir Saidov",   level:"2-razryad" },
-    { id:"12",name:"Aziz Tojiboyev",   level:"2-razryad" },
-  ],
-  E: [
-    { id:"8", name:"Diyor Karimov",    level:"Nomzod" },
-  ],
-  F: [
-    { id:"4", name:"Sarvar Yo'ldoshev",level:"1-razryad" },
-    { id:"10",name:"Otabek Rahimov",   level:"1-razryad" },
-  ],
-};
-
-const GROUP_NAMES: Record<string, string> = {
-  A: "Boshlang'ich — A",
-  B: "Taktika — B",
-  C: "Bolalar kursi — C",
-  D: "Pozitsion — D",
-  E: "Pro Trening — E",
-  F: "Blitz klub — F",
-};
 
 /* status config */
 const ST: Record<AttStatus, { icon: string; bg: string; color: string }> = {
@@ -73,20 +19,36 @@ const ST: Record<AttStatus, { icon: string; bg: string; color: string }> = {
   kelmadi: { icon: "x",    bg: "#fee2e2", color: "#ef4444" },
 };
 
-function calcPct(a: AttStatus[]) {
-  return Math.round((a.filter((s) => s === "keldi").length / a.length) * 100);
+const API_TO_LOCAL: Record<"p" | "a" | "l", AttStatus> = {
+  p: "keldi",
+  a: "kelmadi",
+  l: "kech",
+};
+
+const LOCAL_TO_API: Record<AttStatus, "p" | "a" | "l"> = {
+  keldi:   "p",
+  kelmadi: "a",
+  kech:    "l",
+};
+
+function fmtDate(d: string) {
+  const dt = new Date(d);
+  return `${String(dt.getDate()).padStart(2, "0")}.${String(dt.getMonth() + 1).padStart(2, "0")}`;
 }
 
 /* ─── Page ─── */
 export default function AttendancePage() {
-  const [rows] = useState<AttRow[]>(MOCK_ROWS);
-  const [showModal, setShowModal] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [showModal, setShowModal]             = useState(false);
 
-  const allStatuses = rows.flatMap((r) => r.attendance);
-  const keldi    = allStatuses.filter((s) => s === "keldi").length;
-  const kech     = allStatuses.filter((s) => s === "kech").length;
-  const kelmadi  = allStatuses.filter((s) => s === "kelmadi").length;
-  const avgPct   = Math.round(allStatuses.length > 0 ? (keldi / allStatuses.length) * 100 : 0);
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data: groups = [], isLoading: grpLoading } = useGroups();
+  const { data: attStats } = useAttendanceStats(today);
+  const { data: matrix, isLoading: matLoading } = useAttendanceHistoryMatrix(selectedGroupId, 8);
+
+  /* When groups load, auto-select the first */
+  const activeGroupId = selectedGroupId ?? (groups[0]?.id ?? null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -103,90 +65,189 @@ export default function AttendancePage() {
 
       {/* KPI */}
       <div className="grid cols-4">
-        <StatCard icon="percent" tone="s" value={`${avgPct}%`}  label="O'rtacha davomat"
-          delta={<span style={{ fontSize: 12, fontWeight: 700, color: "var(--success)" }}>↗ +3% o'tgan oy</span>} />
-        <StatCard icon="check"   tone="i" value={String(keldi)}   label="Kelganlar" />
-        <StatCard icon="clock"   tone="w" value={String(kech)}    label="Kechikkanlar" />
-        <StatCard icon="x"       tone="d" value={String(kelmadi)} label="Kelmaganlar" />
+        <StatCard icon="percent" tone="s"
+          value={attStats ? `${attStats.avgPercent}%` : "–"}
+          label="O'rtacha davomat"
+          delta={<span style={{ fontSize: 12, fontWeight: 700, color: "var(--success)" }}>Bugun</span>}
+        />
+        <StatCard icon="check" tone="i"
+          value={attStats ? String(attStats.present) : "–"}
+          label="Kelganlar"
+        />
+        <StatCard icon="clock" tone="w"
+          value={attStats ? String(attStats.late) : "–"}
+          label="Kechikkanlar"
+        />
+        <StatCard icon="x" tone="d"
+          value={attStats ? String(attStats.absent) : "–"}
+          label="Kelmaganlar"
+        />
+      </div>
+
+      {/* Group selector */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-dim)" }}>Guruh:</span>
+        {grpLoading ? (
+          <span style={{ fontSize: 13, color: "var(--text-faint)" }}>Yuklanmoqda...</span>
+        ) : (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {groups.map(g => (
+              <button
+                key={g.id}
+                onClick={() => setSelectedGroupId(g.id)}
+                style={{
+                  padding: "5px 16px", borderRadius: 99, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  border: activeGroupId === g.id ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
+                  background: activeGroupId === g.id ? "var(--accent)" : "transparent",
+                  color: activeGroupId === g.id ? "#fff" : "var(--text-dim)",
+                }}
+              >
+                {g.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Journal */}
       <Card style={{ padding: 0 }}>
-        <CardHead icon="calendar" title="Davomat jadvali" sub={`Oxirgi ${DATES.length} dars`} />
-        <div style={{ overflowX: "auto" }}>
-          <table className="tbl" style={{ minWidth: 900 }}>
-            <thead>
-              <tr>
-                <th style={{ minWidth: 180 }}>O'QUVCHI</th>
-                <th style={{ minWidth: 60 }}>GURUH</th>
-                {DATES.map((d) => (
-                  <th key={d} style={{ textAlign: "center", minWidth: 60 }}>{d}</th>
-                ))}
-                <th style={{ textAlign: "center", minWidth: 60 }}>%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const pct = calcPct(r.attendance);
-                const pctColor = pct >= 80 ? "#16a34a" : pct >= 60 ? "#b45309" : "#ef4444";
-                return (
-                  <tr key={r.id}>
-                    <td>
-                      <div className="with-av">
-                        <Avatar name={r.name} size="sm" style={{ borderRadius: 9, flexShrink: 0 }} />
-                        <span className="cell-main">{r.name}</span>
-                      </div>
-                    </td>
-                    <td style={{ fontWeight: 700, fontSize: 14, color: "var(--text-dim)" }}>
-                      {r.group}
-                    </td>
-                    {r.attendance.map((status, i) => {
-                      const cfg = ST[status];
-                      return (
-                        <td key={i} style={{ textAlign: "center" }}>
-                          <div style={{
-                            display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            width: 32, height: 32, borderRadius: 8,
-                            background: cfg.bg, color: cfg.color,
-                          }}>
-                            <Icon name={cfg.icon} size={14} />
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td style={{ textAlign: "center" }}>
-                      <span style={{
-                        display: "inline-block", padding: "3px 10px",
-                        borderRadius: 99, background: pctColor + "1a",
-                        color: pctColor, fontWeight: 800, fontSize: 13,
-                      }}>
-                        {pct} %
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <CardHead
+          icon="calendar"
+          title="Davomat jadvali"
+          sub={matrix ? `Oxirgi ${matrix.dates.length} dars` : "Guruh tanlanmagan"}
+        />
+
+        {matLoading ? (
+          <div style={{ padding: 40, textAlign: "center", color: "var(--text-faint)" }}>Yuklanmoqda...</div>
+        ) : !matrix || matrix.students.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center", color: "var(--text-faint)" }}>
+            {activeGroupId ? "Ma'lumot topilmadi" : "Guruhni tanlang"}
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="tbl" style={{ minWidth: 900 }}>
+              <thead>
+                <tr>
+                  <th style={{ minWidth: 180 }}>O'QUVCHI</th>
+                  {matrix.dates.map(d => (
+                    <th key={d} style={{ textAlign: "center", minWidth: 60 }}>{fmtDate(d)}</th>
+                  ))}
+                  <th style={{ textAlign: "center", minWidth: 60 }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matrix.students.map(row => {
+                  const pctColor = row.percent >= 80 ? "#16a34a" : row.percent >= 60 ? "#b45309" : "#ef4444";
+                  return (
+                    <tr key={row.studentId}>
+                      <td>
+                        <div className="with-av">
+                          <div style={{ borderRadius: 9, flexShrink: 0, display: "inline-flex" }}><Avatar name={row.fullName} size="sm" /></div>
+                          <span className="cell-main">{row.fullName}</span>
+                        </div>
+                      </td>
+                      {row.days.map((day, i) => {
+                        const local: AttStatus | null = day ? API_TO_LOCAL[day] : null;
+                        if (!local) {
+                          return (
+                            <td key={i} style={{ textAlign: "center" }}>
+                              <div style={{
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                width: 32, height: 32, borderRadius: 8,
+                                background: "var(--surface-3)", color: "var(--text-faint)",
+                                fontSize: 11,
+                              }}>–</div>
+                            </td>
+                          );
+                        }
+                        const cfg = ST[local];
+                        return (
+                          <td key={i} style={{ textAlign: "center" }}>
+                            <div style={{
+                              display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              width: 32, height: 32, borderRadius: 8,
+                              background: cfg.bg, color: cfg.color,
+                            }}>
+                              <Icon name={cfg.icon} size={14} />
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td style={{ textAlign: "center" }}>
+                        <span style={{
+                          display: "inline-block", padding: "3px 10px",
+                          borderRadius: 99, background: pctColor + "1a",
+                          color: pctColor, fontWeight: 800, fontSize: 13,
+                        }}>
+                          {row.percent} %
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
-      {showModal && <MarkModal onClose={() => setShowModal(false)} />}
+      {showModal && (
+        <MarkModal
+          groups={groups}
+          initialGroupId={activeGroupId}
+          onClose={() => setShowModal(false)}
+        />
+      )}
     </div>
   );
 }
 
 /* ─── Mark attendance modal ─── */
-function MarkModal({ onClose }: { onClose: () => void }) {
-  const [group, setGroup] = useState("A");
-  const students = GROUP_STUDENTS[group] ?? [];
+function MarkModal({
+  groups,
+  initialGroupId,
+  onClose,
+}: {
+  groups: { id: string; name: string }[];
+  initialGroupId: string | null;
+  onClose: () => void;
+}) {
+  const [groupId, setGroupId] = useState(initialGroupId ?? groups[0]?.id ?? "");
   const [statuses, setStatuses] = useState<Record<string, AttStatus>>({});
+  const [err, setErr] = useState("");
 
-  const today = new Date();
-  const dateStr = today.toLocaleDateString("en-US", { month: "short", day: "numeric", weekday: "short" });
+  const today = new Date().toISOString().split("T")[0];
+  const dateStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", weekday: "short" });
+
+  const { data: schedule = [] } = useSchedule();
+  const { data: students = [], isLoading: stuLoading } = useStudents();
+  const markAtt = useMarkAttendance();
+
+  /* Get slot for the selected group (any slot — take first matching today's day) */
+  const todayDow = new Date().getDay(); // 0=Sun
+  const slot = schedule.find(s => s.groupId === groupId && s.dayOfWeek === todayDow)
+    ?? schedule.find(s => s.groupId === groupId);
+
+  /* Filter students to the selected group */
+  const groupStudents = students.filter(s => s.groups.some(g => g.id === groupId));
 
   function setStatus(id: string, s: AttStatus) {
-    setStatuses((prev) => ({ ...prev, [id]: s }));
+    setStatuses(prev => ({ ...prev, [id]: s }));
+  }
+
+  async function handleSave() {
+    if (!slot) { setErr("Bu guruh uchun jadval topilmadi"); return; }
+    setErr("");
+    try {
+      const records = groupStudents.map(s => ({
+        studentId: s.id,
+        status: LOCAL_TO_API[statuses[s.id] ?? "keldi"],
+      }));
+      await markAtt.mutateAsync({ scheduleSlotId: slot.id, date: today, records });
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    }
   }
 
   return (
@@ -196,7 +257,7 @@ function MarkModal({ onClose }: { onClose: () => void }) {
         background: "rgba(0,0,0,.45)", backdropFilter: "blur(3px)",
         display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
       }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
         background: "var(--surface)", borderRadius: 18,
@@ -218,12 +279,12 @@ function MarkModal({ onClose }: { onClose: () => void }) {
             <div style={{ position: "relative" }}>
               <select
                 className="inp"
-                value={group}
-                onChange={(e) => { setGroup(e.target.value); setStatuses({}); }}
+                value={groupId}
+                onChange={e => { setGroupId(e.target.value); setStatuses({}); }}
                 style={{ appearance: "none", paddingRight: 30, minWidth: 160, fontWeight: 700 }}
               >
-                {Object.keys(GROUP_NAMES).map((k) => (
-                  <option key={k} value={k}>{GROUP_NAMES[k]}</option>
+                {groups.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
               </select>
               <Icon name="chevronDown" size={13} style={{
@@ -239,7 +300,13 @@ function MarkModal({ onClose }: { onClose: () => void }) {
 
         {/* Students */}
         <div style={{ padding: "12px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
-          {students.map((s) => {
+          {stuLoading && (
+            <div style={{ fontSize: 13, color: "var(--text-faint)", padding: 12 }}>Yuklanmoqda...</div>
+          )}
+          {!stuLoading && groupStudents.length === 0 && (
+            <div style={{ fontSize: 13, color: "var(--text-faint)", padding: 12 }}>Bu guruhda o'quvchilar topilmadi</div>
+          )}
+          {groupStudents.map(s => {
             const cur = statuses[s.id] ?? "keldi";
             return (
               <div key={s.id} style={{
@@ -247,12 +314,11 @@ function MarkModal({ onClose }: { onClose: () => void }) {
                 padding: "12px 14px", borderRadius: 12,
                 border: "1px solid var(--border)", background: "var(--surface-2)",
               }}>
-                <Avatar name={s.name} size="sm" style={{ borderRadius: 10, flexShrink: 0 }} />
+                <div style={{ borderRadius: 10, flexShrink: 0, display: "inline-flex" }}><Avatar name={s.fullName} size="sm" /></div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{s.name}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-faint)" }}>{s.level}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{s.fullName}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-faint)" }}>{s.level ?? ""}</div>
                 </div>
-                {/* Toggle buttons */}
                 <div style={{ display: "flex", gap: 6 }}>
                   <AttBtn label="Keldi"   icon="check" status="keldi"   active={cur === "keldi"}   onClick={() => setStatus(s.id, "keldi")}   />
                   <AttBtn label="Kech"    icon="clock" status="kech"    active={cur === "kech"}    onClick={() => setStatus(s.id, "kech")}    />
@@ -265,13 +331,23 @@ function MarkModal({ onClose }: { onClose: () => void }) {
 
         <div style={{ height: 1, background: "var(--border)" }} />
 
+        {err && (
+          <div style={{ padding: "12px 24px 0", color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>{err}</div>
+        )}
+
         {/* Buttons */}
         <div style={{ display: "flex", gap: 12, padding: "18px 24px" }}>
           <button className="btn" style={{ flex: 1, justifyContent: "center", fontWeight: 700 }} onClick={onClose}>
             Bekor
           </button>
-          <button className="btn primary" style={{ flex: 2, justifyContent: "center" }} onClick={onClose}>
-            <Icon name="check" size={15} /> Saqlash
+          <button
+            className="btn primary"
+            style={{ flex: 2, justifyContent: "center" }}
+            onClick={handleSave}
+            disabled={markAtt.isPending}
+          >
+            <Icon name="check" size={15} />
+            {markAtt.isPending ? "Saqlanmoqda..." : "Saqlash"}
           </button>
         </div>
       </div>

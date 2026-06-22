@@ -283,7 +283,7 @@ export default function PvpGamePage() {
     }
   }, [difficulty, unbeatable]);
 
-  /* ── Trigger computer move when it's computer's turn ─────────────────── */
+  /* ── Trigger computer move when it's their turn ──────────────────────── */
   useEffect(() => {
     if (!isPlayerTurn && !gameOver && !thinking) {
       requestComputerMove(fen);
@@ -297,7 +297,6 @@ export default function PvpGamePage() {
     const chess = chessRef.current;
     let result;
     try {
-      // Auto-promote to queen
       result = chess.move({ from, to, promotion: "q" });
     } catch {
       result = null;
@@ -402,7 +401,7 @@ export default function PvpGamePage() {
               disabled={!isPlayerTurn || !!gameOver || thinking}
               getMoves={(square) =>
                 chessRef.current
-                  .moves({ square, verbose: true })
+                  .moves({ square: square as import("chess.js").Square, verbose: true })
                   .map((m: { to: string }) => m.to)
               }
             />

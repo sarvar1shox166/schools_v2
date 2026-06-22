@@ -23,14 +23,15 @@ const ADMIN_PAGE_META: Record<string, { title: string; sub: string }> = {
   "/admin/teachers":      { title: "O'qituvchilar",    sub: "Barcha o'qituvchilar" },
   "/admin/students":      { title: "O'quvchilar",      sub: "Barcha o'quvchilar" },
   "/admin/groups":        { title: "Guruhlar",          sub: "Guruhlar ro'yxati" },
-  "/admin/attendance":    { title: "Davomat",           sub: "Yo'qlamalar" },
-  "/admin/payments":      { title: "To'lovlar",         sub: "To'lov tarixi" },
-  "/admin/income":        { title: "Daromadlar",        sub: "Moliyaviy hisobot" },
-  "/admin/notifications": { title: "Bildirishnomalar", sub: "Xabarlar va e'lonlar" },
-  "/admin/applications":    { title: "Arizalar",          sub: "CRM va ariza boshqaruvi" },
-  "/admin/attendance":      { title: "Davomat jurnali", sub: "Dars davomati" },
-  "/admin/teacher-rating":  { title: "Ustoz reytingi",  sub: "Baholar va izohlar" },
-  "/admin/reports":       { title: "Hisobotlar",        sub: "Statistika va tahlil" },
+  "/admin/attendance":    { title: "Davomat jurnali",    sub: "Dars davomati" },
+  "/admin/payments":       { title: "To'lovlar",          sub: "To'lov tarixi" },
+  "/admin/income":         { title: "Daromadlar tahlili", sub: "Moliyaviy hisobot" },
+  "/admin/notifications":  { title: "Bildirishnomalar",  sub: "Xabarlar va ogohlantirishlar" },
+  "/admin/video-courses":  { title: "Video darsliklar",   sub: "Kurslar va darslar boshqaruvi" },
+  "/admin/broadcast":      { title: "Ommaviy xabar",     sub: "Auditoriya va kanal tanlash" },
+  "/admin/applications":   { title: "Arizalar",           sub: "CRM va ariza boshqaruvi" },
+  "/admin/teacher-rating": { title: "Ustoz reytingi",     sub: "Baholar va izohlar" },
+  "/admin/reports":        { title: "Hisobotlar",         sub: "Statistika va tahlil" },
 };
 
 const TEACHER_PAGE_META: Record<string, { title: string; sub: string }> = {
@@ -39,12 +40,13 @@ const TEACHER_PAGE_META: Record<string, { title: string; sub: string }> = {
   "/teacher/students":      { title: "O'quvchilarim",     sub: "Guruhlar ro'yxati" },
   "/teacher/attendance":    { title: "Davomat",            sub: "Yo'qlamalar" },
   "/teacher/progress":      { title: "O'quvchi natijasi", sub: "Progress va baholar" },
-  "/teacher/materials":     { title: "Dars materiallari", sub: "Resurslar" },
+  "/teacher/materials":     { title: "Uy vazifalari",     sub: "Topshiriqlar" },
   "/teacher/puzzles":       { title: "Boshqotirmalar",    sub: "Masalalar to'plami" },
   "/teacher/messages":      { title: "Xabarlar",          sub: "Muloqot" },
   "/teacher/notifications": { title: "Bildirishnomalar", sub: "Xabarlar" },
   "/teacher/profile":       { title: "Mening profilim",  sub: "Shaxsiy ma'lumotlar" },
   "/teacher/income":        { title: "Daromad",           sub: "Oylik hisob-kitob" },
+  "/teacher/puzzles/new":  { title: "Yangi boshqotirma", sub: "Pozitsiya va yechim kiriting" },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -177,11 +179,13 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                 )}
               </div>
               <div className="spacer" />
-              <label className="search">
-                <Icon name="search" size={17} />
-                <input placeholder="Qidirish..." />
-                <kbd>⌘K</kbd>
-              </label>
+              {user?.role !== "teacher" && (
+                <label className="search">
+                  <Icon name="search" size={17} />
+                  <input placeholder="Qidirish..." />
+                  <kbd>⌘K</kbd>
+                </label>
+              )}
               <button className="iconbtn" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} title="Mavzu">
                 <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
               </button>
@@ -194,17 +198,22 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                 <Icon name="bell" size={18} />
                 {!!unread?.count && <span className="dot" />}
               </button>
-              {/* Role pill */}
-              <div style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "5px 12px", borderRadius: 8,
-                border: "1px solid var(--border)", background: "var(--surface-2)",
-                fontSize: 13, fontWeight: 600, color: "var(--text-dim)",
-                whiteSpace: "nowrap",
-              }}>
-                <Icon name="user" size={14} />
-                {ROLE_LABELS[user?.role ?? ""] ?? user?.role}
-              </div>
+              {user?.role === "teacher" ? (
+                <button className="btn primary" style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 18px" }}>
+                  <Icon name="plus" size={14}/> Dars yaratish
+                </button>
+              ) : (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "5px 12px", borderRadius: 8,
+                  border: "1px solid var(--border)", background: "var(--surface-2)",
+                  fontSize: 13, fontWeight: 600, color: "var(--text-dim)",
+                  whiteSpace: "nowrap",
+                }}>
+                  <Icon name="user" size={14} />
+                  {ROLE_LABELS[user?.role ?? ""] ?? user?.role}
+                </div>
+              )}
               {/* Avatar */}
               <div style={{
                 width: 36, height: 36, borderRadius: 10, flexShrink: 0,

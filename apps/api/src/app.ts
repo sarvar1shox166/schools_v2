@@ -20,6 +20,8 @@ import { materialsRoutes } from "./modules/materials/materials.routes.js";
 import { messagesRoutes } from "./modules/messages/messages.routes.js";
 import { videosRoutes } from "./modules/videos/videos.routes.js";
 import { lessonsHubRoutes } from "./modules/lessons-hub/lessons-hub.routes.js";
+import { applicationsRoutes } from "./modules/applications/applications.routes.js";
+import { settingsRoutes } from "./modules/settings/settings.routes.js";
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -49,6 +51,8 @@ export function buildApp() {
   app.register(messagesRoutes, { prefix: "/api/v1" });
   app.register(videosRoutes, { prefix: "/api/v1" });
   app.register(lessonsHubRoutes, { prefix: "/api/v1" });
+  app.register(applicationsRoutes, { prefix: "/api/v1" });
+  app.register(settingsRoutes, { prefix: "/api/v1" });
 
   return app;
 }

@@ -1039,3 +1039,225 @@ export function useCompleteHomework() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["homework"] }),
   });
 }
+
+// ─── Applications ─────────────────────────────────────────────────────────────
+
+export interface Application {
+  id: string;
+  fullName: string;
+  phone: string;
+  age: number | null;
+  level: string | null;
+  source: "telegram" | "website" | "phone" | "referral" | "other";
+  note: string | null;
+  status: "yangi" | "korildi" | "qabul" | "rad";
+  assignedTo: string | null;
+  assignedToName: string | null;
+  convertedStudentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApplicationStats {
+  yangi: number; korildi: number; qabul: number; rad: number;
+}
+
+export function useApplications(status?: string) {
+  return useQuery({
+    queryKey: ["applications", status],
+    queryFn: async () =>
+      (await api.get<Application[]>("/applications", { params: status ? { status } : {} })).data,
+  });
+}
+
+export function useApplicationStats() {
+  return useQuery({
+    queryKey: ["applications", "stats"],
+    queryFn: async () => (await api.get<ApplicationStats>("/applications/stats")).data,
+  });
+}
+
+export function useCreateApplication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { fullName: string; phone: string; age?: number; level?: string; source?: string; note?: string }) =>
+      (await api.post<{ id: string }>("/applications", p)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications"] }),
+  });
+}
+
+export function useUpdateApplication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; status?: string; note?: string; assignedTo?: string }) =>
+      (await api.patch(`/applications/${id}`, body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications"] }),
+  });
+}
+
+export function useConvertApplication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post<{ studentId: string; tempPassword: string }>(`/applications/${id}/convert`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["applications"] });
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
+  });
+}
+
+export function useDeleteApplication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/applications/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications"] }),
+  });
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+export interface BrandSettings {
+  name: string; phone: string; address: string; telegram: string; logoUrl: string;
+}
+
+export interface SystemSettings {
+  autoOperator: boolean; debtReminder: boolean; onlinePayment: boolean;
+  selfUnregister: boolean; telegramBot: boolean;
+  language: string; currency: string; timezone: string; yearStart: string;
+}
+
+export interface PricingTier {
+  id: string;
+  name: string;
+  color: string;
+  groupMonthly: number;
+  individualPerLesson: number;
+  sortOrder: number;
+}
+
+export interface SalarySetting {
+  teacherId: string;
+  teacherName: string;
+  salaryType: "per_lesson" | "monthly_fixed" | "percent_income";
+  groupRate: number;
+  individualRate: number;
+  diagnosticRate: number;
+  retentionCoef: number;
+  monthlyAmount: number;
+  incomePercent: number;
+}
+
+export function useBrandSettings() {
+  return useQuery({
+    queryKey: ["settings", "brand"],
+    queryFn: async () => (await api.get<BrandSettings>("/settings/brand")).data,
+  });
+}
+
+export function useUpdateBrandSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Partial<BrandSettings>) => (await api.put("/settings/brand", body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "brand"] }),
+  });
+}
+
+export function useSystemSettings() {
+  return useQuery({
+    queryKey: ["settings", "system"],
+    queryFn: async () => (await api.get<SystemSettings>("/settings/system")).data,
+  });
+}
+
+export function useUpdateSystemSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Partial<SystemSettings>) => (await api.put("/settings/system", body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "system"] }),
+  });
+}
+
+export function usePricingTiers() {
+  return useQuery({
+    queryKey: ["settings", "pricing"],
+    queryFn: async () => (await api.get<PricingTier[]>("/settings/pricing")).data,
+  });
+}
+
+export function useCreatePricingTier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Omit<PricingTier, "id">) =>
+      (await api.post<{ id: string }>("/settings/pricing", body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "pricing"] }),
+  });
+}
+
+export function useUpdatePricingTier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: Partial<PricingTier> & { id: string }) =>
+      (await api.patch(`/settings/pricing/${id}`, body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "pricing"] }),
+  });
+}
+
+export function useDeletePricingTier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/settings/pricing/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "pricing"] }),
+  });
+}
+
+export function useSalarySettings() {
+  return useQuery({
+    queryKey: ["settings", "salary"],
+    queryFn: async () => (await api.get<SalarySetting[]>("/settings/salary")).data,
+  });
+}
+
+export function useUpdateSalarySetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Partial<SalarySetting> & { teacherId: string }) =>
+      (await api.put("/settings/salary", body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "salary"] }),
+  });
+}
+
+export function useBroadcastNotification() {
+  return useMutation({
+    mutationFn: async (body: { title: string; body: string; targetRole?: "teacher" | "student" | "all" }) =>
+      (await api.post<{ ok: boolean; sent: number }>("/notifications/broadcast", body)).data,
+  });
+}
+
+// ─── Update group hook ────────────────────────────────────────────────────────
+export function useUpdateGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; name?: string; level?: string; teacherId?: string; color?: string; capacity?: number }) =>
+      (await api.patch(`/groups/${id}`, body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["groups"] }),
+  });
+}
+
+export function useUpdateStudent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; level?: string; age?: number; status?: string }) =>
+      (await api.patch(`/students/${id}`, body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["students"] }),
+  });
+}
+
+export function useUpdateTeacher() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; spec?: string; title?: string; expYears?: number }) =>
+      (await api.patch(`/teachers/${id}`, body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["teachers"] }),
+  });
+}

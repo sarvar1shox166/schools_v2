@@ -32,21 +32,25 @@ export async function studentsRoutes(app: FastifyInstance) {
     const { tenantId } = request.user;
     const { page, pageSize } = listQuerySchema.parse(request.query);
 
+    const BASE_SELECT = `
+      SELECT s.id, u.full_name AS "fullName", u.phone, u.login,
+             s.level, s.age, s.status, s.joined_at AS "joinedAt",
+             COALESCE(
+               (SELECT json_agg(json_build_object('id', g.id, 'name', g.name,
+                  'teacherName', (SELECT full_name FROM users WHERE id = (
+                    SELECT user_id FROM teachers WHERE id = g.teacher_id))))
+                FROM group_members gm JOIN groups g ON g.id = gm.group_id
+                WHERE gm.student_id = s.id), '[]'
+             ) AS groups,
+             sps.payment_status AS "paymentStatus",
+             sps.active_package_expires AS "activePackageExpires"
+      FROM students s
+      JOIN users u ON u.id = s.user_id
+      LEFT JOIN student_payment_status sps ON sps.student_id = s.id
+      WHERE s.tenant_id = $1`;
+
     if (!page && !pageSize) {
-      const { rows } = await pool.query(
-        `SELECT s.id, u.full_name AS "fullName", u.phone, s.level, s.age, s.status,
-                s.joined_at AS "joinedAt",
-                COALESCE(
-                  (SELECT json_agg(json_build_object('id', g.id, 'name', g.name))
-                   FROM group_members gm JOIN groups g ON g.id = gm.group_id
-                   WHERE gm.student_id = s.id), '[]'
-                ) AS groups
-         FROM students s
-         JOIN users u ON u.id = s.user_id
-         WHERE s.tenant_id = $1
-         ORDER BY u.full_name`,
-        [tenantId]
-      );
+      const { rows } = await pool.query(`${BASE_SELECT} ORDER BY u.full_name`, [tenantId]);
       return rows;
     }
 
@@ -61,18 +65,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     const total = countRows[0]?.total ?? 0;
 
     const { rows } = await pool.query(
-      `SELECT s.id, u.full_name AS "fullName", u.phone, s.level, s.age, s.status,
-              s.joined_at AS "joinedAt",
-              COALESCE(
-                (SELECT json_agg(json_build_object('id', g.id, 'name', g.name))
-                 FROM group_members gm JOIN groups g ON g.id = gm.group_id
-                 WHERE gm.student_id = s.id), '[]'
-              ) AS groups
-       FROM students s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.tenant_id = $1
-       ORDER BY u.full_name
-       LIMIT $2 OFFSET $3`,
+      `${BASE_SELECT} ORDER BY u.full_name LIMIT $2 OFFSET $3`,
       [tenantId, size, offset]
     );
 
@@ -89,8 +82,8 @@ export async function studentsRoutes(app: FastifyInstance) {
     try {
       await client.query("BEGIN");
       const userRes = await client.query(
-        `INSERT INTO users (tenant_id, role, full_name, phone, password_hash)
-         VALUES ($1, 'student', $2, $3, $4) RETURNING id`,
+        `INSERT INTO users (tenant_id, role, full_name, phone, password_hash, login)
+         VALUES ($1, 'student', $2, $3, $4, $3) RETURNING id`,
         [tenantId, body.fullName, body.phone, passwordHash]
       );
       const userId = userRes.rows[0].id;

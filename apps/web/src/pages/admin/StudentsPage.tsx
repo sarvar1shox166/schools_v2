@@ -1,50 +1,30 @@
 import { useMemo, useState } from "react";
 import { Avatar, Card, Icon } from "@chess-school/ui";
+import {
+  useStudents,
+  useCreateStudent,
+  useDeleteStudent,
+  useUpdateStudent,
+  useGroups,
+} from "../../lib/queries.js";
 
 /* ─── Types ─── */
-type Status = "faol" | "yangi" | "qarzdor";
-type PayStatus = "to'langan" | "kutilmoqda" | "qarzdor";
-
 type Student = {
   id: string;
   fullName: string;
-  group: string;
-  username: string;
-  password: string;
   phone: string;
-  age: number;
-  level: string;
-  teacher: string;
+  login?: string;
+  level: string | null;
+  age: number | null;
+  status: "yangi" | "faol" | "nofaol";
   joinedAt: string;
-  status: Status;
-  paymentStatus: PayStatus;
+  groups: Array<{ id: string; name: string; teacherName?: string | null }>;
+  paymentStatus?: "active" | "debt" | "inactive" | "no_package" | null;
+  activePackageExpires?: string | null;
 };
-
-/* ─── Mock data ─── */
-const INIT_STUDENTS: Student[] = [
-  { id:"1",  fullName:"Asilbek Komilov",    group:"A", username:"Asil2016",     password:"Asil2016",     phone:"+998 90 111 22 33", age:9,  level:"Boshlang'ich", teacher:"Alisher Karimov",   joinedAt:"1 sen 2026 10:24",  status:"yangi",   paymentStatus:"to'langan"  },
-  { id:"2",  fullName:"Malika Rashidova",   group:"B", username:"Malika2014",   password:"Malika2014",   phone:"+998 91 444 55 66", age:13, level:"3-razryad",    teacher:"Malika Yusupova",   joinedAt:"2 sen 2026 14:05",  status:"faol",    paymentStatus:"to'langan"  },
-  { id:"3",  fullName:"Bobur Nazarov",      group:"C", username:"Bobur2017",    password:"Bobur2017",    phone:"+998 93 777 88 99", age:8,  level:"Boshlang'ich", teacher:"Bobur Rahimov",     joinedAt:"5 okt 2025 09:30",  status:"faol",    paymentStatus:"kutilmoqda" },
-  { id:"4",  fullName:"Sarvar Yo'ldoshev",  group:"F", username:"Sarvar2009",   password:"Sarvar2009",   phone:"+998 99 222 33 44", age:16, level:"1-razryad",    teacher:"Jasur Tursunov",    joinedAt:"3 apr 2026 11:00",  status:"faol",    paymentStatus:"to'langan"  },
-  { id:"5",  fullName:"Gulnoza Tosheva",    group:"A", username:"Gulnoza2015",  password:"Gulnoza2015",  phone:"+998 90 333 44 55", age:10, level:"Boshlang'ich", teacher:"Alisher Karimov",   joinedAt:"20 fev 2026 16:15", status:"faol",    paymentStatus:"to'langan"  },
-  { id:"6",  fullName:"Javohir Saidov",     group:"D", username:"Javohir2011",  password:"Javohir2011",  phone:"+998 91 555 66 77", age:14, level:"2-razryad",    teacher:"Dilnoza Ergasheva", joinedAt:"8 yan 2026 08:45",  status:"faol",    paymentStatus:"to'langan"  },
-  { id:"7",  fullName:"Madina Aliyeva",     group:"B", username:"Madina2013",   password:"Madina2013",   phone:"+998 93 888 99 00", age:12, level:"3-razryad",    teacher:"Malika Yusupova",   joinedAt:"15 mar 2026 12:30", status:"faol",    paymentStatus:"to'langan"  },
-  { id:"8",  fullName:"Diyor Karimov",      group:"E", username:"Diyor2008",    password:"Diyor2008",    phone:"+998 94 666 77 88", age:17, level:"Nomzod",       teacher:"Sardor Nazarov",    joinedAt:"1 sen 2025 10:00",  status:"qarzdor", paymentStatus:"qarzdor"    },
-  { id:"9",  fullName:"Sevara Mirzayeva",   group:"C", username:"Sevara2018",   password:"Sevara2018",   phone:"+998 95 999 00 11", age:7,  level:"Boshlang'ich", teacher:"Bobur Rahimov",     joinedAt:"9 iyu 2026 09:00",  status:"yangi",   paymentStatus:"kutilmoqda" },
-  { id:"10", fullName:"Otabek Rahimov",     group:"F", username:"Otabek2010",   password:"Otabek2010",   phone:"+998 97 222 11 00", age:15, level:"1-razryad",    teacher:"Jasur Tursunov",    joinedAt:"22 dek 2025 14:20", status:"faol",    paymentStatus:"to'langan"  },
-  { id:"11", fullName:"Laylo Ismoilova",    group:"A", username:"Laylo2016",    password:"Laylo2016",    phone:"+998 99 333 22 11", age:9,  level:"Boshlang'ich", teacher:"Alisher Karimov",   joinedAt:"5 iyu 2026 11:10",  status:"yangi",   paymentStatus:"kutilmoqda" },
-  { id:"12", fullName:"Aziz Tojiboyev",     group:"D", username:"Aziz2012",     password:"Aziz2012",     phone:"+998 90 444 33 22", age:13, level:"2-razryad",    teacher:"Dilnoza Ergasheva", joinedAt:"18 noy 2025 15:45", status:"faol",    paymentStatus:"to'langan"  },
-  { id:"13", fullName:"Kamola Yusupova",    group:"B", username:"Kamola2014",   password:"Kamola2014",   phone:"+998 91 666 55 44", age:11, level:"4-razryad",    teacher:"Malika Yusupova",   joinedAt:"30 mar 2026 10:30", status:"faol",    paymentStatus:"to'langan"  },
-  { id:"14", fullName:"Ulug'bek Hamidov",   group:"E", username:"Ulugbek2009",  password:"Ulugbek2009",  phone:"+998 93 777 66 55", age:16, level:"Nomzod",       teacher:"Sardor Nazarov",    joinedAt:"12 okt 2025 09:15", status:"qarzdor", paymentStatus:"qarzdor"    },
-  { id:"15", fullName:"Shaxzoda Qodirova",  group:"C", username:"Shaxzoda2017", password:"Shaxzoda2017", phone:"+998 94 888 77 66", age:8,  level:"Boshlang'ich", teacher:"Bobur Rahimov",     joinedAt:"2 apr 2026 13:00",  status:"faol",    paymentStatus:"to'langan"  },
-  { id:"16", fullName:"Nodirbek Eshonov",   group:"F", username:"Nodir2011",    password:"Nodir2011",    phone:"+998 95 111 99 88", age:14, level:"1-razryad",    teacher:"Jasur Tursunov",    joinedAt:"9 yan 2026 08:00",  status:"faol",    paymentStatus:"to'langan"  },
-];
 
 /* ─── Constants ─── */
 const LEVELS = ["Boshlang'ich", "1-razryad", "2-razryad", "3-razryad", "4-razryad", "Nomzod"];
-const GROUPS = ["A", "B", "C", "D", "E", "F"];
-const TEACHERS = ["Alisher Karimov", "Malika Yusupova", "Bobur Rahimov", "Sardor Nazarov", "Dilnoza Ergasheva", "Jasur Tursunov"];
-const PAY_STATUSES: PayStatus[] = ["to'langan", "kutilmoqda", "qarzdor"];
 
 const LEVEL_COLOR: Record<string, string> = {
   "Boshlang'ich": "#ef4444",
@@ -59,69 +39,52 @@ const FILTER_TABS = [
   { v: "hammasi" as const, label: "Hammasi" },
   { v: "faol"    as const, label: "Faol" },
   { v: "yangi"   as const, label: "Yangi" },
-  { v: "qarzdor" as const, label: "Qarzdor" },
+  { v: "nofaol"  as const, label: "Nofaol" },
 ];
 
-type FilterTab = "hammasi" | Status;
+type FilterTab = "hammasi" | "faol" | "yangi" | "nofaol";
 
-/* ─── Helpers ─── */
-function shortTeacher(name: string) {
-  const [last, first = ""] = name.split(" ");
-  return `${last[0]}.${first}`;
-}
+const PAY_STATUS_LABEL: Record<string, string> = {
+  active:     "To'langan",
+  debt:       "Qarzdor",
+  no_package: "Paket yo'q",
+  inactive:   "Nofaol",
+};
+
+const PAY_STATUS_COLOR: Record<string, { bg: string; color: string }> = {
+  active:     { bg: "#d1fae5", color: "#059669" },
+  debt:       { bg: "#fee2e2", color: "#dc2626" },
+  no_package: { bg: "var(--surface-3)", color: "var(--text-faint)" },
+  inactive:   { bg: "var(--surface-3)", color: "var(--text-faint)" },
+};
 
 /* ─── Page ─── */
 export default function StudentsPage() {
-  const [students, setStudents] = useState<Student[]>(INIT_STUDENTS);
+  const { data: students = [], isLoading } = useStudents();
   const [tab, setTab] = useState<FilterTab>("hammasi");
   const [q, setQ] = useState("");
-  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
 
-  /* modals */
   type Modal =
     | { mode: "add" }
     | { mode: "edit"; student: Student }
     | { mode: "delete"; student: Student }
+    | { mode: "created"; tempPassword: string }
     | null;
   const [modal, setModal] = useState<Modal>(null);
 
-  /* filtered list */
   const filtered = useMemo(() => {
-    let rows = students;
+    let rows = students as Student[];
     if (tab !== "hammasi") rows = rows.filter((s) => s.status === tab);
     if (q) {
       const lq = q.toLowerCase();
       rows = rows.filter((s) =>
         s.fullName.toLowerCase().includes(lq) ||
-        s.username.toLowerCase().includes(lq) ||
+        (s.login ?? "").toLowerCase().includes(lq) ||
         s.phone.includes(lq)
       );
     }
     return rows;
   }, [students, tab, q]);
-
-  function togglePassword(id: string) {
-    setVisiblePasswords((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function handleAdd(s: Student) {
-    setStudents((prev) => [s, ...prev]);
-    setModal(null);
-  }
-
-  function handleEdit(updated: Student) {
-    setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-    setModal(null);
-  }
-
-  function handleDelete(id: string) {
-    setStudents((prev) => prev.filter((s) => s.id !== id));
-    setModal(null);
-  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -129,7 +92,7 @@ export default function StudentsPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>
-          O'quvchilar — {students.length} ta
+          O'quvchilar — {(students as Student[]).length} ta
         </h2>
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn">
@@ -176,96 +139,145 @@ export default function StudentsPage() {
           </label>
         </div>
 
+        {/* Loading */}
+        {isLoading && (
+          <div style={{ padding: "40px", textAlign: "center", color: "var(--text-faint)", fontWeight: 600 }}>
+            Yuklanmoqda...
+          </div>
+        )}
+
         {/* Table */}
-        <div style={{ overflowX: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>ISM FAMILYA</th>
-                <th>USERNAME</th>
-                <th>PAROL</th>
-                <th>TEL RAQAM</th>
-                <th>YOSHI</th>
-                <th>DARAJASI</th>
-                <th>O'QITUVCHISI</th>
-                <th>RO'YXATDAN O'TISHI</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => (
-                <tr key={s.id}>
-                  <td>
-                    <div className="with-av">
-                      <Avatar name={s.fullName} size="sm" style={{ borderRadius: 10, flexShrink: 0 }} />
-                      <div>
-                        <div className="cell-main">{s.fullName}</div>
-                        <div className="cell-sub">{s.group} guruh</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ fontSize: 13, fontWeight: 600 }}>{s.username}</td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 13, letterSpacing: visiblePasswords.has(s.id) ? 0 : 3, fontFamily: "monospace", color: "var(--text-dim)" }}>
-                        {visiblePasswords.has(s.id) ? s.password : "········"}
-                      </span>
-                      <button
-                        className="iconbtn"
-                        style={{ width: 24, height: 24 }}
-                        onClick={() => togglePassword(s.id)}
-                      >
-                        <Icon name={visiblePasswords.has(s.id) ? "eyeOff" : "eye"} size={13} />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="mono" style={{ fontSize: 13 }}>{s.phone}</td>
-                  <td style={{ fontWeight: 700, fontSize: 14 }}>{s.age}</td>
-                  <td>
-                    <span style={{
-                      fontWeight: 700, fontSize: 13.5,
-                      color: LEVEL_COLOR[s.level] ?? "var(--text)",
-                    }}>
-                      {s.level}
-                    </span>
-                  </td>
-                  <td style={{ fontSize: 13, color: "var(--text-dim)", fontWeight: 600 }}>
-                    {shortTeacher(s.teacher)}
-                  </td>
-                  <td className="cell-sub">{s.joinedAt}</td>
-                  <td>
-                    <div style={{ display: "flex", gap: 2 }}>
-                      <button
-                        className="iconbtn"
-                        style={{ width: 30, height: 30 }}
-                        onClick={() => setModal({ mode: "edit", student: s })}
-                      >
-                        <Icon name="edit" size={13} />
-                      </button>
-                      <button
-                        className="iconbtn"
-                        style={{ width: 30, height: 30, color: "var(--danger)" }}
-                        onClick={() => setModal({ mode: "delete", student: s })}
-                      >
-                        <Icon name="trash" size={13} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
+        {!isLoading && (
+          <div style={{ overflowX: "auto" }}>
+            <table className="tbl">
+              <thead>
                 <tr>
-                  <td colSpan={9}>
-                    <div className="empty">
-                      <Icon name="search" size={28} />
-                      <div>Hech narsa topilmadi</div>
-                    </div>
-                  </td>
+                  <th>ISM FAMILYA</th>
+                  <th>USERNAME</th>
+                  <th>TEL RAQAM</th>
+                  <th>YOSHI</th>
+                  <th>DARAJASI</th>
+                  <th>GURUH</th>
+                  <th>TO'LOV</th>
+                  <th>HOLATI</th>
+                  <th />
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.map((s) => {
+                  const ps = s.paymentStatus;
+                  const psStyle = ps ? (PAY_STATUS_COLOR[ps] ?? PAY_STATUS_COLOR.no_package) : null;
+                  const psLabel = ps ? (PAY_STATUS_LABEL[ps] ?? ps) : null;
+                  return (
+                    <tr key={s.id}>
+                      <td>
+                        <div className="with-av">
+                          <div style={{ borderRadius: 10, flexShrink: 0, display: "inline-flex" }}><Avatar name={s.fullName} size="sm" /></div>
+                          <div>
+                            <div className="cell-main">{s.fullName}</div>
+                            <div className="cell-sub">{new Date(s.joinedAt).toLocaleDateString("uz-Latn-UZ")}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        {s.login ? (
+                          <span style={{
+                            display: "inline-flex", alignItems: "center",
+                            padding: "3px 10px", borderRadius: 6,
+                            background: "var(--surface-2)", fontSize: 12.5,
+                            fontWeight: 700, fontFamily: "monospace",
+                            color: "var(--text-dim)",
+                          }}>
+                            @{s.login}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--text-faint)", fontSize: 13 }}>—</span>
+                        )}
+                      </td>
+                      <td className="mono" style={{ fontSize: 13 }}>{s.phone}</td>
+                      <td style={{ fontWeight: 700, fontSize: 14 }}>{s.age ?? "—"}</td>
+                      <td>
+                        {s.level ? (
+                          <span style={{
+                            fontWeight: 700, fontSize: 13.5,
+                            color: LEVEL_COLOR[s.level] ?? "var(--text)",
+                          }}>
+                            {s.level}
+                          </span>
+                        ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                      </td>
+                      <td>
+                        {s.groups.length > 0 ? (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {s.groups.map((g) => (
+                              <span key={g.id} style={{
+                                display: "inline-flex", alignItems: "center",
+                                padding: "2px 8px", borderRadius: 6,
+                                background: "var(--surface-2)", fontSize: 12,
+                                fontWeight: 600, color: "var(--text-dim)",
+                              }}>
+                                {g.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : <span style={{ color: "var(--text-faint)", fontSize: 13 }}>—</span>}
+                      </td>
+                      <td>
+                        {psStyle && psLabel ? (
+                          <span style={{
+                            display: "inline-flex", alignItems: "center",
+                            padding: "3px 10px", borderRadius: 6, fontSize: 12.5,
+                            fontWeight: 700, background: psStyle.bg, color: psStyle.color,
+                          }}>
+                            {psLabel}
+                          </span>
+                        ) : <span style={{ color: "var(--text-faint)", fontSize: 13 }}>—</span>}
+                      </td>
+                      <td>
+                        <span style={{
+                          display: "inline-flex", alignItems: "center",
+                          padding: "3px 10px", borderRadius: 6, fontSize: 12.5, fontWeight: 700,
+                          background: s.status === "faol" ? "#d1fae5" : s.status === "yangi" ? "#dbeafe" : "var(--surface-3)",
+                          color: s.status === "faol" ? "#059669" : s.status === "yangi" ? "#2563eb" : "var(--text-faint)",
+                        }}>
+                          {s.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 2 }}>
+                          <button
+                            className="iconbtn"
+                            style={{ width: 30, height: 30 }}
+                            onClick={() => setModal({ mode: "edit", student: s })}
+                          >
+                            <Icon name="edit" size={13} />
+                          </button>
+                          <button
+                            className="iconbtn"
+                            style={{ width: 30, height: 30, color: "var(--danger)" }}
+                            onClick={() => setModal({ mode: "delete", student: s })}
+                          >
+                            <Icon name="trash" size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filtered.length === 0 && !isLoading && (
+                  <tr>
+                    <td colSpan={9}>
+                      <div className="empty">
+                        <Icon name="search" size={28} />
+                        <div>Hech narsa topilmadi</div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Footer count */}
         <div style={{
@@ -281,8 +293,7 @@ export default function StudentsPage() {
         <StudentModal
           mode="add"
           onClose={() => setModal(null)}
-          onSave={(s) => handleAdd(s)}
-          nextId={String(students.length + 1)}
+          onCreated={(tempPassword) => setModal({ mode: "created", tempPassword })}
         />
       )}
       {modal?.mode === "edit" && (
@@ -290,57 +301,115 @@ export default function StudentsPage() {
           mode="edit"
           student={modal.student}
           onClose={() => setModal(null)}
-          onSave={(s) => handleEdit(s)}
+          onCreated={() => setModal(null)}
         />
       )}
       {modal?.mode === "delete" && (
         <DeleteModal
           student={modal.student}
           onClose={() => setModal(null)}
-          onConfirm={() => handleDelete(modal.student.id)}
+        />
+      )}
+      {modal?.mode === "created" && (
+        <TempPasswordModal
+          tempPassword={modal.tempPassword}
+          onClose={() => setModal(null)}
         />
       )}
     </div>
   );
 }
 
+/* ─── Temp password modal shown after creation ─── */
+function TempPasswordModal({ tempPassword, onClose }: { tempPassword: string; onClose: () => void }) {
+  return (
+    <ModalShell onClose={onClose} width={420}>
+      <div style={{ padding: "22px 24px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontWeight: 800, fontSize: 17 }}>O'quvchi qo'shildi</div>
+        <button className="iconbtn" style={{ width: 32, height: 32 }} onClick={onClose}>
+          <Icon name="x" size={16} />
+        </button>
+      </div>
+      <div style={{ padding: "10px 24px 32px", textAlign: "center" }}>
+        <div style={{
+          width: 64, height: 64, margin: "0 auto 18px", borderRadius: 16,
+          background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Icon name="check" size={28} style={{ color: "#059669" }} />
+        </div>
+        <div style={{ fontSize: 13.5, color: "var(--text-faint)", marginBottom: 14 }}>
+          O'quvchi muvaffaqiyatli yaratildi. Vaqtinchalik parol:
+        </div>
+        <div style={{
+          padding: "12px 20px", borderRadius: 10, background: "var(--surface-2)",
+          fontFamily: "monospace", fontWeight: 800, fontSize: 22, letterSpacing: 2,
+          color: "var(--text)",
+        }}>
+          {tempPassword}
+        </div>
+        <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 10 }}>
+          Bu parolni o'quvchiga bering. Uni saqlang — keyinchalik ko'rsatilmaydi.
+        </div>
+      </div>
+      <div style={{ height: 1, background: "var(--border)" }} />
+      <div style={{ padding: "18px 24px" }}>
+        <button className="btn primary" style={{ width: "100%", justifyContent: "center" }} onClick={onClose}>
+          Tushunarli
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
 /* ─── Add / Edit modal ─── */
 type StudentModalProps =
-  | { mode: "add"; student?: undefined; onClose: () => void; onSave: (s: Student) => void; nextId: string }
-  | { mode: "edit"; student: Student;   onClose: () => void; onSave: (s: Student) => void; nextId?: string };
+  | { mode: "add"; student?: undefined; onClose: () => void; onCreated: (tempPassword: string) => void }
+  | { mode: "edit"; student: Student; onClose: () => void; onCreated: (tempPassword?: string) => void };
 
-function StudentModal({ mode, student, onClose, onSave, nextId }: StudentModalProps) {
+function StudentModal({ mode, student, onClose, onCreated }: StudentModalProps) {
+  const createStudent = useCreateStudent();
+  const updateStudent = useUpdateStudent();
+  const { data: groups = [] } = useGroups();
+
   const [form, setForm] = useState({
-    fullName:      student?.fullName      ?? "",
-    age:           student?.age           ? String(student.age) : "",
-    username:      student?.username      ?? "",
-    password:      student?.password      ?? "",
-    phone:         student?.phone         ?? "+998",
-    level:         student?.level         ?? "Boshlang'ich",
-    group:         student?.group         ?? "A",
-    teacher:       student?.teacher       ?? "Alisher Karimov",
-    paymentStatus: student?.paymentStatus ?? ("kutilmoqda" as PayStatus),
+    fullName: student?.fullName ?? "",
+    phone:    student?.phone   ?? "+998",
+    level:    student?.level   ?? "",
+    age:      student?.age     ? String(student.age) : "",
+    groupId:  student?.groups?.[0]?.id ?? "",
   });
 
-  function handleSave() {
-    const s: Student = {
-      id: student?.id ?? nextId ?? String(Date.now()),
-      fullName:      form.fullName,
-      group:         form.group,
-      username:      form.username || form.fullName.replace(/\s+/g, "").slice(0, 8),
-      password:      form.password || form.fullName.replace(/\s+/g, "").slice(0, 8),
-      phone:         form.phone,
-      age:           Number(form.age) || 10,
-      level:         form.level,
-      teacher:       form.teacher,
-      joinedAt:      student?.joinedAt ?? new Date().toLocaleDateString("uz-Latn-UZ"),
-      status:        student?.status ?? "yangi",
-      paymentStatus: form.paymentStatus,
-    };
-    onSave(s);
-  }
-
+  const [error, setError] = useState<string | null>(null);
   const isAdd = mode === "add";
+  const isPending = createStudent.isPending || updateStudent.isPending;
+
+  async function handleSave() {
+    setError(null);
+    try {
+      if (isAdd) {
+        const res = await createStudent.mutateAsync({
+          fullName: form.fullName,
+          phone:    form.phone,
+          level:    form.level || undefined,
+          age:      form.age ? Number(form.age) : undefined,
+          groupId:  form.groupId || undefined,
+        });
+        onCreated((res as { id: string; tempPassword: string }).tempPassword ?? "");
+      } else {
+        await updateStudent.mutateAsync({
+          id:       student!.id,
+          fullName: form.fullName,
+          phone:    form.phone,
+          level:    form.level || undefined,
+          age:      form.age ? Number(form.age) : undefined,
+        });
+        onCreated();
+      }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg ?? "Xatolik yuz berdi");
+    }
+  }
 
   return (
     <ModalShell onClose={onClose}>
@@ -361,14 +430,14 @@ function StudentModal({ mode, student, onClose, onSave, nextId }: StudentModalPr
             justifyContent: "center", fontWeight: 800, fontSize: 22, color: "#fff",
           }}>?</div>
         ) : (
-          <Avatar name={student.fullName} size="lg" style={{ borderRadius: 12, flexShrink: 0 }} />
+          <div style={{ borderRadius: 12, flexShrink: 0, display: "inline-flex" }}><Avatar name={student!.fullName} size="lg" /></div>
         )}
         <div>
           <div style={{ fontWeight: 750, fontSize: 15 }}>
-            {isAdd ? "Yangi o'quvchi" : student.fullName}
+            {isAdd ? "Yangi o'quvchi" : student!.fullName}
           </div>
           <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: 3 }}>
-            {isAdd ? "Username/parol bo'sh qolsa avtomatik yaratiladi" : "Ma'lumotlarni o'zgartiring"}
+            {isAdd ? "Ma'lumotlarni to'ldiring" : "Ma'lumotlarni o'zgartiring"}
           </div>
         </div>
       </div>
@@ -388,53 +457,32 @@ function StudentModal({ mode, student, onClose, onSave, nextId }: StudentModalPr
           </FieldWrap>
         </div>
 
-        {/* Row 2: USERNAME + PAROL */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <FieldWrap label="USERNAME">
-            <input className="inp" value={form.username}
-              placeholder={isAdd ? "avtomatik" : ""}
-              onChange={(e) => setForm({ ...form, username: e.target.value })} />
-          </FieldWrap>
-          <FieldWrap label="PAROL">
-            <input className="inp" value={form.password}
-              placeholder={isAdd ? "avtomatik" : ""}
-              onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          </FieldWrap>
-        </div>
-
-        {/* Row 3: TELEFON */}
+        {/* TELEFON */}
         <FieldWrap label="TELEFON">
           <input className="inp" value={form.phone} placeholder="+998 90 000 00 00"
             onChange={(e) => setForm({ ...form, phone: e.target.value })} />
         </FieldWrap>
 
-        {/* Row 4: DARAJASI + GURUH */}
+        {/* DARAJASI + GURUH */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <FieldWrap label="DARAJASI">
             <SelectField value={form.level} onChange={(v) => setForm({ ...form, level: v })}>
+              <option value="">Tanlang...</option>
               {LEVELS.map((l) => <option key={l}>{l}</option>)}
             </SelectField>
           </FieldWrap>
           <FieldWrap label="GURUH">
-            <SelectField value={form.group} onChange={(v) => setForm({ ...form, group: v })}>
-              {GROUPS.map((g) => <option key={g}>{g}</option>)}
+            <SelectField value={form.groupId} onChange={(v) => setForm({ ...form, groupId: v })}>
+              <option value="">Guruhsiz</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </SelectField>
           </FieldWrap>
         </div>
 
-        {/* Row 5: O'QITUVCHISI + TO'LOV HOLATI */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <FieldWrap label="O'QITUVCHISI">
-            <SelectField value={form.teacher} onChange={(v) => setForm({ ...form, teacher: v })}>
-              {TEACHERS.map((t) => <option key={t}>{t}</option>)}
-            </SelectField>
-          </FieldWrap>
-          <FieldWrap label="TO'LOV HOLATI">
-            <SelectField value={form.paymentStatus} onChange={(v) => setForm({ ...form, paymentStatus: v as PayStatus })}>
-              {PAY_STATUSES.map((p) => <option key={p}>{p}</option>)}
-            </SelectField>
-          </FieldWrap>
-        </div>
+        {/* Error */}
+        {error && (
+          <div style={{ color: "#ef4444", fontSize: 13, fontWeight: 600 }}>{error}</div>
+        )}
 
         {/* Buttons */}
         <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
@@ -442,8 +490,8 @@ function StudentModal({ mode, student, onClose, onSave, nextId }: StudentModalPr
             Bekor
           </button>
           <button className="btn primary" style={{ flex: 2, justifyContent: "center" }}
-            onClick={handleSave} disabled={!form.fullName}>
-            <Icon name="check" size={15} /> {isAdd ? "Qo'shish" : "Saqlash"}
+            onClick={handleSave} disabled={!form.fullName || isPending}>
+            <Icon name="check" size={15} /> {isPending ? "Saqlanmoqda..." : isAdd ? "Qo'shish" : "Saqlash"}
           </button>
         </div>
       </div>
@@ -452,11 +500,24 @@ function StudentModal({ mode, student, onClose, onSave, nextId }: StudentModalPr
 }
 
 /* ─── Delete confirmation modal ─── */
-function DeleteModal({ student, onClose, onConfirm }: {
+function DeleteModal({ student, onClose }: {
   student: Student;
   onClose: () => void;
-  onConfirm: () => void;
 }) {
+  const deleteStudent = useDeleteStudent();
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleConfirm() {
+    setError(null);
+    try {
+      await deleteStudent.mutateAsync(student.id);
+      onClose();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg ?? "Xatolik yuz berdi");
+    }
+  }
+
   return (
     <ModalShell onClose={onClose} width={420}>
       <div style={{ padding: "22px 24px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -467,7 +528,6 @@ function DeleteModal({ student, onClose, onConfirm }: {
       </div>
 
       <div style={{ padding: "10px 24px 32px", textAlign: "center" }}>
-        {/* Trash icon */}
         <div style={{
           width: 72, height: 72, margin: "0 auto 18px",
           borderRadius: 18, background: "var(--surface-3)",
@@ -479,6 +539,7 @@ function DeleteModal({ student, onClose, onConfirm }: {
         <div style={{ fontSize: 13.5, color: "var(--text-faint)" }}>
           Haqiqatan ham bu o'quvchini o'chirmoqchimisiz?
         </div>
+        {error && <div style={{ color: "#ef4444", fontSize: 13, marginTop: 12, fontWeight: 600 }}>{error}</div>}
       </div>
 
       <div style={{ height: 1, background: "var(--border)" }} />
@@ -492,11 +553,12 @@ function DeleteModal({ student, onClose, onConfirm }: {
             flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             padding: "0 20px", height: 42, borderRadius: 10,
             background: "#ef4444", color: "#fff", fontWeight: 700, fontSize: 14,
-            border: "none", cursor: "pointer",
+            border: "none", cursor: "pointer", opacity: deleteStudent.isPending ? 0.7 : 1,
           }}
-          onClick={onConfirm}
+          onClick={handleConfirm}
+          disabled={deleteStudent.isPending}
         >
-          <Icon name="trash" size={14} /> O'chirish
+          <Icon name="trash" size={14} /> {deleteStudent.isPending ? "O'chirilmoqda..." : "O'chirish"}
         </button>
       </div>
     </ModalShell>

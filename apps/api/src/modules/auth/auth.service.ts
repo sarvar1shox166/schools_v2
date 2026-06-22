@@ -8,20 +8,24 @@ export interface AuthUser {
   role: "super_admin" | "admin" | "teacher" | "student";
   fullName: string;
   phone: string;
+  login: string;
 }
 
-export async function findUserByPhone(phone: string) {
+export async function findUserByLogin(loginValue: string) {
   const { rows } = await pool.query<
     AuthUser & { passwordHash: string; isActive: boolean }
   >(
     `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId", role,
-            full_name AS "fullName", phone, password_hash AS "passwordHash",
+            full_name AS "fullName", phone, login, password_hash AS "passwordHash",
             is_active AS "isActive"
-     FROM users WHERE phone = $1`,
-    [phone]
+     FROM users WHERE login = $1 OR phone = $1`,
+    [loginValue]
   );
   return rows[0] ?? null;
 }
+
+/** @deprecated use findUserByLogin */
+export const findUserByPhone = findUserByLogin;
 
 export async function findUserByTelegramId(telegramId: number) {
   const { rows } = await pool.query<AuthUser & { isActive: boolean }>(

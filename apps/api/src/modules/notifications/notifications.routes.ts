@@ -63,4 +63,34 @@ export async function notificationsRoutes(app: FastifyInstance) {
     );
     return { ok: true };
   });
+
+  // Broadcast: send notification to a group of users (admin only)
+  app.post("/notifications/broadcast", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { title, body: msgBody, icon = "bell", type = "broadcast",
+            targetRole } = request.body as {
+      title: string; body: string; icon?: string; type?: string;
+      targetRole?: "teacher" | "student" | "all";
+    };
+
+    if (!title || !msgBody) return reply.code(400).send({ error: "title and body required" });
+
+    let roleFilter = "";
+    const params: unknown[] = [tenantId, title, msgBody, icon, type];
+    if (targetRole && targetRole !== "all") {
+      params.push(targetRole);
+      roleFilter = `AND u.role = $${params.length}`;
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO notifications (tenant_id, user_id, type, icon, title, body)
+       SELECT u.tenant_id, u.id, $5, $4, $2, $3
+       FROM users u
+       WHERE u.tenant_id = $1 AND u.is_active = true ${roleFilter}
+       RETURNING id`,
+      params
+    );
+
+    return reply.code(201).send({ ok: true, sent: rows.length });
+  });
 }

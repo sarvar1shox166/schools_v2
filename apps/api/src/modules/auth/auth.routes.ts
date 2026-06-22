@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../../env.js";
-import { findUserByPhone, findUserByTelegramId, linkTelegramId, verifyPassword } from "./auth.service.js";
+import { findUserByLogin, findUserByTelegramId, linkTelegramId, verifyPassword } from "./auth.service.js";
 import { verifyTelegramInitData } from "./telegram.js";
 
 const loginSchema = z.object({
-  phone: z.string().min(5),
+  login: z.string().min(1),
   password: z.string().min(1),
 });
 
@@ -15,7 +15,7 @@ const telegramSchema = z.object({
 
 function issueSession(app: FastifyInstance, user: {
   id: string; tenantId: string | null; branchId: string | null;
-  role: "super_admin" | "admin" | "teacher" | "student"; fullName: string; phone: string;
+  role: "super_admin" | "admin" | "teacher" | "student"; fullName: string; phone: string; login: string;
 }) {
   const payload = {
     sub: user.id,
@@ -34,6 +34,7 @@ function issueSession(app: FastifyInstance, user: {
       id: user.id,
       fullName: user.fullName,
       phone: user.phone,
+      login: user.login,
       role: user.role,
       tenantId: user.tenantId,
       branchId: user.branchId,
@@ -43,9 +44,9 @@ function issueSession(app: FastifyInstance, user: {
 
 export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/login", async (request, reply) => {
-    const { phone, password } = loginSchema.parse(request.body);
+    const { login, password } = loginSchema.parse(request.body);
 
-    const user = await findUserByPhone(phone);
+    const user = await findUserByLogin(login);
     if (!user || !user.isActive) {
       return reply.code(401).send({ error: "Invalid credentials" });
     }
