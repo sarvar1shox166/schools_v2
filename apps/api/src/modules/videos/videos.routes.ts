@@ -1,13 +1,19 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { awardXp } from "../gamification/xp.js";
+
+const UPLOADS_ROOT = path.resolve(process.cwd(), "uploads");
 
 const createVideoSchema = z.object({
   title: z.string().min(1),
   category: z.enum(["zoom", "debyut", "taktika", "endshpil", "strategiya"]),
   videoUrl: z.string().min(1),
   durationSeconds: z.number().int().positive().optional(),
+  thumbnailUrl: z.string().optional(),
   thumbnailColor: z.string().optional(),
   thumbnailIcon: z.string().optional(),
 });
@@ -43,16 +49,18 @@ export async function videosRoutes(app: FastifyInstance) {
     }
 
     let progressJoin = "";
+    let progressSelect = "0";
     if (role === "student") {
       const studentId = await getStudentIdForUser(sub);
       params.push(studentId);
       progressJoin = `LEFT JOIN video_progress vp ON vp.video_id = v.id AND vp.student_id = $${params.length}`;
+      progressSelect = "COALESCE(vp.progress_pct, 0)";
     }
 
     const { rows } = await pool.query(
       `SELECT v.id, v.title, v.category, v.video_url AS "videoUrl", v.duration_seconds AS "durationSeconds",
-              v.thumbnail_color AS "thumbnailColor", v.thumbnail_icon AS "thumbnailIcon",
-              COALESCE(vp.progress_pct, 0) AS "progressPct"
+              v.thumbnail_url AS "thumbnailUrl", v.thumbnail_color AS "thumbnailColor", v.thumbnail_icon AS "thumbnailIcon",
+              ${progressSelect} AS "progressPct"
        FROM video_lessons v
        ${progressJoin}
        WHERE ${conditions.join(" AND ")}
@@ -71,11 +79,60 @@ export async function videosRoutes(app: FastifyInstance) {
     if (role === "teacher") teacherId = await getTeacherIdForUser(sub);
 
     const { rows } = await pool.query(
-      `INSERT INTO video_lessons (tenant_id, teacher_id, title, category, video_url, duration_seconds, thumbnail_color, thumbnail_icon)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [tenantId, teacherId, body.title, body.category, body.videoUrl, body.durationSeconds ?? null, body.thumbnailColor ?? null, body.thumbnailIcon ?? null]
+      `INSERT INTO video_lessons (tenant_id, teacher_id, title, category, video_url, duration_seconds, thumbnail_url, thumbnail_color, thumbnail_icon)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [tenantId, teacherId, body.title, body.category, body.videoUrl, body.durationSeconds ?? null,
+       body.thumbnailUrl ?? null, body.thumbnailColor ?? null, body.thumbnailIcon ?? null]
     );
     return reply.code(201).send({ id: rows[0].id });
+  });
+
+  // Upload video file → returns { url }
+  app.post("/videos/upload", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
+    const data = await request.file();
+    if (!data) return reply.code(400).send({ error: "Fayl topilmadi" });
+
+    const dir = path.join(UPLOADS_ROOT, "videos", tenantId);
+    await mkdir(dir, { recursive: true });
+    const ext = path.extname(data.filename) || ".mp4";
+    const fileName = `${randomUUID()}${ext}`;
+    const filePath = path.join(dir, fileName);
+    const buffer = await data.toBuffer();
+    await writeFile(filePath, buffer);
+
+    const url = `/uploads/videos/${tenantId}/${fileName}`;
+    return { url };
+  });
+
+  // Upload thumbnail image → returns { url }
+  app.post("/upload/image", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
+    const data = await request.file();
+    if (!data) return reply.code(400).send({ error: "Fayl topilmadi" });
+
+    const dir = path.join(UPLOADS_ROOT, "images", tenantId);
+    await mkdir(dir, { recursive: true });
+    const ext = path.extname(data.filename) || ".jpg";
+    const fileName = `${randomUUID()}${ext}`;
+    const filePath = path.join(dir, fileName);
+    const buffer = await data.toBuffer();
+    await writeFile(filePath, buffer);
+
+    const url = `/uploads/images/${tenantId}/${fileName}`;
+    return { url };
+  });
+
+  app.delete("/videos/:id", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+    const { rowCount } = await pool.query(
+      `DELETE FROM video_lessons WHERE id = $1 AND tenant_id = $2`, [id, tenantId]
+    );
+    if (!rowCount) return reply.code(404).send({ error: "Not found" });
+    return { ok: true };
   });
 
   app.post("/videos/:id/progress", { onRequest: [app.requireRole("student")] }, async (request, reply) => {

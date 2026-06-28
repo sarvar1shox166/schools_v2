@@ -63,6 +63,54 @@ export function useTeachers() {
   });
 }
 
+export interface TeacherRanking {
+  id: string;
+  fullName: string;
+  spec: string | null;
+  groupsCount: number;
+  studentsCount: number;
+  avgRating: number;
+  reviewCount: number;
+}
+
+export interface TeacherReview {
+  id: string;
+  rating: number;
+  comment: string | null;
+  period: string;
+  createdAt: string;
+  teacherName: string;
+  reviewerName: string;
+  groupName: string | null;
+  groupColor: string | null;
+}
+
+export function useTeacherRankings() {
+  return useQuery({
+    queryKey: ["teacherRankings"],
+    queryFn: async () => (await api.get<TeacherRanking[]>("/teachers/rankings")).data,
+  });
+}
+
+export function useTeacherReviews() {
+  return useQuery({
+    queryKey: ["teacherReviews"],
+    queryFn: async () => (await api.get<TeacherReview[]>("/teachers/reviews")).data,
+  });
+}
+
+export function useAddTeacherReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ teacherId, ...payload }: { teacherId: string; rating: number; comment?: string }) =>
+      (await api.post(`/teachers/${teacherId}/reviews`, payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["teacherRankings"] });
+      qc.invalidateQueries({ queryKey: ["teacherReviews"] });
+    },
+  });
+}
+
 export function useCreateTeacher() {
   const qc = useQueryClient();
   return useMutation({
@@ -153,9 +201,51 @@ export function useSchedule() {
 export function useCreateScheduleSlot() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { groupId: string; dayOfWeek: number; startTime: string; roomId?: string; isOnline?: boolean }) =>
+    mutationFn: async (payload: { groupId: string; dayOfWeek: number; startTime: string; roomId?: string; isOnline?: boolean; meetingUrl?: string }) =>
       (await api.post("/schedule", payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule"] }),
+  });
+}
+
+export function useUpdateScheduleSlot() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: { id: string; dayOfWeek?: number; startTime?: string; roomId?: string; isOnline?: boolean; meetingUrl?: string }) =>
+      (await api.patch(`/schedule/${id}`, payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule"] }),
+  });
+}
+
+export function useDeleteScheduleSlot() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/schedule/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule"] }),
+  });
+}
+
+export interface TeacherScheduleData {
+  slots: (ScheduleSlot & { studentsCount: number })[];
+  groups: { id: string; name: string; color: string | null; studentsCount: number; weeklyHours: number; slotsCount: number }[];
+}
+
+export function useTeacherSchedule() {
+  return useQuery({
+    queryKey: ["teacherSchedule"],
+    queryFn: async () => (await api.get<TeacherScheduleData>("/me/teacher-schedule")).data,
+  });
+}
+
+export interface GroupStudent {
+  id: string;
+  fullName: string;
+}
+
+export function useGroupStudents(groupId: string | null) {
+  return useQuery({
+    queryKey: ["groupStudents", groupId],
+    queryFn: async () => (await api.get<GroupStudent[]>(`/groups/${groupId}/students`)).data,
+    enabled: !!groupId,
   });
 }
 
@@ -170,7 +260,7 @@ export function useAttendance(scheduleSlotId: string | null, date: string) {
   return useQuery({
     queryKey: ["attendance", scheduleSlotId, date],
     queryFn: async () =>
-      (await api.get<{ studentId: string; status: "p" | "a" | "l" }[]>("/attendance", {
+      (await api.get<{ studentId: string; status: "p" | "a" | "l" | "ae"; reason: string | null; lessonCounted: boolean }[]>("/attendance", {
         params: { scheduleSlotId, date },
       })).data,
     enabled: !!scheduleSlotId,
@@ -183,6 +273,13 @@ export interface Package {
   lessonsCount: number;
   price: number;
   active: boolean;
+  lessonType: "group" | "individual";
+  tier: "standard" | "pro";
+  lessonsPerMonth: number | null;
+  lessonsPerWeek: number | null;
+  durationMinutes: number | null;
+  maxStudents: number | null;
+  delivery: "online" | "offline";
 }
 
 export interface StudentPackage {
@@ -217,8 +314,30 @@ export function usePackages() {
 export function useCreatePackage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { name: string; lessonsCount: number; price: number }) =>
-      (await api.post("/packages", payload)).data,
+    mutationFn: async (payload: {
+      name: string; lessonsCount: number; price: number;
+      lessonType?: "group" | "individual"; tier?: "standard" | "pro";
+      lessonsPerMonth?: number; lessonsPerWeek?: number;
+      durationMinutes?: number; maxStudents?: number;
+      delivery?: "online" | "offline";
+    }) => (await api.post("/packages", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["packages"] }),
+  });
+}
+
+export function useUpdatePackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; name?: string; lessonsCount?: number; price?: number; active?: boolean; lessonType?: "group" | "individual"; tier?: "standard" | "pro"; lessonsPerMonth?: number; lessonsPerWeek?: number; durationMinutes?: number; maxStudents?: number; delivery?: "online" | "offline" }) =>
+      (await api.patch(`/packages/${id}`, body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["packages"] }),
+  });
+}
+
+export function useDeletePackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.patch(`/packages/${id}`, { active: false })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["packages"] }),
   });
 }
@@ -588,10 +707,12 @@ export function useMarkAttendance() {
     mutationFn: async (payload: {
       scheduleSlotId: string;
       date: string;
-      records: { studentId: string; status: "p" | "a" | "l" }[];
+      records: { studentId: string; status: "p" | "a" | "l" | "ae"; reason?: string }[];
     }) => (await api.post("/attendance", payload)).data,
-    onSuccess: (_data, vars) =>
-      qc.invalidateQueries({ queryKey: ["attendance", vars.scheduleSlotId, vars.date] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["attendance", vars.scheduleSlotId, vars.date] });
+      qc.invalidateQueries({ queryKey: ["attendanceStats"] });
+    },
   });
 }
 
@@ -945,6 +1066,7 @@ export interface VideoLesson {
   category: "zoom" | "debyut" | "taktika" | "endshpil" | "strategiya";
   videoUrl: string;
   durationSeconds: number | null;
+  thumbnailUrl: string | null;
   thumbnailColor: string | null;
   thumbnailIcon: string | null;
   progressPct: number;
@@ -954,6 +1076,46 @@ export function useVideos(category?: string) {
   return useQuery({
     queryKey: ["videos", category],
     queryFn: async () => (await api.get<VideoLesson[]>("/videos", { params: category ? { category } : {} })).data,
+  });
+}
+
+export function useCreateVideo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      title: string; category: string; videoUrl: string;
+      durationSeconds?: number; thumbnailUrl?: string;
+      thumbnailColor?: string; thumbnailIcon?: string;
+    }) => (await api.post("/videos", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
+  });
+}
+
+export function useDeleteVideo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/videos/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
+  });
+}
+
+export function useUploadVideo() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return (await api.post<{ url: string }>("/videos/upload", form)).data;
+    },
+  });
+}
+
+export function useUploadImage() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return (await api.post<{ url: string }>("/upload/image", form)).data;
+    },
   });
 }
 
@@ -1036,6 +1198,23 @@ export function useCompleteHomework() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => (await api.post(`/homework/${id}/complete`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["homework"] }),
+  });
+}
+
+export function useCreateHomework() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { groupId: string; title: string; description?: string; dueDate?: string; xpReward?: number }) =>
+      (await api.post("/homework", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["homework"] }),
+  });
+}
+
+export function useDeleteHomework() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/homework/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["homework"] }),
   });
 }
@@ -1259,5 +1438,49 @@ export function useUpdateTeacher() {
     mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; spec?: string; title?: string; expYears?: number }) =>
       (await api.patch(`/teachers/${id}`, body)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["teachers"] }),
+  });
+}
+
+// ─── Staff hooks ──────────────────────────────────────────────────────────────
+export interface StaffMember {
+  id: string;
+  fullName: string;
+  phone: string;
+  login: string;
+  role: "operator" | "accountant" | "admin";
+  isActive: boolean;
+  createdAt: string;
+}
+
+export function useStaff() {
+  return useQuery<StaffMember[]>({
+    queryKey: ["staff"],
+    queryFn: async () => (await api.get("/staff")).data,
+  });
+}
+
+export function useCreateStaff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { fullName: string; phone: string; role: "operator" | "accountant" | "admin" }) =>
+      (await api.post("/staff", body)).data as { id: string; tempPassword: string },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
+export function useUpdateStaff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; isActive?: boolean }) =>
+      (await api.patch(`/staff/${id}`, body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
+export function useDeleteStaff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/staff/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
   });
 }

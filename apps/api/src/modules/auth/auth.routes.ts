@@ -47,8 +47,9 @@ export async function authRoutes(app: FastifyInstance) {
     const { login, password } = loginSchema.parse(request.body);
 
     const user = await findUserByLogin(login);
+
     if (!user || !user.isActive) {
-      return reply.code(401).send({ error: "Invalid credentials" });
+      return reply.code(401).send({ error: "Invalid credentials", user });
     }
 
     const valid = await verifyPassword(password, user.passwordHash);

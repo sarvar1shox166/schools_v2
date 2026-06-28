@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardHead } from "@chess-school/ui";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { useAuthStore } from "../../lib/auth-store.js";
-import { type ScheduleSlot, useAttendanceHistory, useDailyPuzzle, useMyXp, useNextLesson, useSchedule } from "../../lib/queries.js";
+import { type ScheduleSlot, useAttendanceHistory, useDailyPuzzle, useMyPackages, useMyXp, useNextLesson, useSchedule } from "../../lib/queries.js";
 
 const LEVEL_NAMES = ["Yangi boshlovchi", "Boshlang'ich", "O'rta", "Ilg'or", "Usta"];
 const DAY_SHORT = ["Yak", "Du", "Se", "Chor", "Pay", "Ju", "Sha"];
@@ -92,6 +92,11 @@ export default function StudentDashboard() {
   const { data: nextLesson } = useNextLesson();
   const { data: attendance } = useAttendanceHistory();
   const { data: schedule } = useSchedule();
+  const { data: packages = [] } = useMyPackages();
+
+  const activePkg = packages.find((p) => p.status === "active");
+  const remainingLessons = activePkg ? activePkg.totalLessons - activePkg.usedLessons : null;
+  const creditPct = activePkg ? Math.round(((activePkg.totalLessons - activePkg.usedLessons) / activePkg.totalLessons) * 100) : 0;
 
   const elo = xpData?.elo ?? 1200;
   const streak = xpData?.streak ?? 0;
@@ -229,6 +234,37 @@ export default function StudentDashboard() {
 
         {/* Right col */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+
+          {/* Dars krediti */}
+          {activePkg && (
+            <Card>
+              <CardHead icon="calendarCheck" title="Dars krediti" sub={activePkg.packageName} />
+              <div style={{ padding: "14px 20px 18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1, color: creditPct > 30 ? "var(--kacc,#3F8CFF)" : "#ef4444" }}>
+                      {remainingLessons}
+                    </span>
+                    <span style={{ fontSize: 14, color: "var(--text-faint)", marginLeft: 6 }}>/ {activePkg.totalLessons} dars</span>
+                  </div>
+                  <span className={`badge ${creditPct > 30 ? "ok" : "dang"}`} style={{ fontSize: 12 }}>
+                    {creditPct > 30 ? "✓ Faol" : "⚠ Kam qoldi"}
+                  </span>
+                </div>
+                <div style={{ height: 10, borderRadius: 99, background: "var(--surface-3)", overflow: "hidden", marginBottom: 10 }}>
+                  <div style={{
+                    height: "100%", borderRadius: 99, transition: "width 0.6s ease",
+                    width: `${creditPct}%`,
+                    background: creditPct > 30 ? "linear-gradient(90deg,var(--kacc,#3F8CFF),#60a5fa)" : "linear-gradient(90deg,#ef4444,#f87171)",
+                  }} />
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
+                  {activePkg.usedLessons} dars ishlatildi · {remainingLessons} dars qoldi
+                </div>
+              </div>
+            </Card>
+          )}
+
           {dailyPuzzle && (
             <Card>
               <CardHead

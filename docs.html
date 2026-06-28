@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Shaxmat Maktabi — Tizim Hujjati</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f1117; color: #e2e8f0; font-size: 13px; line-height: 1.6; }
+
+  .tabs { display: flex; gap: 4px; padding: 14px 20px 0; border-bottom: 1px solid #2d3748; background: #1a1d27; position: sticky; top: 0; z-index: 10; flex-wrap: wrap; }
+  .tab { padding: 9px 18px; border-radius: 8px 8px 0 0; border: 1px solid transparent; border-bottom: none; cursor: pointer; font-weight: 600; font-size: 12px; color: #64748b; background: none; transition: all .15s; }
+  .tab.active { background: #1e2533; color: #e2e8f0; border-color: #2d3748; }
+  .tab:hover:not(.active) { color: #94a3b8; }
+
+  .page { display: none; padding: 28px 24px; max-width: 920px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  h2 { font-size: 20px; font-weight: 800; margin-bottom: 20px; color: #f1f5f9; }
+  h3 { font-size: 14px; font-weight: 700; margin: 24px 0 10px; color: #cbd5e1; border-left: 3px solid #3b82f6; padding-left: 10px; }
+
+  .card { background: #1e2533; border: 1px solid #2d3748; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+
+  .role-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 20px; }
+  .role-card { border-radius: 12px; padding: 16px; border: 1px solid; }
+  .role-card.super  { background: #1c1030; border-color: #7c3aed44; }
+  .role-card.admin  { background: #0f1e3a; border-color: #2563eb44; }
+  .role-card.teacher{ background: #0a1f17; border-color: #05966944; }
+  .role-card.student{ background: #1f1508; border-color: #f59e0b44; }
+  .role-title { font-size: 15px; font-weight: 800; margin-bottom: 10px; }
+  .role-list { font-size: 12px; color: #94a3b8; display: flex; flex-direction: column; gap: 5px; list-style: none; }
+  .role-list li::before { content: "→ "; color: #475569; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12.5px; }
+  th { background: #161b27; padding: 9px 14px; text-align: left; font-size: 11px; font-weight: 700; color: #64748b; border-bottom: 1px solid #2d3748; letter-spacing: 0.05em; text-transform: uppercase; }
+  td { padding: 10px 14px; border-bottom: 1px solid #1e2533; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  .tag { display: inline-flex; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+  .tag.blue   { background: #1d4ed820; color: #60a5fa; }
+  .tag.green  { background: #05966920; color: #34d399; }
+  .tag.amber  { background: #d9770620; color: #fbbf24; }
+  .tag.red    { background: #dc262620; color: #f87171; }
+  .tag.purple { background: #7c3aed20; color: #c4b5fd; }
+  .tag.gray   { background: #33415520; color: #94a3b8; }
+
+  .flow { display: flex; flex-direction: column; }
+  .flow-step { display: flex; gap: 14px; }
+  .flow-line { display: flex; flex-direction: column; align-items: center; width: 30px; flex: none; }
+  .flow-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; flex: none; }
+  .flow-connector { width: 2px; background: #2d3748; flex: 1; min-height: 18px; margin: 3px 0; }
+  .flow-body { flex: 1; padding: 4px 0 20px; }
+  .flow-title { font-weight: 700; font-size: 13px; margin-bottom: 5px; }
+  .flow-sub { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+  .flow-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+
+  .chain { display: flex; align-items: center; flex-wrap: wrap; gap: 0; margin: 12px 0; }
+  .chain-box { padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-align: center; }
+  .chain-arr { color: #475569; font-size: 20px; padding: 0 6px; }
+
+  .note { background: #0f1e3a; border: 1px solid #2563eb33; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #93c5fd; margin: 10px 0; }
+  .note.warn    { background: #1f1508; border-color: #d9770633; color: #fbbf24; }
+  .note.success { background: #0a1f17; border-color: #05966944; color: #34d399; }
+
+  details { margin: 10px 0; }
+  summary { cursor: pointer; font-weight: 700; font-size: 13px; padding: 10px 14px; background: #161b27; border-radius: 8px; color: #94a3b8; list-style: none; display: flex; justify-content: space-between; align-items: center; border: 1px solid #2d3748; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "▸"; transition: transform .2s; font-size: 12px; }
+  details[open] summary::after { transform: rotate(90deg); }
+  details[open] summary { color: #e2e8f0; background: #1e2533; border-radius: 8px 8px 0 0; }
+  .details-body { padding: 0; border: 1px solid #2d3748; border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
+
+  .api-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 14px; border-bottom: 1px solid #161b27; }
+  .api-row:last-child { border-bottom: none; }
+  .api-method { padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; font-family: monospace; min-width: 52px; text-align: center; flex: none; }
+  .api-method.GET    { background: #05966922; color: #34d399; }
+  .api-method.POST   { background: #1d4ed820; color: #60a5fa; }
+  .api-method.PATCH  { background: #d9770620; color: #fbbf24; }
+  .api-method.DELETE { background: #dc262620; color: #f87171; }
+  .api-path { font-family: monospace; font-size: 12.5px; color: #e2e8f0; flex: 1; }
+  .api-desc { font-size: 11.5px; color: #64748b; min-width: 220px; }
+
+  .xp-row { display: flex; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid #1e2533; }
+  .xp-badge { padding: 3px 12px; border-radius: 99px; font-size: 12px; font-weight: 800; background: #d9770622; color: #fbbf24; min-width: 80px; text-align: center; flex: none; }
+  .xp-bar-wrap { flex: 1; height: 7px; background: #1e2533; border-radius: 99px; overflow: hidden; }
+  .xp-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+  .xp-range { font-size: 12px; color: #64748b; min-width: 100px; }
+  .xp-label { font-size: 12px; color: #94a3b8; min-width: 100px; }
+
+  ol.steps { padding-left: 20px; display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; color: #94a3b8; }
+
+  @media (max-width: 600px) {
+    .role-grid { grid-template-columns: 1fr; }
+    .tabs { gap: 2px; }
+    .tab { padding: 7px 10px; font-size: 11px; }
+    .chain { flex-direction: column; align-items: flex-start; }
+    .chain-arr { transform: rotate(90deg); padding: 2px 0; }
+    .api-desc { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <button class="tab active" onclick="show('overview')">📊 Umumiy</button>
+  <button class="tab" onclick="show('admin')">🏫 Admin</button>
+  <button class="tab" onclick="show('teacher')">📚 O'qituvchi</button>
+  <button class="tab" onclick="show('student')">🎓 O'quvchi</button>
+  <button class="tab" onclick="show('flows')">🔄 Jarayonlar</button>
+  <button class="tab" onclick="show('api')">⚡ API</button>
+  <button class="tab" onclick="show('xp')">⭐ XP & Gamifikatsiya</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     UMUMIY
+══════════════════════════════════════ -->
+<div id="page-overview" class="page active">
+  <h2>📊 Tizim umumiy ko'rinishi</h2>
+
+  <div class="role-grid">
+    <div class="role-card super">
+      <div class="role-title" style="color:#a78bfa">👑 Super Admin</div>
+      <ul class="role-list">
+        <li>Barcha tenantlarni boshqaradi</li>
+        <li>Migratsiyalar va sozlamalar</li>
+        <li>Xodimlar va rollar</li>
+        <li>Login → /login → super_admin roli</li>
+      </ul>
+    </div>
+    <div class="role-card admin">
+      <div class="role-title" style="color:#60a5fa">🏫 Admin</div>
+      <ul class="role-list">
+        <li>Faqat o'z maktabini boshqaradi</li>
+        <li>O'qituvchi, guruh, o'quvchi CRUD</li>
+        <li>To'lovlar, paketlar, jadval</li>
+        <li>Login: +998900000001 / password123</li>
+      </ul>
+    </div>
+    <div class="role-card teacher">
+      <div class="role-title" style="color:#34d399">📚 O'qituvchi</div>
+      <ul class="role-list">
+        <li>Faqat o'z guruhlarini ko'radi</li>
+        <li>Davomat, uy vazifasi, puzzle</li>
+        <li>Maosh hisobi avtomatik</li>
+        <li>Login: +998900000002 / password123</li>
+      </ul>
+    </div>
+    <div class="role-card student">
+      <div class="role-title" style="color:#fbbf24">🎓 O'quvchi</div>
+      <ul class="role-list">
+        <li>Faqat o'z ma'lumotlarini ko'radi</li>
+        <li>Video, puzzle, PvP, XP tizimi</li>
+        <li>Dars krediti (paket)</li>
+        <li>Login: +998900000003 / password123</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>🔐 Autentifikatsiya oqimi</h3>
+  <div class="card">
+    <div class="chain">
+      <div class="chain-box" style="background:#0f1e3a;color:#60a5fa">Login sahifasi</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#0a1f17;color:#34d399">POST /auth/login</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1c1030;color:#c4b5fd">JWT + Refresh token</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1f1508;color:#fbbf24">Zustand store</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#0f1e3a;color:#60a5fa">Role redirect</div>
+    </div>
+    <div class="note" style="margin-top:12px">
+      Token ichida: <code>{ sub (userId), role, tenantId, exp }</code><br>
+      Har so'rovda: <code>Authorization: Bearer &lt;accessToken&gt;</code><br>
+      Zustand store kaliti: <code>chess-school-auth</code> (localStorage da saqlanadi)
+    </div>
+  </div>
+
+  <h3>🏢 Multi-tenant arxitektura</h3>
+  <table>
+    <tr><th>Qatlam</th><th>Qanday ishlaydi</th></tr>
+    <tr><td>Database</td><td>Har bir jadvaldagi <code>tenant_id</code> ustuni — faqat o'z maktabi ma'lumoti</td></tr>
+    <tr><td>Backend</td><td><code>request.user.tenantId</code> — har SQL so'rovda <code>WHERE tenant_id = $N</code></td></tr>
+    <tr><td>Frontend</td><td>Token ichida tenantId bor — alohida subdomain kerak emas</td></tr>
+    <tr><td>Xavfsizlik</td><td>Boshqa maktab ma'lumotini olishning imkoni yo'q</td></tr>
+  </table>
+
+  <h3>📦 Tech Stack</h3>
+  <table>
+    <tr><th>Qatlam</th><th>Texnologiya</th><th>Maqsad</th></tr>
+    <tr><td>Frontend</td><td><span class="tag blue">React 18</span> <span class="tag blue">TypeScript</span> <span class="tag blue">Vite</span></td><td>UI va sahifalar</td></tr>
+    <tr><td>Ma'lumot</td><td><span class="tag purple">TanStack Query</span> <span class="tag purple">Zustand</span></td><td>Server state, auth store</td></tr>
+    <tr><td>Backend</td><td><span class="tag green">Fastify v4</span> <span class="tag green">Node.js</span> <span class="tag green">tsx watch</span></td><td>API server (port 3001)</td></tr>
+    <tr><td>Database</td><td><span class="tag amber">PostgreSQL</span> <span class="tag amber">pool.query</span></td><td>Ma'lumot saqlash (ORM yo'q)</td></tr>
+    <tr><td>Fayl</td><td><span class="tag gray">uploads/videos/ + uploads/images/</span></td><td>Video va rasm saqlash</td></tr>
+    <tr><td>O'yin</td><td><span class="tag red">Stockfish WASM</span></td><td>Kompyuter bilan shaxmat</td></tr>
+    <tr><td>Proxy</td><td><span class="tag gray">Vite /api → :3001</span></td><td>Dev serverda CORS muammosiz</td></tr>
+  </table>
+
+  <h3>🗄️ Asosiy DB Jadvallar</h3>
+  <table>
+    <tr><th>Jadval</th><th>Maqsad</th><th>Muhim ustunlar</th></tr>
+    <tr><td><code>users</code></td><td>Barcha foydalanuvchilar</td><td>role, phone, full_name, tenant_id</td></tr>
+    <tr><td><code>students</code></td><td>O'quvchi profili</td><td>user_id, group_id, elo_rating</td></tr>
+    <tr><td><code>teachers</code></td><td>O'qituvchi profili</td><td>user_id, spec, salary_type</td></tr>
+    <tr><td><code>groups</code></td><td>Guruhlar</td><td>name, teacher_id, level</td></tr>
+    <tr><td><code>schedule_slots</code></td><td>Haftalik jadval</td><td>group_id, day_of_week, start_time</td></tr>
+    <tr><td><code>attendance</code></td><td>Davomat</td><td>student_id, slot_id, date, status (p/a/l/ae)</td></tr>
+    <tr><td><code>packages</code></td><td>Paket turlari</td><td>name, price, lessons_count</td></tr>
+    <tr><td><code>student_packages</code></td><td>O'quvchi paketi</td><td>student_id, total_lessons, used_lessons, status</td></tr>
+    <tr><td><code>transactions</code></td><td>To'lovlar</td><td>student_id, amount, payment_method</td></tr>
+    <tr><td><code>student_xp</code></td><td>Gamifikatsiya</td><td>student_id, xp, level, streak</td></tr>
+    <tr><td><code>video_lessons</code></td><td>Videolar</td><td>title, category, video_url, tenant_id</td></tr>
+    <tr><td><code>homework</code></td><td>Uy vazifalari</td><td>group_id, title, due_date, xp_reward</td></tr>
+    <tr><td><code>puzzles</code></td><td>Boshqotirmalar</td><td>fen, solution, difficulty, xp_reward, teacher_id</td></tr>
+    <tr><td><code>notifications</code></td><td>Bildirishnomalar</td><td>user_id, title, body, read_at</td></tr>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════
+     ADMIN
+══════════════════════════════════════ -->
+<div id="page-admin" class="page">
+  <h2>🏫 Admin — To'liq qo'llanma</h2>
+  <div class="note">Login: <strong>+998900000001 / password123</strong> → /admin ga yo'naltiriladi</div>
+
+  <h3>📋 Barcha Sahifalar</h3>
+  <table>
+    <tr><th>Sahifa</th><th>URL</th><th>Nima qiladi</th></tr>
+    <tr><td>Dashboard</td><td>/admin</td><td>Umumiy KPI: o'quvchilar, daromad, davomat, bugungi darslar</td></tr>
+    <tr><td>Dars vaqtlari</td><td>/admin/schedule</td><td>Haftalik jadval gridi — guruh/vaqt qo'shish, o'chirish</td></tr>
+    <tr><td>Arizalar</td><td>/admin/applications</td><td>CRM: yangi ariza → status → guruhga qo'shish</td></tr>
+    <tr><td>O'qituvchilar</td><td>/admin/teachers</td><td>CRUD, spec, tajriba, guruhlar soni</td></tr>
+    <tr><td>O'quvchilar</td><td>/admin/students</td><td>CRUD, to'lov holati, guruhlar, paket tayinlash</td></tr>
+    <tr><td>Guruhlar</td><td>/admin/groups</td><td>Guruh yaratish, o'qituvchi tayinlash, o'quvchilar soni</td></tr>
+    <tr><td>Davomat jurnali</td><td>/admin/attendance</td><td>Barcha guruhlar davomati matritsasi</td></tr>
+    <tr><td>Video darsliklar</td><td>/admin/video-courses</td><td>Video yuklash (MP4), thumbnail, kategoriya</td></tr>
+    <tr><td>Ustoz reytingi</td><td>/admin/teacher-rating</td><td>O'qituvchi ballari, sharhlar</td></tr>
+    <tr><td>Paketlar</td><td>/admin/packages</td><td>Dars paketlari (narx, darslar soni, tur)</td></tr>
+    <tr><td>To'lovlar</td><td>/admin/payments</td><td>Paket tayinlash, to'lov ro'yxati, status</td></tr>
+    <tr><td>Daromadlar</td><td>/admin/income</td><td>Oylik daromad tahlili, grafik</td></tr>
+    <tr><td>Xodimlar</td><td>/admin/staff</td><td>Admin/teacher rollarini boshqarish</td></tr>
+    <tr><td>Ommaviy xabar</td><td>/admin/broadcast</td><td>Barcha o'quvchi/teacherga xabar yuborish</td></tr>
+    <tr><td>Bildirishnomalar</td><td>/admin/notifications</td><td>Kiruvchi xabarlar</td></tr>
+    <tr><td>Hisobotlar</td><td>/admin/reports</td><td>Statistika: davomat, to'lov, progress</td></tr>
+    <tr><td>Sozlamalar</td><td>/admin/settings</td><td>Maktab nomi, telefon, Telegram bot token</td></tr>
+  </table>
+
+  <h3>💰 To'lov va Paket Jarayoni</h3>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#1d4ed8;color:#fff">1</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">Paket yaratish — /admin/packages</div>
+        <div class="flow-sub">Nom, narx, darslar soni, tur (guruhlik/individual), tier (standard/pro) kiritiladi</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#0369a1;color:#fff">2</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">Paket tayinlash — /admin/payments → "Paket tayinlash"</div>
+        <div class="flow-sub">O'quvchi tanlash → paket tanlash → to'lov usuli (naqd / UzCard / Click / Payme)</div>
+        <div class="flow-tags">
+          <span class="tag green">student_packages yaratiladi</span>
+          <span class="tag amber">transactions yaratiladi</span>
+          <span class="tag blue">total_lessons = pakettagi darslar soni</span>
+        </div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#0e7490;color:#fff">3</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">Davomat belgilanadi (teacher tomonidan)</div>
+        <div class="flow-sub">O'quvchi keldi (p/a/l) → <code>consumeLesson()</code> → <code>used_lessons + 1</code></div>
+        <div class="flow-tags">
+          <span class="tag purple">ae (sababli) bo'lsa → dars hisoblanmaydi</span>
+          <span class="tag amber">refundLesson() — ae ga o'zgarganda</span>
+        </div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#dc2626;color:#fff">4</div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">Paket tugaganda — bildirishnoma</div>
+        <div class="flow-sub"><code>used_lessons >= total_lessons</code> → status = "finished" → o'quvchiga xabar</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>📅 Jadval Yaratish (Bosqichma-bosqich)</h3>
+  <div class="card">
+    <ol class="steps">
+      <li>Avval guruh va o'qituvchi mavjud bo'lishi kerak</li>
+      <li>/admin/schedule → "Yangi slot" tugmasi</li>
+      <li>Guruh tanlash → Hafta kuni (Du–Sha) → Vaqt (HH:MM) → Xona yoki Zoom URL</li>
+      <li>Saqlanib bo'lgach haftalik grid da ko'rinadi</li>
+      <li>O'qituvchi va o'quvchilar darhol o'z jadvallarida ko'rishadi</li>
+    </ol>
+  </div>
+
+  <h3>👥 O'quvchi qo'shish (CRM orqali)</h3>
+  <div class="card">
+    <ol class="steps">
+      <li>/admin/applications → "Yangi ariza" → ism, telefon, yosh, manba (Instagram/Telegram/Referral)</li>
+      <li>Status: <strong>yangi → muloqot → test → qabul / rad</strong></li>
+      <li>"Qabul qilindi" bosilganda: users + students jadvallariga yoziladi</li>
+      <li>Keyin /admin/payments → Paket tayinlash → Guruhga qo'shish</li>
+    </ol>
+  </div>
+
+  <h3>🎬 Video Yuklash</h3>
+  <div class="card">
+    <ol class="steps">
+      <li>/admin/video-courses → "Video qo'shish"</li>
+      <li>Sarlavha, kategoriya (zoom/debyut/taktika/endshpil/strategiya)</li>
+      <li>MP4 fayl tanlash → POST /videos/upload → <code>uploads/videos/{tenantId}/</code> ga saqlanadi</li>
+      <li>Thumbnail: rasm yuklash yoki rang + emoji tanlash</li>
+      <li>Saqlash → O'quvchilar /student/videos da ko'rishadi</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TEACHER
+══════════════════════════════════════ -->
+<div id="page-teacher" class="page">
+  <h2>📚 O'qituvchi — To'liq qo'llanma</h2>
+  <div class="note">Login: <strong>+998900000002 / password123</strong> → /teacher ga yo'naltiriladi</div>
+
+  <h3>📋 Barcha Sahifalar</h3>
+  <table>
+    <tr><th>Sahifa</th><th>URL</th><th>Nima qiladi</th></tr>
+    <tr><td>Dashboard</td><td>/teacher</td><td>Bugungi darslar, o'quvchilar soni, haftalik jadval, maosh ko'rsatgichi</td></tr>
+    <tr><td>Darslarim</td><td>/teacher/schedule</td><td>O'z guruhlarining jadvali, Zoom link ko'rish</td></tr>
+    <tr><td>O'quvchilarim</td><td>/teacher/students</td><td>Barcha guruhlar va o'quvchilar ro'yxati, progress</td></tr>
+    <tr><td>Davomat</td><td>/teacher/attendance</td><td>Sana va guruh → har o'quvchi uchun p/a/l/ae belgilash</td></tr>
+    <tr><td>O'quvchi natijasi</td><td>/teacher/progress</td><td>Davomat %, XP, ELO tahlili</td></tr>
+    <tr><td>Uy vazifalari</td><td>/teacher/materials</td><td>Vazifa qo'shish, muddat, XP miqdori</td></tr>
+    <tr><td>Boshqotirmalar</td><td>/teacher/puzzles</td><td>O'z puzzle lari, yangi yaratish</td></tr>
+    <tr><td>Bildirishnomalar</td><td>/teacher/notifications</td><td>Kiruvchi xabarlar</td></tr>
+    <tr><td>Mening profilim</td><td>/teacher/profile</td><td>Shaxsiy ma'lumotlar, spec, tajriba</td></tr>
+    <tr><td>Daromad</td><td>/teacher/income</td><td>Oylik maosh hisobi</td></tr>
+  </table>
+
+  <h3>✅ Davomat Belgilash — Batafsil</h3>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#059669;color:#fff">1</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">/teacher/attendance ga kirish</div>
+        <div class="flow-sub">Sana tanlash (bugun yoki o'tgan) → Guruh tanlash → O'quvchilar ro'yxati yuklanadi</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#0d9488;color:#fff">2</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">Har bir o'quvchi uchun status tanlash</div>
+        <div class="flow-tags">
+          <span class="tag green">✓ p — Keldi (dars krediti sarflanadi)</span>
+          <span class="tag amber">◷ l — Kechikdi (dars krediti sarflanadi)</span>
+          <span class="tag red">✕ a — Kelmadi (dars krediti sarflanadi)</span>
+          <span class="tag purple">◌ ae — Sababli yo'q (kredit sarflanmaydi!)</span>
+        </div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#0369a1;color:#fff">3</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">"Saqlash" → POST /attendance</div>
+        <div class="flow-sub">Backend: <code>consumeLesson()</code> chaqiriladi → <code>student_packages.used_lessons + 1</code></div>
+        <div class="flow-sub">Maosh: <code>recordLessonSession()</code> → o'qituvchi mashg'uloti hisoblanadi</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#7c3aed;color:#fff">4</div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">O'quvchi bildirishnoma oladi (paket tugayotgan bo'lsa)</div>
+        <div class="flow-sub">O'quvchi /student/lessons → Dars krediti kartasida ⚠ ko'rinadi</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>📋 Uy Vazifasi Qo'shish</h3>
+  <div class="card">
+    <ol class="steps">
+      <li>/teacher/materials → "Vazifa qo'shish" tugmasi</li>
+      <li>Guruh tanlash, sarlavha, tavsif, muddat (sana), XP miqdori (30 default)</li>
+      <li>Fayl biriktirish mumkin (ixtiyoriy)</li>
+      <li>O'quvchilar /student/lessons sahifasida "Uy vazifalari" bo'limida ko'rishadi</li>
+      <li>O'quvchi checkboxni bosadi → <code>POST /homework/:id/complete</code> → XP beriladi</li>
+      <li>O'qituvchi "completionCount" ni ko'radi (nechta bajardi)</li>
+    </ol>
+  </div>
+
+  <h3>🧩 Puzzle Yaratish</h3>
+  <div class="card">
+    <ol class="steps">
+      <li>/teacher/puzzles → "Yangi puzzle" → /teacher/puzzles/new sahifasi</li>
+      <li>FEN pozitsiyasini kiriting → shaxmat taxtasida jonli ko'rinadi</li>
+      <li>Yechim: harakat ketma-ketligi (masalan: "e2e4,d7d5,e4e5")</li>
+      <li>Qiyinlik darajasi (1–5 yulduz), XP miqdori belgilash</li>
+      <li>Saqlash → O'quvchilar /student/puzzles da hal qiladi → to'g'ri bo'lsa XP toast paydo bo'ladi</li>
+    </ol>
+  </div>
+
+  <h3>💵 Maosh Hisoblash Usullari</h3>
+  <table>
+    <tr><th>Tur</th><th>Formula</th><th>Qaerda belgilanadi</th></tr>
+    <tr><td>Foiz</td><td>To'lov summasi × foiz%</td><td>Admin → O'qituvchilar → tahrirlash</td></tr>
+    <tr><td>Soatlik</td><td>Darslar soni × soatlik stavka</td><td>Admin → O'qituvchilar → tahrirlash</td></tr>
+    <tr><td>Oylik</td><td>Belgilangan oylik miqdor</td><td>Admin → O'qituvchilar → tahrirlash</td></tr>
+    <tr><td>Hisoblanish</td><td>Davomat belgilanganida avtomatik</td><td>/teacher/income da ko'rinadi</td></tr>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════
+     STUDENT
+══════════════════════════════════════ -->
+<div id="page-student" class="page">
+  <h2>🎓 O'quvchi — To'liq qo'llanma</h2>
+  <div class="note">Login: <strong>+998900000003 / password123</strong> → /student ga yo'naltiriladi</div>
+
+  <h3>📱 Barcha Sahifalar</h3>
+  <table>
+    <tr><th>Sahifa</th><th>URL</th><th>Nima qiladi</th></tr>
+    <tr><td>🏠 Bosh sahifa</td><td>/student</td><td>ELO/streak/dars kartalar, jadval, kunlik masala, dars krediti qisqacha</td></tr>
+    <tr><td>📅 Darslarim</td><td>/student/lessons</td><td>Keyingi dars countdown, jadval, uy vazifalari, davomat tarixi, dars krediti batafsil</td></tr>
+    <tr><td>🎬 Video darslar</td><td>/student/videos</td><td>Kategoriyalar bo'yicha videolar, progress bar, XP</td></tr>
+    <tr><td>📚 O'rganish</td><td>/student/learn</td><td>Dars materiallari, fayl yuklab olish</td></tr>
+    <tr><td>🧩 Boshqotirmalar</td><td>/student/puzzles</td><td>Puzzle hal qilish → to'g'ri bo'lsa XP toast</td></tr>
+    <tr><td>♟ O'ynash</td><td>/student/pvp</td><td>Vaqt nazorati → Stockfish bilan o'ynash → ELO o'zgaradi</td></tr>
+    <tr><td>🏆 Reyting</td><td>/student/leaderboard</td><td>Guruh ichida ELO reytingi jadvali</td></tr>
+    <tr><td>👤 Profilim</td><td>/student/profile</td><td>Shaxsiy ma'lumot, yutuqlar, statistika</td></tr>
+  </table>
+
+  <h3>🎫 Dars Krediti Tizimi</h3>
+  <div class="card">
+    <table>
+      <tr><th>Holat</th><th>Ko'rsatish</th><th>Rang</th></tr>
+      <tr><td>30%+ qolgan</td><td>"✓ Faol" badge, ko'k progress bar</td><td>#3b82f6 (ko'k)</td></tr>
+      <tr><td>≤30% qolgan</td><td>"⚠ Kam qoldi" + qizil ogohlantirish</td><td>#ef4444 (qizil)</td></tr>
+      <tr><td>Paket yo'q</td><td>"Admin orqali paket sotib oling"</td><td>Kulrang</td></tr>
+    </table>
+    <div class="note" style="margin-top:12px">
+      Dars krediti <strong>/student/lessons</strong> da batafsil, <strong>/student</strong> (dashboard) da qisqacha ko'rinadi.<br>
+      Formula: <code>qolgan = total_lessons - used_lessons</code> | <code>percent = (qolgan / total) × 100</code>
+    </div>
+  </div>
+
+  <h3>🎮 PvP O'yin Jarayoni</h3>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#f59e0b;color:#1a0800">1</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">/student/pvp — Vaqt nazorati tanlash</div>
+        <div class="flow-sub">Bullet (1+0), Blitz (3+2, 5+0), Rapid (10+0, 15+10), Klassik (30+0)</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#d97706;color:#fff">2</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">Stockfish WASM brauzerda yuklanadi</div>
+        <div class="flow-sub">Internet shart emas, serverga yuborilmaydi — to'liq offline ishlaydi</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#b45309;color:#fff">3</div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">O'yin natijasi → ELO yangilanishi</div>
+        <div class="flow-sub">G'alaba → ELO oshadi, Yutqizish → pasayadi → POST /gamification/elo</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>🎬 Video Ko'rish va XP Olish</h3>
+  <div class="card">
+    <ol class="steps">
+      <li>/student/videos → kategoriya tanlash → video bosish</li>
+      <li>Video player ochiladi → ko'rish davom ettiriladi (progress saqlanadi)</li>
+      <li>100% ko'rilganda: POST /videos/:id/progress → <strong>+20 XP</strong> avtomatik</li>
+      <li>XP toast ekranning pastidan animatsiya bilan chiqadi</li>
+      <li>Ikkinchi marta ko'rsa XP berilmaydi (alreadyCompleted tekshiriladi)</li>
+    </ol>
+  </div>
+
+  <h3>📱 Mobil Ko'rinish</h3>
+  <div class="card">
+    <table>
+      <tr><th>Ekran eni</th><th>Layout</th></tr>
+      <tr><td>&gt;900px (desktop)</td><td>Sidebar doim ko'rinadi, full grid layout</td></tr>
+      <tr><td>768–900px (tablet)</td><td>2 ustunli grid, sidebar overlay</td></tr>
+      <tr><td>&lt;768px (mobil)</td><td>1 ustunli full-width, hamburger menyu (☰), sidebar overlay sifatida</td></tr>
+      <tr><td>&lt;480px (kichik)</td><td>XP bar va sidebar barcha elementlar 1 ustun</td></tr>
+    </table>
+    <div class="note" style="margin-top:10px">
+      Mobil da: ☰ tugmasini bosish → sidebar chiqadi → backdrop (qoraygan fon) bosish → yopiladi.<br>
+      Sahifa o'zgarsa avtomatik yopiladi.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     JARAYONLAR
+══════════════════════════════════════ -->
+<div id="page-flows" class="page">
+  <h2>🔄 Ma'lumot Almashinuvi va Jarayonlar</h2>
+
+  <h3>1. Davomat → Kredit → Bildirishnoma Zanjiri</h3>
+  <div class="card">
+    <div class="chain">
+      <div class="chain-box" style="background:#0a1f17;color:#34d399">Teacher davomat belgilaydi</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#0f1e3a;color:#60a5fa">POST /attendance</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1f1508;color:#fbbf24">consumeLesson()</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1c0a0a;color:#f87171">used_lessons++</div>
+    </div>
+    <div class="chain" style="margin-top:10px">
+      <div class="chain-box" style="background:#1c0a0a;color:#f87171">Tugadimi?</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1c1030;color:#c4b5fd">notify() chaqiriladi</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#0f1e3a;color:#60a5fa">O'quvchi bildirishnoma oladi</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1f1508;color:#fbbf24">⚠ Dars krediti ko'rinadi</div>
+    </div>
+    <div class="note warn" style="margin-top:12px">
+      <strong>ae (sababli yo'q)</strong> tanlansa: <code>consumeLesson()</code> chaqirilmaydi — kredit sarflanmaydi.<br>
+      Agar avval p/a/l belgilangan bo'lsa, keyin ae ga o'zgartirilsa: <code>refundLesson()</code> chaqiriladi — kredit qaytariladi.
+    </div>
+  </div>
+
+  <h3>2. Uy Vazifasi Jarayoni (Teacher ↔ Student)</h3>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#059669;color:#fff">T</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">O'qituvchi: /teacher/materials → Vazifa qo'shish</div>
+        <div class="flow-sub">Guruh, sarlavha, muddat, XP (30 default) → POST /homework → DB ga yozildi</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#f59e0b;color:#1a0800">O</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">O'quvchi: /student/lessons → "Uy vazifalari" bo'limi</div>
+        <div class="flow-sub">GET /homework → o'quvchiga tegishli vazifalar → "done: false" holda checkbox ko'rinadi</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#7c3aed;color:#fff">✓</div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">O'quvchi checkboxni bosadi → XP toast</div>
+        <div class="flow-sub">POST /homework/:id/complete → homework_completions jadvaliga yoziladi → awardXp() → +30 XP</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">O'qituvchi /teacher/materials da <strong>completionCount</strong> ni ko'radi (nechta o'quvchi bajardi)</div>
+
+  <h3>3. Puzzle Jarayoni (Teacher → Student)</h3>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#059669;color:#fff">T</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">O'qituvchi: /teacher/puzzles/new</div>
+        <div class="flow-sub">FEN, yechim (harakat ketma-ketligi), qiyinlik (1–5), XP miqdori → POST /puzzles → DB</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#f59e0b;color:#1a0800">O</div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">O'quvchi: /student/puzzles → Masala yechish</div>
+        <div class="flow-sub">Taxtada harakat qiladi → to'g'ri bo'lsa → POST /puzzles/:id/attempt → awardXp() → XP toast</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>4. Video → XP Jarayoni</h3>
+  <div class="card">
+    <div class="chain">
+      <div class="chain-box" style="background:#0f1e3a;color:#60a5fa">O'quvchi video ko'radi</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1f1508;color:#fbbf24">100% yetganda</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#0a1f17;color:#34d399">POST /videos/:id/progress</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1c1030;color:#c4b5fd">awardXp(+20)</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1f1508;color:#fbbf24">XP Toast animatsiya</div>
+    </div>
+  </div>
+
+  <h3>5. Ariza → O'quvchi (CRM Jarayoni)</h3>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#1d4ed8;color:#fff">1</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">/admin/applications → Yangi ariza</div>
+        <div class="flow-sub">Ism, telefon, yosh, daraja, manba (Instagram/Telegram/Referral/Boshqa)</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#0369a1;color:#fff">2</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">Status o'zgartiriladi</div>
+        <div class="flow-sub"><strong>yangi</strong> → <strong>muloqot</strong> → <strong>test</strong> → <strong>qabul / rad etildi</strong></div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-dot" style="background:#059669;color:#fff">3</div>
+      </div>
+      <div class="flow-body">
+        <div class="flow-title">"Qabul qilindi" → O'quvchi yaratish</div>
+        <div class="flow-sub">POST /students → users + students yaratiladi → Paket tayinlash → Guruhga qo'shish → Login beriladi</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>6. Maosh Hisoblash Jarayoni</h3>
+  <div class="card">
+    <div class="chain">
+      <div class="chain-box" style="background:#059669;color:#fff">Teacher davomat belgilaydi</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#0f1e3a;color:#60a5fa">recordLessonSession()</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1f1508;color:#fbbf24">teacher_sessions jadvaliga</div>
+      <div class="chain-arr">→</div>
+      <div class="chain-box" style="background:#1c1030;color:#c4b5fd">/teacher/income da ko'rinadi</div>
+    </div>
+    <div class="note" style="margin-top:10px">Admin /admin/reports da barcha o'qituvchilar maoshini ko'radi va tasdiqlaydi</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     API
+══════════════════════════════════════ -->
+<div id="page-api" class="page">
+  <h2>⚡ API Endpointlar</h2>
+  <div class="note">
+    Bazaviy URL: <code>http://localhost:3001/api/v1</code><br>
+    Barcha so'rovlarda: <code>Authorization: Bearer &lt;accessToken&gt;</code>
+  </div>
+
+  <details open>
+    <summary>🔐 Auth</summary>
+    <div class="details-body">
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/auth/login</span><span class="api-desc">Login/parol → { accessToken, refreshToken, user }</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/auth/refresh</span><span class="api-desc">{ refreshToken } → yangi { accessToken }</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>👥 O'quvchilar</summary>
+    <div class="details-body">
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/students?page&pageSize</span><span class="api-desc">Ro'yxat (admin/teacher)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/students</span><span class="api-desc">Yangi o'quvchi yaratish (admin)</span></div>
+      <div class="api-row"><span class="api-method PATCH">PATCH</span><span class="api-path">/students/:id</span><span class="api-desc">Tahrirlash (admin)</span></div>
+      <div class="api-row"><span class="api-method DELETE">DELETE</span><span class="api-path">/students/:id</span><span class="api-desc">O'chirish (admin)</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/students/:id/packages</span><span class="api-desc">O'quvchi paketlari (admin)</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/me/packages</span><span class="api-desc">O'zim paketlari — { totalLessons, usedLessons, status } (student)</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/me/attendance-history</span><span class="api-desc">O'z davomati tarixi, so'ngi 30 ta (student)</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>✅ Davomat</summary>
+    <div class="details-body">
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/attendance?scheduleSlotId&date</span><span class="api-desc">Guruh davomati (teacher/admin)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/attendance</span><span class="api-desc">Belgilash → consumeLesson() / refundLesson()</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/attendance/stats</span><span class="api-desc">Bugungi statistika (admin dashboard)</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/attendance/history</span><span class="api-desc">Matrits ko'rinishi (admin/teacher)</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>📋 Uy Vazifalari</summary>
+    <div class="details-body">
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/homework</span><span class="api-desc">Rol asosida: teacher→guruhlar, student→o'ziniki (done:bool)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/homework</span><span class="api-desc">Vazifa yaratish (teacher)</span></div>
+      <div class="api-row"><span class="api-method DELETE">DELETE</span><span class="api-path">/homework/:id</span><span class="api-desc">O'chirish (teacher)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/homework/:id/complete</span><span class="api-desc">Bajarish → awardXp(+30)</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>🎬 Video Darsliklar</summary>
+    <div class="details-body">
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/videos?category</span><span class="api-desc">Ro'yxat (student: progressPct ham qo'shiladi)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/videos</span><span class="api-desc">Video yozuv yaratish (admin/teacher)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/videos/upload</span><span class="api-desc">MP4 fayl yuklash → uploads/videos/{tenantId}/ → { url }</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/upload/image</span><span class="api-desc">Rasm yuklash → uploads/images/{tenantId}/ → { url }</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/videos/:id/progress</span><span class="api-desc">Ko'rish % saqlash → 100% + birinchi marta → +20 XP</span></div>
+      <div class="api-row"><span class="api-method DELETE">DELETE</span><span class="api-path">/videos/:id</span><span class="api-desc">O'chirish (admin/teacher)</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>💰 To'lovlar va Paketlar</summary>
+    <div class="details-body">
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/packages</span><span class="api-desc">Aktiv paketlar ro'yxati</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/packages</span><span class="api-desc">Yangi paket (admin)</span></div>
+      <div class="api-row"><span class="api-method PATCH">PATCH</span><span class="api-path">/packages/:id</span><span class="api-desc">Tahrirlash (active:false = arxivlash)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/student-packages</span><span class="api-desc">O'quvchiga paket tayinlash + tranzaksiya yaratish</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/transactions</span><span class="api-desc">To'lovlar tarixi (admin)</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/payments/stats</span><span class="api-desc">Umumiy moliya statistikasi</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>🧩 Puzzle va Gamifikatsiya</summary>
+    <div class="details-body">
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/me/xp</span><span class="api-desc">O'z XP, daraja, streak, yutuqlar</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/leaderboard</span><span class="api-desc">Guruh ichida ELO reytingi</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/daily-puzzle</span><span class="api-desc">Bugungi kunlik masala (student)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/puzzles/:id/attempt</span><span class="api-desc">Urinish → to'g'ri → awardXp()</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/puzzles</span><span class="api-desc">Puzzle ro'yxati (student/teacher)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/puzzles</span><span class="api-desc">Yangi puzzle (teacher)</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>📅 Jadval, Guruh, Bildirishnomalar</summary>
+    <div class="details-body">
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/schedule</span><span class="api-desc">Haftalik jadval (rol asosida filtrlangan)</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/schedule</span><span class="api-desc">Slot qo'shish (admin)</span></div>
+      <div class="api-row"><span class="api-method DELETE">DELETE</span><span class="api-path">/schedule/:id</span><span class="api-desc">Slot o'chirish (admin)</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/groups</span><span class="api-desc">Guruhlar ro'yxati</span></div>
+      <div class="api-row"><span class="api-method POST">POST</span><span class="api-path">/groups</span><span class="api-desc">Yangi guruh (admin)</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/notifications</span><span class="api-desc">Bildirishnomalar (rol asosida)</span></div>
+      <div class="api-row"><span class="api-method PATCH">PATCH</span><span class="api-path">/notifications/:id/read</span><span class="api-desc">O'qildi belgisi qo'yish</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/reports/overview</span><span class="api-desc">Admin hisobot paneli</span></div>
+      <div class="api-row"><span class="api-method GET">GET</span><span class="api-path">/health</span><span class="api-desc">Server holati tekshirish</span></div>
+    </div>
+  </details>
+</div>
+
+<!-- ══════════════════════════════════════
+     XP
+══════════════════════════════════════ -->
+<div id="page-xp" class="page">
+  <h2>⭐ XP va Gamifikatsiya Tizimi</h2>
+
+  <h3>XP Manbalari</h3>
+  <table>
+    <tr><th>Harakat</th><th>XP miqdori</th><th>Endpoint</th><th>Shart</th></tr>
+    <tr><td>Video to'liq ko'rish</td><td><strong>+20 XP</strong></td><td>POST /videos/:id/progress (100%)</td><td>Faqat birinchi marta</td></tr>
+    <tr><td>Uy vazifasi bajarish</td><td><strong>+30 XP</strong> (default)</td><td>POST /homework/:id/complete</td><td>Faqat birinchi marta</td></tr>
+    <tr><td>Puzzle yechish</td><td><strong>Teacher belgiladi</strong></td><td>POST /puzzles/:id/attempt</td><td>To'g'ri javob</td></tr>
+    <tr><td>Kunlik masala</td><td><strong>Puzzle XP miqdori</strong></td><td>GET /daily-puzzle → attempt</td><td>Har kun yangi masala</td></tr>
+  </table>
+
+  <h3>Daraja Tizimi</h3>
+  <div class="card">
+    <div class="note" style="margin-bottom:14px">Formula: <code>daraja = Math.floor(xp / 200) + 1</code> — har 200 XP = yangi daraja</div>
+    <div class="xp-row">
+      <span class="xp-badge">1-daraja</span>
+      <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:0%"></div></div>
+      <span class="xp-range">0 – 200 XP</span>
+      <span class="xp-label">Yangi boshlovchi</span>
+    </div>
+    <div class="xp-row">
+      <span class="xp-badge">2-daraja</span>
+      <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:25%"></div></div>
+      <span class="xp-range">200 – 400 XP</span>
+      <span class="xp-label">Boshlang'ich</span>
+    </div>
+    <div class="xp-row">
+      <span class="xp-badge">3-daraja</span>
+      <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:50%"></div></div>
+      <span class="xp-range">400 – 600 XP</span>
+      <span class="xp-label">O'rta daraja</span>
+    </div>
+    <div class="xp-row">
+      <span class="xp-badge">4-daraja</span>
+      <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:75%"></div></div>
+      <span class="xp-range">600 – 800 XP</span>
+      <span class="xp-label">Ilg'or</span>
+    </div>
+    <div class="xp-row">
+      <span class="xp-badge">5-daraja</span>
+      <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:100%"></div></div>
+      <span class="xp-range">800 – 1000 XP</span>
+      <span class="xp-label">Usta</span>
+    </div>
+  </div>
+
+  <h3>Streak Tizimi (🔥)</h3>
+  <table>
+    <tr><th>Holat</th><th>Natija</th></tr>
+    <tr><td>Bugun XP oldi + Kecha ham olgan</td><td>streak + 1 🔥</td></tr>
+    <tr><td>Bugun XP oldi + Kecha olmagan</td><td>streak = 1 (qayta boshlash)</td></tr>
+    <tr><td>Bugun XP olmadi</td><td>streak o'zgarmaydi (ertaga uziladi)</td></tr>
+  </table>
+  <div class="note">Streak topbar da doim ko'rinadi: "🔥 N kun" — O'quvchi har kuni faol bo'lishga undaydi</div>
+
+  <h3>Yutuqlar (Achievements)</h3>
+  <table>
+    <tr><th>Tur</th><th>Sharti (DB da)</th><th>Qachon tekshiriladi</th></tr>
+    <tr><td>first_solve</td><td>Birinchi to'g'ri puzzle yechish</td><td>awardXp() → checkAchievements() ichida</td></tr>
+    <tr><td>xp_threshold</td><td>Umumiy XP belgilangan miqdordan oshganda</td><td>Har XP berilganda</td></tr>
+    <tr><td>streak_threshold</td><td>Streak N kundan oshganda</td><td>Har XP berilganda</td></tr>
+  </table>
+  <div class="note success">Yutuq olinganda: { newAchievements: [...] } qaytariladi → frontend toast ko'rsatadi</div>
+
+  <h3>ELO Reytingi (Shaxmat)</h3>
+  <div class="card">
+    <table>
+      <tr><th>Ko'rsatgich</th><th>Ma'lumot</th></tr>
+      <tr><td>Boshlang'ich ELO</td><td>1200 (yangi o'quvchi)</td></tr>
+      <tr><td>G'alaba</td><td>ELO oshadi (raqib ELO ga qarab)</td></tr>
+      <tr><td>Yutqizish</td><td>ELO pasayadi</td></tr>
+      <tr><td>Durang</td><td>ELO minimal o'zgaradi</td></tr>
+      <tr><td>Ko'rish joyi</td><td>/student/leaderboard — guruh ichida tartib</td></tr>
+      <tr><td>ELO da o'zgaradi</td><td>Faqat PvP (Stockfish bilan o'yin) da</td></tr>
+    </table>
+  </div>
+
+  <h3>awardXp() Funksiyasi — Ichki Ishlash</h3>
+  <div class="card">
+    <ol class="steps" style="color:#64748b">
+      <li>student_xp jadvalidan joriy xp, daraja, streak, last_xp_date olinadi</li>
+      <li>Streak hisoblash: bugun va kecha solishtiriladi</li>
+      <li>xp += amount, daraja yangilanadi (floor(xp/200)+1)</li>
+      <li>student_xp jadvaliga yoziladi (ON CONFLICT UPDATE)</li>
+      <li>checkAchievements() — yangi yutuq bormi tekshiriladi</li>
+      <li>{ xp, level, streak, newAchievements } qaytariladi → frontend toast ko'rsatadi</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+</script>
+</body>
+</html>

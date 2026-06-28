@@ -15,10 +15,15 @@ const markSchema = z.object({
   records: z.array(
     z.object({
       studentId: z.string().uuid(),
-      status: z.enum(["p", "a", "l"]),
+      status: z.enum(["p", "a", "l", "ae"]),
+      reason: z.string().optional(),
     })
   ),
 });
+
+// 'ae' = sababli yo'qlik. Dars hisoblanmaydi.
+// 'p', 'a', 'l' = dars hisoblanadi (paketdan ayiriladi).
+const isCounted = (s: string) => s !== "ae";
 
 export async function attendanceRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
@@ -26,7 +31,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
   app.get("/attendance", async (request) => {
     const { scheduleSlotId, date } = querySchema.parse(request.query);
     const { rows } = await pool.query(
-      `SELECT student_id AS "studentId", status
+      `SELECT student_id AS "studentId", status, reason, lesson_counted AS "lessonCounted"
        FROM attendance_records
        WHERE schedule_slot_id = $1 AND date = $2`,
       [scheduleSlotId, date]
@@ -51,9 +56,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
         [tenantId, targetDate]
       );
 
-      const counts = { p: 0, a: 0, l: 0 };
-      for (const r of rows) counts[r.status as "p" | "a" | "l"] = Number(r.count);
-      const total = counts.p + counts.a + counts.l;
+      const counts = { p: 0, a: 0, l: 0, ae: 0 };
+      for (const r of rows) counts[r.status as keyof typeof counts] = Number(r.count);
+      const total = counts.p + counts.a + counts.l + counts.ae;
       const avgPercent = total > 0 ? Math.round((counts.p / total) * 100) : 0;
 
       return {
@@ -62,6 +67,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         present: counts.p,
         late: counts.l,
         absent: counts.a,
+        excused: counts.ae,
         total,
       };
     }
@@ -104,7 +110,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         [groupId, dates[0], dates[dates.length - 1]]
       );
 
-      const recordMap = new Map<string, Map<string, "p" | "a" | "l">>();
+      const recordMap = new Map<string, Map<string, "p" | "a" | "l" | "ae">>();
       for (const r of recordsRes.rows) {
         const dateKey = new Date(r.date).toISOString().slice(0, 10);
         if (!recordMap.has(r.studentId)) recordMap.set(r.studentId, new Map());
@@ -140,8 +146,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
       [sub]
     );
 
-    const totals = { p: 0, a: 0, l: 0 };
-    for (const r of rows) totals[r.status as "p" | "a" | "l"]++;
+    const totals = { p: 0, a: 0, l: 0, ae: 0 };
+    for (const r of rows) totals[r.status as keyof typeof totals]++;
     const total = rows.length;
     const pct = total > 0 ? Math.round((totals.p / total) * 100) : 0;
 
@@ -165,18 +171,22 @@ export async function attendanceRoutes(app: FastifyInstance) {
             [r.studentId, body.scheduleSlotId, body.date]
           );
           const oldStatus = existing.rows[0]?.status as string | undefined;
+          const oldCounted = oldStatus ? isCounted(oldStatus) : false;
+          const newCounted = isCounted(r.status);
 
           await client.query(
-            `INSERT INTO attendance_records (student_id, schedule_slot_id, date, status, marked_by)
-             VALUES ($1, $2, $3, $4, $5)
+            `INSERT INTO attendance_records
+               (student_id, schedule_slot_id, date, status, reason, lesson_counted, marked_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              ON CONFLICT (student_id, schedule_slot_id, date)
-             DO UPDATE SET status = EXCLUDED.status, marked_by = EXCLUDED.marked_by`,
-            [r.studentId, body.scheduleSlotId, body.date, r.status, userId]
+             DO UPDATE SET status = EXCLUDED.status, reason = EXCLUDED.reason,
+               lesson_counted = EXCLUDED.lesson_counted, marked_by = EXCLUDED.marked_by`,
+            [r.studentId, body.scheduleSlotId, body.date, r.status, r.reason ?? null, newCounted, userId]
           );
 
-          if (oldStatus !== "p" && r.status === "p") {
+          if (!oldCounted && newCounted) {
             await consumeLesson(client, r.studentId);
-          } else if (oldStatus === "p" && r.status !== "p") {
+          } else if (oldCounted && !newCounted) {
             await refundLesson(client, r.studentId);
           }
         }

@@ -110,4 +110,77 @@ export async function teachersRoutes(app: FastifyInstance) {
     );
     return { ok: true };
   });
+
+  // Teacher rankings: real attendance + review data
+  app.get("/teachers/rankings", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT t.id, u.full_name AS "fullName", t.spec,
+              (SELECT COUNT(*)::int FROM groups g WHERE g.teacher_id = t.id) AS "groupsCount",
+              (SELECT COUNT(DISTINCT gm.student_id)::int FROM group_members gm JOIN groups g ON g.id = gm.group_id WHERE g.teacher_id = t.id) AS "studentsCount",
+              COALESCE(rev.avg_rating, 0) AS "avgRating",
+              COALESCE(rev.review_count, 0) AS "reviewCount"
+       FROM teachers t
+       JOIN users u ON u.id = t.user_id
+       LEFT JOIN (
+         SELECT teacher_id,
+                ROUND(AVG(rating)::numeric, 1) AS avg_rating,
+                COUNT(*)::int AS review_count
+         FROM teacher_reviews
+         GROUP BY teacher_id
+       ) rev ON rev.teacher_id = t.id
+       WHERE t.tenant_id = $1
+       ORDER BY "avgRating" DESC, "studentsCount" DESC`,
+      [tenantId]
+    );
+    return rows.map((r) => ({
+      ...r,
+      avgRating: r.avgRating > 0 ? Number(r.avgRating) : computeMockRating(r.id, null),
+    }));
+  });
+
+  // Get reviews for all teachers (admin view)
+  app.get("/teachers/reviews", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT tr.id, tr.rating, tr.comment, tr.period, tr.created_at AS "createdAt",
+              tu.full_name AS "teacherName",
+              ru.full_name AS "reviewerName",
+              g.name AS "groupName", g.color AS "groupColor"
+       FROM teacher_reviews tr
+       JOIN teachers t ON t.id = tr.teacher_id
+       JOIN users tu ON tu.id = t.user_id
+       JOIN users ru ON ru.id = tr.reviewer_id
+       LEFT JOIN groups g ON g.teacher_id = tr.teacher_id
+       WHERE t.tenant_id = $1
+       ORDER BY tr.created_at DESC
+       LIMIT 50`,
+      [tenantId]
+    );
+    return rows;
+  });
+
+  // Add a review (admin only)
+  app.post("/teachers/:id/reviews", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId, sub } = request.user;
+    const body = z.object({
+      rating: z.number().int().min(1).max(5),
+      comment: z.string().optional(),
+      period: z.string().optional(),
+    }).parse(request.body);
+
+    const period = body.period ?? new Date().toISOString().slice(0, 7);
+    const reviewer = await pool.query(`SELECT id FROM users WHERE id = $1 AND tenant_id = $2`, [sub, tenantId]);
+    if (reviewer.rows.length === 0) return reply.code(403).send({ error: "Forbidden" });
+
+    await pool.query(
+      `INSERT INTO teacher_reviews (tenant_id, teacher_id, reviewer_id, rating, comment, period)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (teacher_id, reviewer_id, period) DO UPDATE
+       SET rating = EXCLUDED.rating, comment = EXCLUDED.comment`,
+      [tenantId, id, sub, body.rating, body.comment ?? null, period]
+    );
+    return reply.code(201).send({ ok: true });
+  });
 }

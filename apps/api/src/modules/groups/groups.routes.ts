@@ -66,4 +66,24 @@ export async function groupsRoutes(app: FastifyInstance) {
     await pool.query(`DELETE FROM groups WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
     return { ok: true };
   });
+
+  // Students in a group (for attendance marking)
+  app.get("/groups/:id/students", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+
+    const groupCheck = await pool.query(`SELECT id FROM groups WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    if (groupCheck.rows.length === 0) return reply.code(404).send({ error: "Group not found" });
+
+    const { rows } = await pool.query(
+      `SELECT s.id, u.full_name AS "fullName"
+       FROM group_members gm
+       JOIN students s ON s.id = gm.student_id
+       JOIN users u ON u.id = s.user_id
+       WHERE gm.group_id = $1
+       ORDER BY u.full_name`,
+      [id]
+    );
+    return rows;
+  });
 }

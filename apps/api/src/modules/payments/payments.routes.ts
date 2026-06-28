@@ -9,6 +9,13 @@ const packageCreateSchema = z.object({
   name: z.string().min(2),
   lessonsCount: z.number().int().positive(),
   price: z.number().positive(),
+  lessonType: z.enum(["group", "individual"]).default("group"),
+  tier: z.enum(["standard", "pro"]).default("standard"),
+  lessonsPerMonth: z.number().int().positive().optional(),
+  lessonsPerWeek: z.number().int().positive().optional(),
+  durationMinutes: z.number().int().positive().optional(),
+  maxStudents: z.number().int().positive().optional(),
+  delivery: z.enum(["online", "offline"]).default("online"),
 });
 
 const packageUpdateSchema = z.object({
@@ -16,6 +23,13 @@ const packageUpdateSchema = z.object({
   lessonsCount: z.number().int().positive().optional(),
   price: z.number().positive().optional(),
   active: z.boolean().optional(),
+  lessonType: z.enum(["group", "individual"]).optional(),
+  tier: z.enum(["standard", "pro"]).optional(),
+  lessonsPerMonth: z.number().int().positive().optional(),
+  lessonsPerWeek: z.number().int().positive().optional(),
+  durationMinutes: z.number().int().positive().optional(),
+  maxStudents: z.number().int().positive().optional(),
+  delivery: z.enum(["online", "offline"]).optional(),
 });
 
 const assignSchema = z.object({
@@ -33,7 +47,10 @@ export async function paymentsRoutes(app: FastifyInstance) {
   app.get("/packages", async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT id, name, lessons_count AS "lessonsCount", price, active
+      `SELECT id, name, lessons_count AS "lessonsCount", price, active,
+              lesson_type AS "lessonType", tier, lessons_per_month AS "lessonsPerMonth",
+              lessons_per_week AS "lessonsPerWeek", duration_minutes AS "durationMinutes",
+              max_students AS "maxStudents", delivery
        FROM packages WHERE tenant_id = $1 ORDER BY price`,
       [tenantId]
     );
@@ -44,9 +61,14 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const body = packageCreateSchema.parse(request.body);
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `INSERT INTO packages (tenant_id, name, lessons_count, price)
-       VALUES ($1, $2, $3, $4) RETURNING id`,
-      [tenantId, body.name, body.lessonsCount, body.price]
+      `INSERT INTO packages (tenant_id, name, lessons_count, price,
+         lesson_type, tier, lessons_per_month, lessons_per_week,
+         duration_minutes, max_students, delivery)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+      [tenantId, body.name, body.lessonsCount, body.price,
+       body.lessonType, body.tier, body.lessonsPerMonth ?? null,
+       body.lessonsPerWeek ?? null, body.durationMinutes ?? null,
+       body.maxStudents ?? null, body.delivery]
     );
     return reply.code(201).send({ id: rows[0].id });
   });
@@ -60,9 +82,20 @@ export async function paymentsRoutes(app: FastifyInstance) {
          name = COALESCE($1, name),
          lessons_count = COALESCE($2, lessons_count),
          price = COALESCE($3, price),
-         active = COALESCE($4, active)
-       WHERE id = $5 AND tenant_id = $6`,
-      [body.name ?? null, body.lessonsCount ?? null, body.price ?? null, body.active ?? null, id, tenantId]
+         active = COALESCE($4, active),
+         lesson_type = COALESCE($5, lesson_type),
+         tier = COALESCE($6, tier),
+         lessons_per_month = COALESCE($7, lessons_per_month),
+         lessons_per_week = COALESCE($8, lessons_per_week),
+         duration_minutes = COALESCE($9, duration_minutes),
+         max_students = COALESCE($10, max_students),
+         delivery = COALESCE($11, delivery)
+       WHERE id = $12 AND tenant_id = $13`,
+      [body.name ?? null, body.lessonsCount ?? null, body.price ?? null,
+       body.active ?? null, body.lessonType ?? null, body.tier ?? null,
+       body.lessonsPerMonth ?? null, body.lessonsPerWeek ?? null,
+       body.durationMinutes ?? null, body.maxStudents ?? null,
+       body.delivery ?? null, id, tenantId]
     );
     return { ok: true };
   });

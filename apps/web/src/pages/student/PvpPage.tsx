@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { Chess } from "chess.js";
 import type { PvpGameState } from "./PvpGamePage.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { CoordinateTrainer } from "../../components/CoordinateTrainer.js";
@@ -51,6 +52,83 @@ function initials(name: string) {
 const DIFF_ELO: Record<number, number> = {
   1:720, 2:840, 3:960, 4:1080, 5:1200, 6:1320, 7:1440, 8:1560, 9:1680, 10:1800,
 };
+
+/* ── Custom time modal ───────────────────────────────────────────────────── */
+function CustomTimeModal({ onClose, onConfirm }:{
+  onClose: () => void;
+  onConfirm: (tc: string, type: string, color: string) => void;
+}) {
+  const [mins, setMins] = useState(10);
+  const [incr, setIncr] = useState(0);
+
+  const tc    = `${mins}+${incr}`;
+  const type  = mins <= 2 ? "BULLET" : mins <= 5 ? "BLITS" : mins <= 15 ? "RAPID" : "KLASSIK";
+  const color = mins <= 2 ? "#ef4444" : mins <= 5 ? "#f59e0b" : mins <= 15 ? "#3b82f6" : "#22c55e";
+
+  const overlay = (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"grid", placeItems:"center", zIndex:2000 }}
+      onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div style={{ background:"#1a1f35", borderRadius:22, width:400, maxWidth:"95vw", overflow:"hidden", boxShadow:"0 24px 64px rgba(0,0,0,.6)" }}>
+        {/* Header */}
+        <div style={{ background:"linear-gradient(135deg,#4f46e5,#7c3aed)", padding:"20px 22px", display:"flex", alignItems:"center", gap:14 }}>
+          <div style={{ width:46,height:46,borderRadius:14,background:"rgba(255,255,255,.2)",display:"grid",placeItems:"center",fontSize:24,flexShrink:0 }}>⏱</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:900, fontSize:17, color:"#fff" }}>Maxsus vaqt nazorati</div>
+            <div style={{ fontSize:12.5, color:"rgba(255,255,255,.7)", marginTop:3 }}>Vaqtni o'zingiz belgilang</div>
+          </div>
+          <button onClick={onClose}
+            style={{ width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,.2)",border:"none",color:"#fff",fontSize:16,cursor:"pointer",display:"grid",placeItems:"center",flexShrink:0 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding:"22px 22px 26px" }}>
+          {/* Preview */}
+          <div style={{ textAlign:"center", marginBottom:22, padding:"16px", borderRadius:14, background:"rgba(255,255,255,.04)", border:"1.5px solid rgba(255,255,255,.08)" }}>
+            <div style={{ fontSize:36, fontWeight:900, color, letterSpacing:-1, lineHeight:1 }}>{tc}</div>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", color:"rgba(255,255,255,.4)", marginTop:6 }}>{type}</div>
+          </div>
+
+          {/* Minutes */}
+          <div style={{ marginBottom:20 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:"rgba(255,255,255,.55)" }}>⏱ Daqiqa</span>
+              <span style={{ fontSize:14, fontWeight:900, color:"#fff" }}>{mins}</span>
+            </div>
+            <input type="range" min={1} max={60} value={mins}
+              onChange={e=>setMins(Number(e.target.value))}
+              style={{ width:"100%", accentColor:color, cursor:"pointer" }} />
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"rgba(255,255,255,.3)", marginTop:4 }}>
+              <span>1</span><span>15</span><span>30</span><span>60</span>
+            </div>
+          </div>
+
+          {/* Increment */}
+          <div style={{ marginBottom:24 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:"rgba(255,255,255,.55)" }}>➕ Qo'shimcha (soniya)</span>
+              <span style={{ fontSize:14, fontWeight:900, color:"#fff" }}>{incr}</span>
+            </div>
+            <input type="range" min={0} max={30} value={incr}
+              onChange={e=>setIncr(Number(e.target.value))}
+              style={{ width:"100%", accentColor:color, cursor:"pointer" }} />
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"rgba(255,255,255,.3)", marginTop:4 }}>
+              <span>0</span><span>10</span><span>20</span><span>30</span>
+            </div>
+          </div>
+
+          {/* Confirm */}
+          <button onClick={()=>onConfirm(tc, type, color)}
+            style={{ width:"100%", padding:"14px", borderRadius:14, border:"none",
+              background:`linear-gradient(135deg,${color},${color}cc)`,
+              color:"#fff", fontWeight:800, fontSize:15, cursor:"pointer" }}>
+            ✓ Tasdiqlash — {tc} {type}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  return createPortal(overlay, document.body);
+}
 
 /* ── Computer modal ──────────────────────────────────────────────────────── */
 function ComputerModal({ tc, tcType, tcColor, onClose, onStart }:{
@@ -180,6 +258,7 @@ function IdleScreen({ timeControl, setTimeControl, onStart, onlinePlayers, onCha
 }) {
   const navigate = useNavigate();
   const [modal, setModal] = useState<{ tc:string; type:string; color:string }|null>(null);
+  const [customTime, setCustomTime] = useState(false);
 
   const players = onlinePlayers.length > 0
     ? onlinePlayers.map((p, i) => ({ id:p.studentId, name:p.fullName, elo:1200, tc:"5+0 Blits", color:["#f59e0b","#7c3aed","#22c55e","#3b82f6"][i%4] }))
@@ -204,17 +283,17 @@ function IdleScreen({ timeControl, setTimeControl, onStart, onlinePlayers, onCha
             const isLast = tc === "...";
             return (
               <button key={tc}
-                onClick={()=>{ if(!isLast){ setTimeControl(tc); setModal({ tc, type, color }); } }}
-                style={{ padding:"22px 16px", textAlign:"center", cursor:isLast?"default":"pointer",
+                onClick={()=>{ if(isLast){ setCustomTime(true); } else { setTimeControl(tc); setModal({ tc, type, color }); } }}
+                style={{ padding:"22px 16px", textAlign:"center", cursor:"pointer",
                   background:"transparent",
                   borderTop: i >= 3 ? "1px solid rgba(255,255,255,.06)" : "none",
                   borderLeft: i%3 !== 0 ? "1px solid rgba(255,255,255,.06)" : "none",
                   borderRight:"none", borderBottom:"none",
                   transition:"background .15s" }}
-                onMouseEnter={e=>{ if(!isLast)(e.currentTarget as HTMLButtonElement).style.background=`${color}10`; }}
+                onMouseEnter={e=>{ (e.currentTarget as HTMLButtonElement).style.background=isLast?"rgba(99,102,241,.1)":`${color}10`; }}
                 onMouseLeave={e=>{ (e.currentTarget as HTMLButtonElement).style.background="transparent"; }}>
                 {isLast ? (
-                  <div style={{ fontSize:22, fontWeight:900, color:"rgba(255,255,255,.25)", letterSpacing:4, marginBottom:6 }}>· · ·</div>
+                  <div style={{ fontSize:22, fontWeight:900, color:"rgba(255,255,255,.5)", letterSpacing:4, marginBottom:6 }}>· · ·</div>
                 ) : (
                   <div style={{ fontSize:32, fontWeight:900, color, marginBottom:5, lineHeight:1, letterSpacing:-1 }}>{tc}</div>
                 )}
@@ -257,21 +336,17 @@ function IdleScreen({ timeControl, setTimeControl, onStart, onlinePlayers, onCha
           {players.map((p, i) => (
             <div key={p.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px",
               borderTop: i > 0 ? "1px solid rgba(255,255,255,.06)" : "none" }}>
-              {/* Avatar */}
               <div style={{ width:42,height:42,borderRadius:12,background:p.color,display:"grid",placeItems:"center",
                 fontSize:14,fontWeight:800,color:"#fff",flexShrink:0 }}>
                 {initials(p.name)}
               </div>
-              {/* Info */}
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontWeight:700, fontSize:14 }}>{p.name}</div>
                 <div style={{ fontSize:12, color:"rgba(255,255,255,.4)", marginTop:2 }}>
                   {p.elo} ELO · {p.tc}
                 </div>
               </div>
-              {/* Online dot */}
               <span style={{ width:8,height:8,borderRadius:"50%",background:"#4ade80",flexShrink:0 }}/>
-              {/* Challenge button */}
               <button onClick={()=>onChallenge(p.id)}
                 style={{ display:"flex",alignItems:"center",gap:6,padding:"8px 18px",borderRadius:10,border:"none",
                   background:"linear-gradient(135deg,#2563eb,#3b82f6)",color:"#fff",
@@ -282,6 +357,18 @@ function IdleScreen({ timeControl, setTimeControl, onStart, onlinePlayers, onCha
           ))}
         </div>
       </div>
+
+      {/* Custom time modal */}
+      {customTime && (
+        <CustomTimeModal
+          onClose={()=>setCustomTime(false)}
+          onConfirm={(tc, type, color)=>{
+            setCustomTime(false);
+            setTimeControl(tc);
+            setModal({ tc, type, color });
+          }}
+        />
+      )}
 
       {/* Computer modal */}
       {modal && (
@@ -376,12 +463,6 @@ export default function PvpPage() {
 
   return (
     <div>
-      {/* Banner */}
-      <div className="kid-banner kb-chess" style={{ marginBottom:20 }}>
-        <div className="kb-ico">♟</div>
-        <div><h2>Shaxmat o'yini</h2><p>Kompyuter bilan o'ynash</p></div>
-      </div>
-
       {status === "idle" && (
         <IdleScreen
           timeControl={timeControl}
@@ -426,7 +507,16 @@ export default function PvpPage() {
       {(status === "playing" || status === "finished") && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 280px", gap:16 }}>
           <div style={{ background:"rgba(255,255,255,.04)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:18, padding:20 }}>
-            <ChessBoard fen={fen} onMove={handleMove} disabled={status !== "playing"} flipped={color === "b"} />
+            <ChessBoard
+              fen={fen}
+              onMove={handleMove}
+              disabled={status !== "playing"}
+              flipped={color === "b"}
+              getMoves={(sq) => {
+                try { return new Chess(fen).moves({ square: sq as import("chess.js").Square, verbose: true }).map((m: {to: string}) => m.to); }
+                catch { return []; }
+              }}
+            />
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             <div style={{ background:"rgba(255,255,255,.04)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:16, padding:18 }}>

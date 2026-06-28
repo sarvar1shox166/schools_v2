@@ -28,6 +28,7 @@ const ADMIN_PAGE_META: Record<string, { title: string; sub: string }> = {
   "/admin/income":         { title: "Daromadlar tahlili", sub: "Moliyaviy hisobot" },
   "/admin/notifications":  { title: "Bildirishnomalar",  sub: "Xabarlar va ogohlantirishlar" },
   "/admin/video-courses":  { title: "Video darsliklar",   sub: "Kurslar va darslar boshqaruvi" },
+  "/admin/staff":          { title: "Xodimlar",           sub: "Rollar va ruxsatlar boshqaruvi" },
   "/admin/broadcast":      { title: "Ommaviy xabar",     sub: "Auditoriya va kanal tanlash" },
   "/admin/applications":   { title: "Arizalar",           sub: "CRM va ariza boshqaruvi" },
   "/admin/teacher-rating": { title: "Ustoz reytingi",     sub: "Baholar va izohlar" },
@@ -86,6 +87,9 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("chess_sb_collapsed") === "1"
   );
+  const [mobOpen, setMobOpen] = useState(false);
+  // Close mobile sidebar on route change
+  useEffect(() => { setMobOpen(false); }, [location.pathname]);
 
   useEffect(() => {
     const t = isStudent ? "dark" : theme;
@@ -114,8 +118,10 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   };
 
   return (
-    <div className={"app" + (isStudent ? " kid-theme" : "") + (!isStudent && collapsed ? " collapsed" : "")}>
+    <div className={"app" + (isStudent ? " kid-theme" : "") + (!isStudent && collapsed ? " collapsed" : "") + (isStudent && mobOpen ? " mob-open" : "")}>
       <XpToastHost />
+      {/* Mobile backdrop — clicks close the sidebar */}
+      <div className="mob-backdrop" onClick={() => isStudent ? setMobOpen(false) : setCollapsed(true)} />
       {nav && (
         <Sidebar
           sections={nav}
@@ -128,6 +134,11 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
         <header className="topbar">
           {isStudent ? (
             <>
+              <button className="mob-hamburger" onClick={() => setMobOpen(true)} title="Menyu">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/>
+                </svg>
+              </button>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="kid-tb-title">{studentMeta?.title ?? title}</div>
                 {studentMeta?.sub && <div className="kid-tb-sub">{studentMeta.sub}</div>}

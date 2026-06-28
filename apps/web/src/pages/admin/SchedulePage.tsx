@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { Avatar, Card, Icon, StatCard } from "@chess-school/ui";
-import { useCreateScheduleSlot, useGroups, useSchedule } from "../../lib/queries.js";
+import {
+  useCreateScheduleSlot, useUpdateScheduleSlot, useDeleteScheduleSlot,
+  useGroups, useSchedule, type ScheduleSlot,
+} from "../../lib/queries.js";
 
 const DAYS = ["Dus", "Ses", "Cho", "Pay", "Jum", "Sha", "Yak"];
 const DAY_SHORT = ["Du", "Se", "Cho", "Pay", "Ju", "Sha", "Yak"];
@@ -10,48 +13,15 @@ const HOURS = [
   "20:00","21:00","22:00","23:00",
 ];
 
-type Slot = {
-  id: string;
-  groupName: string;
-  level?: string;
-  teacherName: string | null;
-  dayOfWeek: number;
-  startTime: string;
-  color: string | null;
-  isOnline?: boolean;
-  slotType?: string;
-  room?: string;
-  capacity?: number;
-  enrolled?: number;
-};
-
 type ModalState =
-  | { mode: "view"; slot: Slot }
+  | { mode: "view"; slot: ScheduleSlot }
   | { mode: "add"; day: number; hour: string }
-  | { mode: "edit"; slot: Slot }
+  | { mode: "edit"; slot: ScheduleSlot }
   | null;
 
-const MOCK_SLOTS: Slot[] = [
-  { id:"m1",  groupName:"Boshlang'ich — A", level:"Boshlang'ich", teacherName:"Nigora Saidova",  dayOfWeek:0, startTime:"09:00", color:"#3F8CFF", slotType:"guruh",      room:"1-zal", capacity:14, enrolled:12 },
-  { id:"m2",  groupName:"Boshlang'ich — A", level:"Boshlang'ich", teacherName:"Nigora Saidova",  dayOfWeek:2, startTime:"09:00", color:"#3F8CFF", slotType:"guruh",      room:"1-zal", capacity:14, enrolled:12 },
-  { id:"m3",  groupName:"Boshlang'ich — A", level:"Boshlang'ich", teacherName:"Nigora Saidova",  dayOfWeek:4, startTime:"09:00", color:"#3F8CFF", slotType:"guruh",      room:"1-zal", capacity:14, enrolled:12 },
-  { id:"m4",  groupName:"Taktika — B",      level:"O'rta",        teacherName:"Malika Yusupova", dayOfWeek:1, startTime:"11:00", color:"#10b981", slotType:"guruh",      room:"2-zal", capacity:12, enrolled:8  },
-  { id:"m5",  groupName:"Taktika — B",      level:"O'rta",        teacherName:"Malika Yusupova", dayOfWeek:3, startTime:"11:00", color:"#10b981", slotType:"guruh",      room:"2-zal", capacity:12, enrolled:8  },
-  { id:"m6",  groupName:"Taktika — B",      level:"O'rta",        teacherName:"Malika Yusupova", dayOfWeek:5, startTime:"11:00", color:"#10b981", slotType:"guruh",      room:"2-zal", capacity:12, enrolled:8  },
-  { id:"m7",  groupName:"Bolalar kursi — C",level:"Boshlang'ich", teacherName:"Bobur Rahimov",   dayOfWeek:0, startTime:"14:00", color:"#f59e0b", slotType:"guruh",      room:"1-zal", capacity:16, enrolled:15 },
-  { id:"m8",  groupName:"Bolalar kursi — C",level:"Boshlang'ich", teacherName:"Bobur Rahimov",   dayOfWeek:2, startTime:"14:00", color:"#f59e0b", slotType:"guruh",      room:"1-zal", capacity:16, enrolled:15 },
-  { id:"m9",  groupName:"Bolalar kursi — C",level:"Boshlang'ich", teacherName:"Bobur Rahimov",   dayOfWeek:4, startTime:"14:00", color:"#f59e0b", slotType:"guruh",      room:"1-zal", capacity:16, enrolled:15 },
-  { id:"m10", groupName:"Pro Trening",       level:"Ilg'or",       teacherName:"Sardor Nazarov",  dayOfWeek:5, startTime:"10:00", color:"#ec4899", slotType:"individual", room:"3-zal", capacity:1,  enrolled:1  },
-  { id:"m11", groupName:"Pro Trening",       level:"Ilg'or",       teacherName:"Sardor Nazarov",  dayOfWeek:6, startTime:"10:00", color:"#ec4899", slotType:"individual", room:"3-zal", capacity:1,  enrolled:1  },
-  { id:"m12", groupName:"Pozitsion — D",     level:"O'rta",        teacherName:"Dilnoza Ergasheva",dayOfWeek:1,startTime:"16:00", color:"#8b5cf6", slotType:"individual", room:"2-zal", capacity:12, enrolled:10 },
-  { id:"m13", groupName:"Pozitsion — D",     level:"O'rta",        teacherName:"Dilnoza Ergasheva",dayOfWeek:3,startTime:"16:00", color:"#8b5cf6", slotType:"individual", room:"2-zal", capacity:12, enrolled:10 },
-  { id:"m14", groupName:"Blitz klub — F",    level:"Ilg'or",       teacherName:"Jasur Toshmatov", dayOfWeek:3, startTime:"18:00", color:"#06b6d4", slotType:"guruh",      room:"2-zal", capacity:14, enrolled:11 },
-  { id:"m15", groupName:"Blitz klub — F",    level:"Ilg'or",       teacherName:"Jasur Toshmatov", dayOfWeek:5, startTime:"18:00", color:"#06b6d4", slotType:"guruh",      room:"2-zal", capacity:14, enrolled:11 },
-];
-
-function getGroupDays(slots: Slot[], groupName: string): string {
+function getGroupDays(slots: ScheduleSlot[], groupId: string): string {
   return slots
-    .filter((s) => s.groupName === groupName)
+    .filter((s) => s.groupId === groupId)
     .map((s) => s.dayOfWeek)
     .sort((a, b) => a - b)
     .map((d) => DAY_SHORT[d])
@@ -59,14 +29,14 @@ function getGroupDays(slots: Slot[], groupName: string): string {
 }
 
 export default function SchedulePage() {
-  const { data: apiSlots } = useSchedule();
-  const { data: groups } = useGroups();
+  const { data: slots = [], isLoading } = useSchedule();
+  const { data: groups = [] } = useGroups();
   const createSlot = useCreateScheduleSlot();
+  const updateSlot = useUpdateScheduleSlot();
+  const deleteSlot = useDeleteScheduleSlot();
 
   const [modal, setModal] = useState<ModalState>(null);
   const [teacherFilter, setTeacherFilter] = useState<string | null>(null);
-
-  const slots: Slot[] = apiSlots && apiSlots.length > 0 ? apiSlots : MOCK_SLOTS;
 
   const teachers = useMemo(
     () => [...new Set(slots.map((s) => s.teacherName).filter(Boolean) as string[])],
@@ -78,10 +48,10 @@ export default function SchedulePage() {
     : slots;
 
   const grid = useMemo(() => {
-    const map = new Map<string, Slot[]>();
+    const map = new Map<string, ScheduleSlot[]>();
     for (const h of HOURS) for (let d = 0; d < 7; d++) map.set(`${h}-${d}`, []);
     for (const s of filteredSlots) {
-      const key = `${s.startTime.slice(0, 5)}-${s.dayOfWeek}`;
+      const key = `${String(s.startTime).slice(0, 5)}-${s.dayOfWeek}`;
       const arr = map.get(key);
       if (arr) arr.push(s);
       else map.set(key, [s]);
@@ -91,13 +61,32 @@ export default function SchedulePage() {
 
   const totalLessons = slots.length;
   const totalHours = Number((totalLessons * 1.5).toFixed(1));
-  const activeGroups = new Set(slots.map((s) => s.groupName)).size;
+  const activeGroups = new Set(slots.map((s) => s.groupId)).size;
   const emptySlots = HOURS.length * 7 - totalLessons;
 
-  async function handleCreate(form: { groupId: string; dayOfWeek: number; startTime: string; isOnline: boolean }) {
+  async function handleCreate(form: { groupId: string; dayOfWeek: number; startTime: string; isOnline: boolean; meetingUrl?: string }) {
     if (!form.groupId) return;
     await createSlot.mutateAsync(form);
     setModal(null);
+  }
+
+  async function handleUpdate(id: string, patch: { dayOfWeek?: number; startTime?: string; isOnline?: boolean; meetingUrl?: string }) {
+    await updateSlot.mutateAsync({ id, ...patch });
+    setModal(null);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Bu darsni o'chirishni tasdiqlaysizmi?")) return;
+    await deleteSlot.mutateAsync(id);
+    setModal(null);
+  }
+
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300, color: "var(--text-faint)" }}>
+        Yuklanmoqda...
+      </div>
+    );
   }
 
   return (
@@ -192,13 +181,15 @@ export default function SchedulePage() {
               allSlots={slots}
               onClose={() => setModal(null)}
               onEdit={() => setModal({ mode: "edit", slot: modal.slot })}
+              onDelete={() => handleDelete(modal.slot.id)}
+              isDeleting={deleteSlot.isPending}
             />
           )}
           {modal.mode === "add" && (
             <AddModal
               day={modal.day}
               hour={modal.hour}
-              groups={groups ?? []}
+              groups={groups}
               teachers={teachers}
               onClose={() => setModal(null)}
               onCreate={handleCreate}
@@ -210,6 +201,8 @@ export default function SchedulePage() {
               slot={modal.slot}
               allSlots={slots}
               onClose={() => setModal(null)}
+              onSave={handleUpdate}
+              isPending={updateSlot.isPending}
             />
           )}
         </ModalOverlay>
@@ -265,55 +258,54 @@ function ModalHeader({ title, onClose }: { title: string; onClose: () => void })
 }
 
 /* ─── View modal ─── */
-function ViewModal({ slot, allSlots, onClose, onEdit }: {
-  slot: Slot; allSlots: Slot[]; onClose: () => void; onEdit: () => void;
+function ViewModal({ slot, allSlots, onClose, onEdit, onDelete, isDeleting }: {
+  slot: ScheduleSlot; allSlots: ScheduleSlot[]; onClose: () => void; onEdit: () => void;
+  onDelete: () => void; isDeleting: boolean;
 }) {
   const color = slot.color ?? "#3F8CFF";
-  const kunlar = getGroupDays(allSlots, slot.groupName);
+  const kunlar = getGroupDays(allSlots, slot.groupId);
 
   return (
     <ModalBox>
       <ModalHeader title="Dars ma'lumotlari" onClose={onClose} />
 
-      {/* Group header */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
         <div style={{
           width: 52, height: 52, borderRadius: 14, flexShrink: 0,
-          background: `${color}22`, display: "grid", placeItems: "center",
-          fontSize: 22,
-        }}>
-          ♟
-        </div>
+          background: `${color}22`, display: "grid", placeItems: "center", fontSize: 22,
+        }}>♟</div>
         <div>
           <div style={{ fontWeight: 800, fontSize: 17 }}>{slot.groupName}</div>
-          {slot.level && <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 2 }}>{slot.level}</div>}
         </div>
       </div>
 
-      {/* Detail rows */}
       <div style={{ display: "flex", flexDirection: "column" }}>
         {[
           { label: "O'qituvchi", value: slot.teacherName ?? "—" },
-          { label: "Vaqt",       value: slot.startTime.slice(0, 5) },
-          { label: "Kunlar",     value: kunlar || DAY_SHORT[slot.dayOfWeek] },
-          { label: "Xona",       value: slot.room ?? "—" },
-          { label: "Turi",       value: slot.slotType === "individual" ? "Individual" : "Guruh" },
-          { label: "O'quvchilar",value: slot.enrolled != null ? `${slot.enrolled}/${slot.capacity} o'rin` : "—" },
+          { label: "Vaqt", value: String(slot.startTime).slice(0, 5) },
+          { label: "Kunlar", value: kunlar || DAY_SHORT[slot.dayOfWeek] },
+          { label: "Xona", value: slot.roomName ?? "—" },
+          { label: "Turi", value: slot.isOnline ? "Online (Zoom)" : "Offline" },
+          ...(slot.meetingUrl ? [{ label: "Havola", value: slot.meetingUrl }] : []),
         ].map(({ label, value }) => (
           <div key={label} style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             padding: "13px 0", borderBottom: "1px solid var(--border)",
           }}>
             <span style={{ color: "var(--text-faint)", fontSize: 14 }}>{label}</span>
-            <span style={{ fontWeight: 700, fontSize: 14 }}>{value}</span>
+            <span style={{ fontWeight: 700, fontSize: 14, maxWidth: 260, textAlign: "right", wordBreak: "break-all" }}>{value}</span>
           </div>
         ))}
       </div>
 
-      {/* Actions */}
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-        <button className="btn" style={{ flex: 1, color: "var(--danger)", borderColor: "var(--danger)" }}>
-          <Icon name="trash" size={14} /> O'chirish
+        <button
+          className="btn"
+          style={{ flex: 1, color: "var(--danger)", borderColor: "var(--danger)" }}
+          disabled={isDeleting}
+          onClick={onDelete}
+        >
+          <Icon name="trash" size={14} /> {isDeleting ? "..." : "O'chirish"}
         </button>
         <button className="btn primary" style={{ flex: 2 }} onClick={onEdit}>
           <Icon name="edit" size={14} /> Tahrirlash
@@ -324,99 +316,89 @@ function ViewModal({ slot, allSlots, onClose, onEdit }: {
 }
 
 /* ─── Add modal ─── */
-function AddModal({ day, hour, groups, teachers, onClose, onCreate, isPending }: {
+function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
   day: number; hour: string;
   groups: { id: string; name: string }[];
   teachers: string[];
   onClose: () => void;
-  onCreate: (f: { groupId: string; dayOfWeek: number; startTime: string; isOnline: boolean }) => void;
+  onCreate: (f: { groupId: string; dayOfWeek: number; startTime: string; isOnline: boolean; meetingUrl?: string }) => void;
   isPending: boolean;
 }) {
   const [form, setForm] = useState({
-    name: "", teacher: teachers[0] ?? "", day: String(day), time: hour, type: "guruh",
+    groupId: groups[0]?.id ?? "",
+    day: String(day),
+    time: hour,
+    isOnline: false,
+    meetingUrl: "",
   });
-
-  const title = `Dars qo'shish — ${DAYS[day]} ${hour}`;
 
   return (
     <ModalBox>
-      <ModalHeader title={title} onClose={onClose} />
+      <ModalHeader title={`Dars qo'shish — ${DAYS[day]} ${hour}`} onClose={onClose} />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Group name */}
         <div>
-          <label style={labelStyle}>GURUH / DARS NOMI</label>
-          <input
-            className="inp"
-            style={{ width: "100%" }}
-            placeholder="Boshlang'ich A"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-        </div>
-
-        {/* Teacher */}
-        <div>
-          <label style={labelStyle}>O'QITUVCHI</label>
-          <select
-            className="inp"
-            style={{ width: "100%" }}
-            value={form.teacher}
-            onChange={(e) => setForm({ ...form, teacher: e.target.value })}
-          >
-            <option value="">Tanlang...</option>
-            {teachers.map((t) => <option key={t} value={t}>{t}</option>)}
+          <label style={labelStyle}>GURUH</label>
+          <select className="inp" style={{ width: "100%" }} value={form.groupId}
+            onChange={(e) => setForm({ ...form, groupId: e.target.value })}>
+            <option value="">Guruh tanlang...</option>
             {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </div>
 
-        {/* Day / Time / Type */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
             <label style={labelStyle}>KUN</label>
-            <select className="inp" style={{ width: "100%" }} value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })}>
+            <select className="inp" style={{ width: "100%" }} value={form.day}
+              onChange={(e) => setForm({ ...form, day: e.target.value })}>
               {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
             </select>
           </div>
           <div>
             <label style={labelStyle}>VAQT</label>
-            <select className="inp" style={{ width: "100%" }} value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })}>
+            <select className="inp" style={{ width: "100%" }} value={form.time}
+              onChange={(e) => setForm({ ...form, time: e.target.value })}>
               {HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
             </select>
           </div>
-          <div>
-            <label style={labelStyle}>TURI</label>
-            <select className="inp" style={{ width: "100%" }} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              <option value="guruh">guruh</option>
-              <option value="individual">individual</option>
-            </select>
+        </div>
+
+        <div>
+          <label style={labelStyle}>TURI</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[{ v: false, label: "Offline" }, { v: true, label: "Online (Zoom)" }].map(({ v, label }) => (
+              <button key={String(v)} onClick={() => setForm({ ...form, isOnline: v })}
+                style={{
+                  flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
+                  border: form.isOnline === v ? "none" : "1px solid var(--border)",
+                  background: form.isOnline === v ? "var(--accent)" : "var(--surface-2)",
+                  color: form.isOnline === v ? "#fff" : "var(--text-dim)",
+                  fontWeight: 600, fontSize: 13,
+                }}>
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Info box */}
-        <div style={{
-          display: "flex", alignItems: "flex-start", gap: 10,
-          padding: "12px 14px", borderRadius: 10,
-          background: "color-mix(in oklab, #ef4444 8%, var(--surface))",
-          border: "1px solid color-mix(in oklab, #ef4444 20%, var(--border))",
-        }}>
-          <Icon name="calendar" size={16} style={{ color: "var(--danger)", marginTop: 1, flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: "var(--danger)", lineHeight: 1.4 }}>
-            Bu vaqt bo'sh — diagnostika yoki yangi dars qo'yish mumkin
-          </span>
-        </div>
+        {form.isOnline && (
+          <div>
+            <label style={labelStyle}>ZOOM HAVOLA (ixtiyoriy)</label>
+            <input className="inp" style={{ width: "100%" }} placeholder="https://zoom.us/j/..."
+              value={form.meetingUrl} onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
+          </div>
+        )}
       </div>
 
-      {/* Actions */}
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
         <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
-        <button
-          className="btn primary"
-          style={{ flex: 2 }}
-          disabled={!form.name || isPending}
-          onClick={() => onCreate({ groupId: form.teacher, dayOfWeek: Number(form.day), startTime: form.time, isOnline: false })}
-        >
-          <Icon name="check" size={14} /> Qo'shish
+        <button className="btn primary" style={{ flex: 2 }}
+          disabled={!form.groupId || isPending}
+          onClick={() => onCreate({
+            groupId: form.groupId, dayOfWeek: Number(form.day), startTime: form.time,
+            isOnline: form.isOnline, meetingUrl: form.meetingUrl || undefined,
+          })}>
+          <Icon name="check" size={14} /> {isPending ? "Saqlanmoqda..." : "Qo'shish"}
         </button>
       </div>
     </ModalBox>
@@ -424,18 +406,16 @@ function AddModal({ day, hour, groups, teachers, onClose, onCreate, isPending }:
 }
 
 /* ─── Edit modal ─── */
-function EditModal({ slot, allSlots, onClose }: {
-  slot: Slot; allSlots: Slot[]; onClose: () => void;
+function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
+  slot: ScheduleSlot; allSlots: ScheduleSlot[]; onClose: () => void;
+  onSave: (id: string, patch: { dayOfWeek?: number; startTime?: string; isOnline?: boolean; meetingUrl?: string }) => void;
+  isPending: boolean;
 }) {
-  const kunlar = getGroupDays(allSlots, slot.groupName);
   const [form, setForm] = useState({
-    name: slot.groupName,
-    teacher: slot.teacherName ?? "",
-    kunlar,
-    time: slot.startTime.slice(0, 5),
-    room: slot.room ?? "",
-    type: slot.slotType ?? "guruh",
-    capacity: String(slot.capacity ?? ""),
+    day: String(slot.dayOfWeek),
+    time: String(slot.startTime).slice(0, 5),
+    isOnline: slot.isOnline ?? false,
+    meetingUrl: slot.meetingUrl ?? "",
   });
 
   const color = slot.color ?? "#3F8CFF";
@@ -444,70 +424,70 @@ function EditModal({ slot, allSlots, onClose }: {
     <ModalBox>
       <ModalHeader title="Darsni tahrirlash" onClose={onClose} />
 
-      {/* Group header */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
         <div style={{
           width: 52, height: 52, borderRadius: 14, flexShrink: 0,
           background: `${color}22`, display: "grid", placeItems: "center", fontSize: 22,
-        }}>
-          ♟
-        </div>
+        }}>♟</div>
         <div>
           <div style={{ fontWeight: 800, fontSize: 17 }}>{slot.groupName}</div>
-          {slot.level && <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 2 }}>{slot.level}</div>}
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
+            {getGroupDays(allSlots, slot.groupId) || DAY_SHORT[slot.dayOfWeek]}
+          </div>
         </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {/* Name */}
-        <div>
-          <label style={labelStyle}>GURUH / DARS NOMI</label>
-          <input className="inp" style={{ width: "100%" }} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        </div>
-
-        {/* Teacher */}
-        <div>
-          <label style={labelStyle}>O'QITUVCHI</label>
-          <input className="inp" style={{ width: "100%" }} value={form.teacher} onChange={(e) => setForm({ ...form, teacher: e.target.value })} />
-        </div>
-
-        {/* Days + Time */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
-            <label style={labelStyle}>KUNLAR</label>
-            <input className="inp" style={{ width: "100%" }} value={form.kunlar} onChange={(e) => setForm({ ...form, kunlar: e.target.value })} />
-          </div>
-          <div>
-            <label style={labelStyle}>VAQT</label>
-            <input className="inp" type="time" style={{ width: "100%" }} value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
-          </div>
-        </div>
-
-        {/* Room + Type + Capacity */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-          <div>
-            <label style={labelStyle}>XONA</label>
-            <input className="inp" style={{ width: "100%" }} value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} />
-          </div>
-          <div>
-            <label style={labelStyle}>TURI</label>
-            <select className="inp" style={{ width: "100%" }} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              <option value="guruh">guruh</option>
-              <option value="individual">individual</option>
+            <label style={labelStyle}>KUN</label>
+            <select className="inp" style={{ width: "100%" }} value={form.day}
+              onChange={(e) => setForm({ ...form, day: e.target.value })}>
+              {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
             </select>
           </div>
           <div>
-            <label style={labelStyle}>SIG'IM</label>
-            <input className="inp" type="number" style={{ width: "100%" }} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} />
+            <label style={labelStyle}>VAQT</label>
+            <input className="inp" type="time" style={{ width: "100%" }} value={form.time}
+              onChange={(e) => setForm({ ...form, time: e.target.value })} />
           </div>
         </div>
+
+        <div>
+          <label style={labelStyle}>TURI</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[{ v: false, label: "Offline" }, { v: true, label: "Online (Zoom)" }].map(({ v, label }) => (
+              <button key={String(v)} onClick={() => setForm({ ...form, isOnline: v })}
+                style={{
+                  flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
+                  border: form.isOnline === v ? "none" : "1px solid var(--border)",
+                  background: form.isOnline === v ? "var(--accent)" : "var(--surface-2)",
+                  color: form.isOnline === v ? "#fff" : "var(--text-dim)",
+                  fontWeight: 600, fontSize: 13,
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {form.isOnline && (
+          <div>
+            <label style={labelStyle}>ZOOM HAVOLA</label>
+            <input className="inp" style={{ width: "100%" }} placeholder="https://zoom.us/j/..."
+              value={form.meetingUrl} onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
+          </div>
+        )}
       </div>
 
-      {/* Actions */}
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
         <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
-        <button className="btn primary" style={{ flex: 2 }} onClick={onClose}>
-          <Icon name="check" size={14} /> Saqlash
+        <button className="btn primary" style={{ flex: 2 }} disabled={isPending}
+          onClick={() => onSave(slot.id, {
+            dayOfWeek: Number(form.day), startTime: form.time,
+            isOnline: form.isOnline, meetingUrl: form.meetingUrl || undefined,
+          })}>
+          <Icon name="check" size={14} /> {isPending ? "Saqlanmoqda..." : "Saqlash"}
         </button>
       </div>
     </ModalBox>
@@ -515,9 +495,8 @@ function EditModal({ slot, allSlots, onClose }: {
 }
 
 /* ─── Lesson card cell ─── */
-function LessonCard({ slot, onClick }: { slot: Slot; onClick: () => void }) {
+function LessonCard({ slot, onClick }: { slot: ScheduleSlot; onClick: () => void }) {
   const color = slot.color ?? "#3F8CFF";
-  const type = slot.slotType ?? "guruh";
   return (
     <div
       onClick={onClick}
@@ -535,7 +514,7 @@ function LessonCard({ slot, onClick }: { slot: Slot; onClick: () => void }) {
         {slot.groupName}
       </div>
       <div style={{ fontSize: 11, marginTop: 3 }}>
-        <span style={{ color, fontWeight: 700 }}>{type}</span>
+        <span style={{ color, fontWeight: 700 }}>{slot.isOnline ? "online" : "offline"}</span>
         {slot.teacherName && (
           <span style={{ color: "var(--text-faint)" }}>
             {" "}{slot.teacherName.split(" ").slice(0, 2).map((w, i) => i === 0 ? w : w[0] + ".").join(" ")}

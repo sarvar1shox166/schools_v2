@@ -1,267 +1,301 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRef, useState } from "react";
 import { Card, Icon, StatCard } from "@chess-school/ui";
+import {
+  useVideos, useCreateVideo, useDeleteVideo,
+  useUploadVideo, useUploadImage,
+  type VideoLesson,
+} from "../../lib/queries.js";
 
-/* ─── Types ─── */
-export type VideoCourse = {
-  id: string; title: string; teacher: string;
-  color: string; videoCount: number; views: number; likes: number;
+const CATEGORIES = [
+  { key: "zoom",       label: "Zoom yozuvlari" },
+  { key: "debyut",     label: "Debyutlar"      },
+  { key: "taktika",    label: "Taktika"        },
+  { key: "endshpil",   label: "Endshpil"       },
+  { key: "strategiya", label: "Strategiya"     },
+] as const;
+type Category = typeof CATEGORIES[number]["key"];
+
+const CAT_COLORS: Record<string, string> = {
+  zoom: "#3b82f6", debyut: "#10b981", taktika: "#f59e0b",
+  endshpil: "#8b5cf6", strategiya: "#ec4899",
 };
 
-/* ─── Shared mock data (used by detail page too) ─── */
-export const COURSES_STORE: VideoCourse[] = [
-  { id:"1", title:"Shaxmatni 0 dan boshlash", teacher:"A.Karimov",             color:"#3b82f6", videoCount:12, views:1240, likes:318 },
-  { id:"2", title:"Debyutlar",                teacher:"Abduxaliqova Gulchehra", color:"#ec4899", videoCount:12, views:892,  likes:241 },
-];
+function formatDuration(s: number | null) {
+  if (!s) return "";
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
 
-const COURSE_COLORS = ["#3b82f6","#10b981","#f59e0b","#ec4899","#8b5cf6","#06b6d4"];
+// ---- Upload component ----
+function FileUploadZone({ accept, label, value, onChange, uploading }: {
+  accept: string; label: string;
+  value: string; onChange: (url: string) => void;
+  uploading: boolean;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div
+      onClick={() => !uploading && ref.current?.click()}
+      style={{
+        border: "2px dashed var(--border)", borderRadius: 10,
+        padding: "18px 12px", textAlign: "center", cursor: uploading ? "default" : "pointer",
+        background: "var(--surface-2)", transition: "border-color 0.2s",
+      }}>
+      {value ? (
+        accept.startsWith("image") ? (
+          <img src={value} alt="" style={{ maxHeight: 90, borderRadius: 8, objectFit: "cover" }} />
+        ) : (
+          <div style={{ color: "var(--text)", fontWeight: 600, fontSize: 13 }}>
+            <Icon name="check" size={14} style={{ color: "#059669", marginRight: 6 }} />
+            Video yuklandi
+          </div>
+        )
+      ) : uploading ? (
+        <div style={{ color: "var(--text-faint)", fontSize: 13 }}>Yuklanmoqda...</div>
+      ) : (
+        <div style={{ color: "var(--text-faint)" }}>
+          <div style={{ fontSize: 28, marginBottom: 6 }}>📁</div>
+          <div style={{ fontSize: 13 }}>{label}</div>
+        </div>
+      )}
+      <input ref={ref} type="file" accept={accept} style={{ display: "none" }} onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (f) onChange(URL.createObjectURL(f));
+        e.target.value = "";
+      }} />
+    </div>
+  );
+}
 
-/* ─── Page ─── */
-export default function VideoCoursesPage() {
-  const [courses, setCourses] = useState<VideoCourse[]>(COURSES_STORE);
-  const [showModal, setShowModal] = useState(false);
-  const navigate = useNavigate();
+// ---- Add Video Modal ----
+function AddVideoModal({ onClose }: { onClose: () => void }) {
+  const createVideo = useCreateVideo();
+  const uploadVideo = useUploadVideo();
+  const uploadImage = useUploadImage();
+  const videoRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLInputElement>(null);
 
-  const totalVideos = courses.reduce((s, c) => s + c.videoCount, 0);
-  const totalViews  = courses.reduce((s, c) => s + c.views, 0);
+  const [form, setForm] = useState({
+    title: "",
+    category: "debyut" as Category,
+    thumbnailColor: CAT_COLORS.debyut,
+  });
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [imgFile, setImgFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState("");
+  const [imgPreview, setImgPreview] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  function handleSave(data: { title: string; teacher: string }) {
-    const id = String(Date.now());
-    const color = COURSE_COLORS[courses.length % COURSE_COLORS.length];
-    const newCourse: VideoCourse = { id, title:data.title, teacher:data.teacher, color, videoCount:0, views:0, likes:0 };
-    setCourses(prev => [...prev, newCourse]);
-    COURSES_STORE.push(newCourse);
-    setShowModal(false);
+  async function handleSave() {
+    if (!form.title.trim() || !videoFile) return;
+    setSaving(true);
+    try {
+      const { url: videoUrl } = await uploadVideo.mutateAsync(videoFile);
+      let thumbnailUrl: string | undefined;
+      if (imgFile) {
+        const res = await uploadImage.mutateAsync(imgFile);
+        thumbnailUrl = res.url;
+      }
+      await createVideo.mutateAsync({
+        title: form.title.trim(),
+        category: form.category,
+        videoUrl,
+        thumbnailUrl,
+        thumbnailColor: form.thumbnailColor,
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:"var(--gap)" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: "var(--surface)", borderRadius: 20, padding: "28px 32px", width: 520, maxWidth: "calc(100vw - 32px)", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>Video qo'shish</div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center" }}>
+            <Icon name="x" size={13} />
+          </button>
+        </div>
 
-      {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <h2 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.02em", margin:0 }}>Video darsliklar</h2>
-        <button className="btn primary" onClick={() => setShowModal(true)}>
-          <Icon name="plus" size={15}/> Yangi kurs
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={labelSt}>VIDEO FAYL</label>
+            <div onClick={() => videoRef.current?.click()} style={{
+              border: "2px dashed var(--border)", borderRadius: 10, padding: "20px 12px",
+              textAlign: "center", cursor: "pointer", background: "var(--surface-2)",
+            }}>
+              {videoFile ? (
+                <div style={{ fontWeight: 600, fontSize: 13 }}>
+                  <Icon name="check" size={14} style={{ color: "#059669", marginRight: 6 }} />
+                  {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(1)} MB)
+                </div>
+              ) : (
+                <div style={{ color: "var(--text-faint)" }}>
+                  <div style={{ fontSize: 30, marginBottom: 6 }}>🎬</div>
+                  <div style={{ fontSize: 13 }}>MP4, WebM yoki MOV yuklang</div>
+                </div>
+              )}
+            </div>
+            <input ref={videoRef} type="file" accept="video/*" style={{ display: "none" }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) setVideoFile(f); }} />
+          </div>
+
+          <div>
+            <label style={labelSt}>MUQOVA RASMI (IXTIYORIY)</label>
+            <div onClick={() => imgRef.current?.click()} style={{
+              border: "2px dashed var(--border)", borderRadius: 10, padding: imgPreview ? "8px" : "16px 12px",
+              textAlign: "center", cursor: "pointer", background: "var(--surface-2)",
+            }}>
+              {imgPreview ? (
+                <img src={imgPreview} alt="" style={{ maxHeight: 80, borderRadius: 6, objectFit: "cover" }} />
+              ) : (
+                <div style={{ color: "var(--text-faint)" }}>
+                  <div style={{ fontSize: 24, marginBottom: 4 }}>🖼</div>
+                  <div style={{ fontSize: 12 }}>Muqova rasm (JPG/PNG)</div>
+                </div>
+              )}
+            </div>
+            <input ref={imgRef} type="file" accept="image/*" style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { setImgFile(f); setImgPreview(URL.createObjectURL(f)); }
+              }} />
+          </div>
+
+          <div>
+            <label style={labelSt}>VIDEO NOMI</label>
+            <input className="inp" style={{ width: "100%" }} placeholder="Masalan: Siciliya mudofaasi" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          </div>
+
+          <div>
+            <label style={labelSt}>KATEGORIYA</label>
+            <select className="inp" style={{ width: "100%" }} value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value as Category, thumbnailColor: CAT_COLORS[e.target.value] ?? "#3b82f6" })}>
+              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+          <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
+          <button className="btn primary" style={{ flex: 2 }} disabled={!form.title.trim() || !videoFile || saving} onClick={handleSave}>
+            <Icon name="upload" size={14} /> {saving ? "Yuklanmoqda..." : "Saqlash"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Video Card ----
+function VideoCard({ v, onDelete }: { v: VideoLesson; onDelete: () => void }) {
+  const color = CAT_COLORS[v.category] ?? "#3b82f6";
+  const catLabel = CATEGORIES.find((c) => c.key === v.category)?.label ?? v.category;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
+      <div style={{
+        width: 80, height: 52, borderRadius: 8, flexShrink: 0, overflow: "hidden",
+        background: color + "22", border: "1.5px solid " + color + "44",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        {v.thumbnailUrl ? (
+          <img src={v.thumbnailUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span style={{ fontSize: 24 }}>♟</span>
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{v.title}</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, color: "var(--text-faint)" }}>
+          <span style={{ padding: "1px 8px", borderRadius: 99, background: color + "22", color, fontSize: 11, fontWeight: 700 }}>{catLabel}</span>
+          {v.durationSeconds && <span>⏱ {formatDuration(v.durationSeconds)}</span>}
+        </div>
+      </div>
+      <button onClick={onDelete} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <Icon name="trash" size={13} style={{ color: "#ef4444" }} />
+      </button>
+    </div>
+  );
+}
+
+// ---- Page ----
+export default function VideoCoursesPage() {
+  const { data: videos = [], isLoading } = useVideos();
+  const deleteVideo = useDeleteVideo();
+  const [showModal, setShowModal] = useState(false);
+  const [filterCat, setFilterCat] = useState<string>("hammasi");
+
+  const filtered = filterCat === "hammasi" ? videos : videos.filter((v) => v.category === filterCat);
+
+  const totalViews = 0; // video_progress ko'rish soni backenddan keyinroq
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Video darsliklar</h2>
+        <button className="btn primary" onClick={() => setShowModal(true)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon name="plus" size={13} /> Video qo'shish
         </button>
       </div>
 
-      {/* KPI */}
       <div className="grid cols-3">
-        <StatCard icon="video" tone="i"
-          value={String(courses.length)} label="Jami kurslar"
-          delta={<span style={{fontSize:12,fontWeight:700,color:"var(--success)"}}>↗ +1 bu oy</span>}
-        />
+        <StatCard icon="video" tone="i" value={String(videos.length)} label="Jami videolar" />
         <StatCard icon="students" tone="s"
-          value={String(totalVideos)} label="Jami videolar"
-          delta={<span style={{fontSize:12,fontWeight:700,color:"var(--success)"}}>↗ +12</span>}
-        />
-        <StatCard icon="barChart" tone="w"
-          value={totalViews.toLocaleString("ru-RU")} label="Ko'rishlar"
-          delta={<span style={{fontSize:12,fontWeight:700,color:"var(--success)"}}>↗ +8%</span>}
-        />
+          value={String(CATEGORIES.filter((c) => videos.some((v) => v.category === c.key)).length)}
+          label="Kategoriyalar" />
+        <StatCard icon="barChart" tone="w" value={String(totalViews)} label="Ko'rishlar" />
       </div>
 
-      {/* Course list */}
-      <Card style={{ padding:0 }}>
-        <div style={{
-          padding:"18px 22px 14px", fontWeight:800, fontSize:15.5,
-          borderBottom:"1px solid var(--border)",
-        }}>
-          Kurslar ro'yxati
-        </div>
+      {/* Category filter */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {[{ key: "hammasi", label: "Barchasi" }, ...CATEGORIES].map((c) => (
+          <button key={c.key} onClick={() => setFilterCat(c.key)}
+            style={{
+              padding: "6px 14px", borderRadius: 99, border: "none", cursor: "pointer",
+              fontWeight: filterCat === c.key ? 700 : 500, fontSize: 13,
+              background: filterCat === c.key ? "var(--accent)" : "var(--surface-2)",
+              color: filterCat === c.key ? "#fff" : "var(--text-faint)",
+            }}>
+            {c.label}
+            {c.key !== "hammasi" && (
+              <span style={{ marginLeft: 5, opacity: 0.7 }}>({videos.filter((v) => v.category === c.key).length})</span>
+            )}
+          </button>
+        ))}
+      </div>
 
-        {courses.length === 0 ? (
-          <div style={{ padding:"48px 22px", textAlign:"center", color:"var(--text-faint)" }}>
-            <div style={{ fontSize:40, marginBottom:10 }}>🎬</div>
-            <div style={{ fontWeight:700, fontSize:15 }}>Kurslar yo'q</div>
+      <Card style={{ padding: 0 }}>
+        {isLoading ? (
+          <div style={{ padding: "48px 0", textAlign: "center", color: "var(--text-faint)" }}>Yuklanmoqda...</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: "56px 0", textAlign: "center", color: "var(--text-faint)" }}>
+            <div style={{ fontSize: 42, marginBottom: 10 }}>🎬</div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Video yo'q</div>
+            <div style={{ fontSize: 13, marginBottom: 20 }}>Yuqoridagi "Video qo'shish" tugmasini bosing</div>
+            <button className="btn primary" onClick={() => setShowModal(true)}>+ Video qo'shish</button>
           </div>
         ) : (
-          <div style={{ display:"flex", flexDirection:"column" }}>
-            {courses.map((c, i) => (
-              <div key={c.id} style={{
-                display:"flex", alignItems:"center", gap:16, padding:"16px 22px",
-                borderBottom: i < courses.length-1 ? "1px solid var(--border)" : "none",
-              }}>
-                {/* Thumbnail */}
-                <div style={{
-                  width:76, height:54, borderRadius:10, flexShrink:0,
-                  background: c.color + "22",
-                  border: "1.5px solid " + c.color + "44",
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  fontSize:26,
-                }}>♟</div>
-
-                {/* Info */}
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:750, fontSize:15, marginBottom:5 }}>{c.title}</div>
-                  <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:14, fontSize:12.5, color:"var(--text-faint)" }}>
-                    <span style={{ display:"flex", alignItems:"center", gap:4 }}>
-                      <Icon name="user" size={12}/> {c.teacher}
-                    </span>
-                    <span style={{ display:"flex", alignItems:"center", gap:4 }}>
-                      <Icon name="video" size={12}/> {c.videoCount} ta video
-                    </span>
-                    <span>👁 {c.views.toLocaleString("ru-RU")} ko'rildi</span>
-                    <span>♥ {c.likes} like</span>
-                  </div>
-                </div>
-
-                {/* Ko'rish */}
-                <button
-                  className="btn"
-                  onClick={() => navigate(`/admin/video-courses/${c.id}`)}
-                  style={{ display:"flex", alignItems:"center", gap:6 }}
-                >
-                  <Icon name="eye" size={14}/> Ko'rish
-                </button>
-              </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {filtered.map((v) => (
+              <VideoCard key={v.id} v={v}
+                onDelete={() => { if (confirm(`"${v.title}" o'chirilsinmi?`)) deleteVideo.mutate(v.id); }} />
             ))}
           </div>
         )}
       </Card>
 
-      {showModal && <NewCourseModal onClose={() => setShowModal(false)} onSave={handleSave} />}
+      {showModal && <AddVideoModal onClose={() => setShowModal(false)} />}
     </div>
   );
 }
 
-/* ─── 2-step New Course Modal ─── */
-function NewCourseModal({
-  onClose, onSave,
-}: {
-  onClose: () => void;
-  onSave: (data: { title: string; teacher: string }) => void;
-}) {
-  const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ title:"", teacher:"" });
-
-  const STEPS = [
-    { n:1, label:"Kurs ma'lumotlari" },
-    { n:2, label:"Kurs banneri"      },
-  ];
-
-  return (
-    <div
-      style={{
-        position:"fixed", inset:0, zIndex:200,
-        background:"rgba(0,0,0,.45)", backdropFilter:"blur(3px)",
-        display:"flex", alignItems:"center", justifyContent:"center", padding:16,
-      }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{
-        background:"var(--surface)", borderRadius:18,
-        width:500, maxWidth:"100%",
-        boxShadow:"0 24px 64px rgba(0,0,0,.22)",
-        padding:"30px 32px",
-      }}>
-
-        {/* Stepper */}
-        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"center", gap:0, marginBottom:30 }}>
-          {STEPS.map((s, i) => (
-            <div key={s.n} style={{ display:"flex", alignItems:"flex-start" }}>
-              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:7 }}>
-                <div style={{
-                  width:36, height:36, borderRadius:"50%",
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  fontWeight:800, fontSize:15,
-                  background: step >= s.n ? "var(--accent)" : "var(--surface-3)",
-                  color: step >= s.n ? "#fff" : "var(--text-faint)",
-                  flexShrink:0,
-                }}>{s.n}</div>
-                <div style={{
-                  fontSize:11.5, fontWeight:700, whiteSpace:"nowrap",
-                  color: step === s.n ? "var(--accent)" : "var(--text-faint)",
-                }}>{s.label}</div>
-              </div>
-              {i < STEPS.length - 1 && (
-                <div style={{
-                  width:80, height:2, margin:"17px 0 0",
-                  background: step > s.n ? "var(--accent)" : "var(--border)",
-                }} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Step 1 */}
-        {step === 1 && (
-          <div>
-            <div style={{ fontSize:20, fontWeight:800, marginBottom:22 }}>Kurs ma'lumotlari</div>
-
-            {/* Image upload */}
-            <div style={{ marginBottom:18 }}>
-              <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>Kurs rasmi</div>
-              <div style={{
-                border:"1.5px dashed var(--border-strong)", borderRadius:12,
-                height:110, display:"flex", flexDirection:"column",
-                alignItems:"center", justifyContent:"center", gap:8,
-                cursor:"pointer", background:"var(--surface-2)",
-                color:"var(--text-faint)",
-              }}>
-                <div style={{ fontSize:22, fontWeight:300 }}>+</div>
-                <div style={{ fontSize:13 }}>Rasm yuklash uchun bosing</div>
-              </div>
-            </div>
-
-            {/* Course name */}
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>Kurs nomi</div>
-              <input
-                className="inp" placeholder="Masalan: Shaxmat asoslari"
-                value={form.title} onChange={e => setForm(f => ({ ...f, title:e.target.value }))}
-                style={{ width:"100%" }}
-              />
-            </div>
-
-            {/* Teacher */}
-            <div style={{ marginBottom:28 }}>
-              <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>O'qituvchi ismi</div>
-              <input
-                className="inp" placeholder="Masalan: A.Karimov"
-                value={form.teacher} onChange={e => setForm(f => ({ ...f, teacher:e.target.value }))}
-                style={{ width:"100%" }}
-              />
-            </div>
-
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
-              <button className="btn" onClick={onClose}>Bekor qilish</button>
-              <button className="btn primary" onClick={() => setStep(2)} disabled={!form.title.trim()}>
-                Keyingi →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2 */}
-        {step === 2 && (
-          <div>
-            <div style={{ fontSize:20, fontWeight:800, marginBottom:22 }}>Kurs banneri</div>
-
-            <div style={{ marginBottom:28 }}>
-              <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>Banner rasmi</div>
-              <div style={{
-                border:"1.5px dashed var(--border-strong)", borderRadius:12,
-                height:150, display:"flex", flexDirection:"column",
-                alignItems:"center", justifyContent:"center", gap:10,
-                cursor:"pointer", background:"var(--surface-2)",
-                color:"var(--text-faint)",
-              }}>
-                <div style={{ fontSize:32 }}>🖼</div>
-                <div style={{ fontSize:13 }}>Banner rasm yuklash uchun bosing</div>
-                <div style={{ fontSize:11.5, opacity:0.7 }}>1920×400 px tavsiya etiladi</div>
-              </div>
-            </div>
-
-            <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}>
-              <button className="btn" onClick={() => setStep(1)}>← Orqaga</button>
-              <button className="btn primary" onClick={() => onSave({ title:form.title, teacher:form.teacher })}>
-                <Icon name="check" size={14}/> Saqlash
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+const labelSt: React.CSSProperties = {
+  display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
+  color: "var(--text-faint)", marginBottom: 5, textTransform: "uppercase",
+};

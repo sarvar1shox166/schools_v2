@@ -36,12 +36,12 @@ const ASOSLAR: Section[] = [
   {
     title: "ASOSIY PRINSIPLAR",
     lessons: [
-      { id:"urib",     title:"Urib olish",       desc:"Raqib donalarini urib oling",            icon:"⚔️", iconColor:"#e879a0", done:2, total:5, state:"progress" },
-      { id:"himoya",   title:"Himoya",           desc:"Donalaringizni ehtiyot qiling",           icon:"🛡️", iconColor:"#60a5fa", done:2, total:8, state:"progress" },
-      { id:"jang",     title:"Jang",             desc:"Donalarni urib olish va himoya qilish",   icon:"⚡", iconColor:"#fb923c", done:0, total:6, state:"locked"   },
-      { id:"shohber",  title:"Shoh berish",      desc:"Raqib shohiga hujum qiling",              icon:"👑", iconColor:"#fbbf24", done:0, total:5, state:"locked"   },
-      { id:"qutulish", title:"Shohdan qutulish", desc:"Shohingizni himoya qiling",               icon:"🛡️", iconColor:"#3b82f6", done:6, total:7, state:"active"   },
-      { id:"mot",      title:"Mot berish",       desc:"Raqib shohini taslim qiling",             icon:"♟", iconColor:"rgba(255,255,255,.55)", done:6, total:7, state:"progress" },
+      { id:"urib_olish",       title:"Urib olish",       desc:"Raqib donalarini urib oling",      icon:"⚔️", iconColor:"#e879a0", done:0, total:5, state:"locked" },
+      { id:"himoya",           title:"Himoya",           desc:"Muhim katakchalarni himoya qiling", icon:"🛡️", iconColor:"#60a5fa", done:0, total:4, state:"locked" },
+      { id:"jang",             title:"Jang",             desc:"Donalarni bir-bir urib oling",      icon:"⚡", iconColor:"#fb923c", done:0, total:4, state:"locked" },
+      { id:"shoh_berish",      title:"Shoh berish",      desc:"Dushman shohiga shoh bering",       icon:"👑", iconColor:"#fbbf24", done:0, total:4, state:"locked" },
+      { id:"shohdan_qutulish", title:"Shohdan qutulish", desc:"Shohingizni xavfdan oling",         icon:"🛡️", iconColor:"#3b82f6", done:0, total:4, state:"locked" },
+      { id:"mot_berish",       title:"Mot berish",       desc:"Dushmanga mat bering",              icon:"👑", iconColor:"#a78bfa", done:0, total:4, state:"locked" },
     ],
   },
   {

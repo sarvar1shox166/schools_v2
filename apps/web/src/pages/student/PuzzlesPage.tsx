@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Chess } from "chess.js";
 import { useAttemptPuzzle, usePuzzleHint, usePuzzleStats, usePuzzles } from "../../lib/queries.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
 
@@ -204,7 +205,16 @@ function PuzzleCenter({ puzzles }: { puzzles: ReturnType<typeof usePuzzles>["dat
       {/* Board */}
       <div style={{ background:"rgba(255,255,255,.03)", borderRadius:16, overflow:"hidden", border:"1.5px solid rgba(255,255,255,.08)", padding:"16px 16px 28px" }}>
         {puzzle ? (
-          <ChessBoard fen={activeFen} onMove={handleMove} disabled={solved} hintSquare={hintSquare} />
+          <ChessBoard
+            fen={activeFen}
+            onMove={handleMove}
+            disabled={solved}
+            hintSquare={hintSquare}
+            getMoves={(sq) => {
+              try { return new Chess(activeFen).moves({ square: sq as import("chess.js").Square, verbose: true }).map((m: {to: string}) => m.to); }
+              catch { return []; }
+            }}
+          />
         ) : (
           <div style={{ aspectRatio:"1", background:"rgba(255,255,255,.05)", borderRadius:12, display:"grid", placeItems:"center", color:"rgba(255,255,255,.3)", fontSize:14 }}>
             Masalalar yuklanmoqda...
@@ -253,12 +263,6 @@ export default function PuzzlesPage() {
 
   return (
     <div>
-      {/* Header banner */}
-      <div className="kid-banner kb-puzzle" style={{ marginBottom:20 }}>
-        <div className="kb-ico">🧩</div>
-        <div><h2>Boshqotirmalar</h2><p>Masala yeching, XP yig'ing</p></div>
-      </div>
-
       {/* 3-column layout */}
       <div style={{ display:"grid", gridTemplateColumns:"240px 1fr 270px", gap:16, alignItems:"start" }}>
         {/* Left */}

@@ -4,6 +4,7 @@ import {
   useAttendanceHistory,
   useCompleteHomework,
   useHomework,
+  useMyPackages,
   useNextLesson,
   useSchedule,
   type Homework,
@@ -139,7 +140,12 @@ export default function LessonsPage() {
   const { data: scheduleRaw }   = useSchedule();
   const { data: attendanceRaw } = useAttendanceHistory();
   const { data: homeworkRaw }   = useHomework();
+  const { data: packages = [] } = useMyPackages();
   const completeHW              = useCompleteHomework();
+
+  const activePkg = packages.find((p) => p.status === "active");
+  const remainingLessons = activePkg ? activePkg.totalLessons - activePkg.usedLessons : null;
+  const creditPct = activePkg ? Math.round(((activePkg.totalLessons - activePkg.usedLessons) / activePkg.totalLessons) * 100) : 0;
   const [tick, setTick]         = useState(0);
 
   useEffect(() => { const t=setInterval(()=>setTick(v=>v+1),1000); return ()=>clearInterval(t); }, []);
@@ -327,8 +333,53 @@ export default function LessonsPage() {
           </Card>
         </div>
 
-        {/* RIGHT: davomat + yozuvlar + materiallar */}
+        {/* RIGHT: dars krediti + davomat */}
         <div style={{ display:"flex",flexDirection:"column",gap:"var(--gap)" }}>
+
+          {/* Dars krediti */}
+          <Card>
+            <SHead icon="🎫" title="Dars krediti" sub={activePkg ? activePkg.packageName : "Aktiv paket yo'q"} />
+            <div style={{ padding:"14px 16px 18px" }}>
+              {activePkg ? (
+                <>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12 }}>
+                    <div>
+                      <span style={{ fontSize:42,fontWeight:900,lineHeight:1,color:creditPct>30?"var(--kacc,#3F8CFF)":"#ef4444" }}>
+                        {remainingLessons}
+                      </span>
+                      <span style={{ fontSize:14,color:"var(--text-faint)",marginLeft:7 }}>dars qoldi</span>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:12,color:"var(--text-faint)" }}>Jami</div>
+                      <div style={{ fontSize:18,fontWeight:800 }}>{activePkg.totalLessons}</div>
+                    </div>
+                  </div>
+                  <div style={{ height:12,borderRadius:99,background:"rgba(255,255,255,.08)",overflow:"hidden",marginBottom:10 }}>
+                    <div style={{
+                      height:"100%",borderRadius:99,transition:"width 0.7s ease",
+                      width:`${creditPct}%`,
+                      background:creditPct>30?"linear-gradient(90deg,var(--kacc,#3F8CFF),#60a5fa)":"linear-gradient(90deg,#ef4444,#f87171)",
+                    }}/>
+                  </div>
+                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--text-faint)" }}>
+                    <span>{activePkg.usedLessons} dars ishlatildi</span>
+                    <span style={{ color:creditPct>30?"var(--kacc,#3F8CFF)":"#ef4444",fontWeight:700 }}>{creditPct}%</span>
+                  </div>
+                  {creditPct<=30 && (
+                    <div style={{ marginTop:12,padding:"10px 13px",borderRadius:10,background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.25)",fontSize:12,color:"#f87171" }}>
+                      ⚠ Dars krediti tugayapti. Admin bilan bog'laning.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ textAlign:"center",padding:"18px 0",color:"var(--text-faint)" }}>
+                  <div style={{ fontSize:32,marginBottom:8 }}>🎫</div>
+                  <div style={{ fontSize:13,fontWeight:600 }}>Aktiv paket topilmadi</div>
+                  <div style={{ fontSize:12,marginTop:4 }}>Admin orqali paket sotib oling</div>
+                </div>
+              )}
+            </div>
+          </Card>
 
           {/* Davomat tarixi */}
           <Card>

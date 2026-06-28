@@ -16,6 +16,8 @@ import TeacherRatingPage from "./pages/admin/TeacherRatingPage.js";
 import VideoCoursesPage from "./pages/admin/VideoCoursesPage.js";
 import VideoCourseDetailPage from "./pages/admin/VideoCourseDetailPage.js";
 import SettingsPage from "./pages/admin/SettingsPage.js";
+import XodimlarPage from "./pages/admin/XodimlarPage.js";
+import PackagesPage from "./pages/admin/PackagesPage.js";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard.js";
 import TeacherIncomePage from "./pages/teacher/TeacherIncomePage.js";
 import TStudentsPage from "./pages/teacher/TStudentsPage.js";
@@ -66,6 +68,7 @@ const ADMIN_NAV: NavSection[] = [
   {
     group: "Moliya",
     items: [
+      { to: "/admin/packages", label: "Paketlar",   icon: "wallet" },
       { to: "/admin/payments", label: "To'lovlar",  icon: "payments", badge: 3 },
       { to: "/admin/income",   label: "Daromadlar", icon: "income" },
     ],
@@ -73,6 +76,7 @@ const ADMIN_NAV: NavSection[] = [
   {
     group: "Tizim",
     items: [
+      { to: "/admin/staff",          label: "Xodimlar",         icon: "users" },
       { to: "/admin/broadcast",     label: "Ommaviy xabar",    icon: "message" },
       { to: "/admin/notifications", label: "Bildirishnomalar", icon: "bell",    badge: 3 },
       { to: "/admin/reports",       label: "Hisobotlar",       icon: "reports" },
@@ -142,12 +146,14 @@ export default function App() {
           <Route path="/admin/groups"         element={<GroupsPage />} />
           <Route path="/admin/schedule"       element={<SchedulePage />} />
           <Route path="/admin/attendance"     element={<AttendancePage />} />
+          <Route path="/admin/packages"       element={<PackagesPage />} />
           <Route path="/admin/payments"       element={<PaymentsPage />} />
           <Route path="/admin/income"         element={<IncomeReportPage />} />
           <Route path="/admin/applications"   element={<ApplicationsPage />} />
           <Route path="/admin/teacher-rating"           element={<TeacherRatingPage />} />
           <Route path="/admin/video-courses"           element={<VideoCoursesPage />} />
           <Route path="/admin/video-courses/:courseId" element={<VideoCourseDetailPage />} />
+          <Route path="/admin/staff"                   element={<XodimlarPage />} />
           <Route path="/admin/broadcast"               element={<BroadcastPage />} />
           <Route path="/admin/notifications"  element={<NotificationsPage />} />
           <Route path="/admin/reports"        element={<ReportsPage />} />
