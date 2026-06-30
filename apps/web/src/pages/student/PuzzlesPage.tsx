@@ -3,17 +3,6 @@ import { Chess } from "chess.js";
 import { useAttemptPuzzle, usePuzzleHint, usePuzzleStats, usePuzzles } from "../../lib/queries.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
 
-/* ── Demo week data ──────────────────────────────────────────────────────── */
-const WEEK_DAYS = [
-  { day: "Payshanba",           date: "11.06", correct: 5, wrong: 0, total: 5,  today: false },
-  { day: "Juma",                date: "12.06", correct: 2, wrong: 0, total: 2,  today: false },
-  { day: "Shanba",              date: "13.06", correct: 5, wrong: 1, total: 6,  today: false },
-  { day: "Yakshanba",           date: "14.06", correct: 4, wrong: 0, total: 4,  today: false },
-  { day: "Dushanba",            date: "15.06", correct: 0, wrong: 0, total: 0,  today: false },
-  { day: "Seshanba",            date: "16.06", correct: 2, wrong: 2, total: 4,  today: false },
-  { day: "Chorshanba · Bugun",  date: "17.06", correct: 0, wrong: 0, total: 0,  today: true  },
-];
-
 /* ── Sections ────────────────────────────────────────────────────────────── */
 interface Section { id: string; title: string; sub: string; icon: string; color: string; locked?: boolean; }
 const SECTIONS: Section[] = [
@@ -25,9 +14,7 @@ const SECTIONS: Section[] = [
 ];
 
 /* ── Left panel ──────────────────────────────────────────────────────────── */
-function StatsPanel({ correct, wrong, accuracy, xp }: { correct:number; wrong:number; accuracy:number; xp:number }) {
-  const weekTotal = WEEK_DAYS.reduce((s,d)=>s+d.total, 0);
-
+function StatsPanel({ correct, wrong, accuracy }: { correct:number; wrong:number; accuracy:number }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       {/* Umumiy statistika */}
@@ -36,67 +23,27 @@ function StatsPanel({ correct, wrong, accuracy, xp }: { correct:number; wrong:nu
           📊 Umumiy statistika
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-          {/* To'g'ri */}
           <div style={{ background:"rgba(34,197,94,.1)", border:"1px solid rgba(34,197,94,.2)", borderRadius:12, padding:"10px 12px" }}>
             <div style={{ fontSize:22, fontWeight:900, color:"#22c55e" }}>{correct}</div>
             <div style={{ fontSize:11, color:"rgba(255,255,255,.45)", marginTop:2 }}>✓ To'g'ri</div>
           </div>
-          {/* Noto'g'ri */}
           <div style={{ background:"rgba(239,68,68,.1)", border:"1px solid rgba(239,68,68,.2)", borderRadius:12, padding:"10px 12px" }}>
             <div style={{ fontSize:22, fontWeight:900, color:"#ef4444" }}>{wrong}</div>
             <div style={{ fontSize:11, color:"rgba(255,255,255,.45)", marginTop:2 }}>✗ Noto'g'ri</div>
           </div>
-          {/* To'g'rilik */}
-          <div style={{ background:"rgba(239,68,68,.08)", border:"1px solid rgba(239,68,68,.15)", borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ gridColumn:"1/-1", background:"rgba(239,68,68,.08)", border:"1px solid rgba(239,68,68,.15)", borderRadius:12, padding:"10px 12px" }}>
             <div style={{ fontSize:22, fontWeight:900, color:"#f87171" }}>{accuracy}%</div>
             <div style={{ fontSize:11, color:"rgba(255,255,255,.45)", marginTop:2 }}>🎯 To'g'rilik</div>
           </div>
-          {/* XP */}
-          <div style={{ background:"rgba(245,158,11,.1)", border:"1px solid rgba(245,158,11,.2)", borderRadius:12, padding:"10px 12px" }}>
-            <div style={{ fontSize:22, fontWeight:900, color:"#f59e0b" }}>{xp}</div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,.45)", marginTop:2 }}>⚡ XP olindi</div>
-          </div>
         </div>
       </div>
 
-      {/* Bugun yechilgan */}
+      {/* Jami yechilgan */}
       <div style={{ background:"linear-gradient(135deg,rgba(234,88,12,.25) 0%,rgba(251,146,60,.15) 100%)", border:"1.5px solid rgba(234,88,12,.3)", borderRadius:16, padding:"14px 16px", display:"flex", alignItems:"center", gap:12 }}>
         <div style={{ fontSize:26 }}>🔥</div>
         <div>
-          <div style={{ fontSize:22, fontWeight:900, color:"#fb923c" }}>0</div>
-          <div style={{ fontSize:12, color:"rgba(255,255,255,.5)", marginTop:1 }}>Bugun yechilgan masala</div>
-        </div>
-      </div>
-
-      {/* Bu hafta */}
-      <div style={{ background:"rgba(255,255,255,.04)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:16, padding:16 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-          <div style={{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,.4)", letterSpacing:"0.08em" }}>📅 Bu hafta</div>
-          <div style={{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,.35)" }}>Jami: <span style={{ color:"#fff" }}>{weekTotal}</span></div>
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-          {WEEK_DAYS.map(d => (
-            <div key={d.date} style={{ display:"flex", alignItems:"center", gap:8,
-              background: d.today ? "rgba(99,102,241,.15)" : "transparent",
-              border: d.today ? "1px solid rgba(99,102,241,.3)" : "1px solid transparent",
-              borderRadius:10, padding:"6px 8px" }}>
-              <div style={{ minWidth:0, flex:1 }}>
-                <div style={{ fontSize:12.5, fontWeight:700, color: d.today ? "#a5b4fc" : "rgba(255,255,255,.75)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                  {d.day}
-                </div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,.3)" }}>{d.date}</div>
-              </div>
-              {d.total > 0 && (
-                <div style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
-                  {d.correct > 0 && <span style={{ fontSize:11, fontWeight:700, color:"#4ade80" }}>✓{d.correct}</span>}
-                  {d.wrong > 0 && <span style={{ fontSize:11, fontWeight:700, color:"#f87171" }}>✗{d.wrong}</span>}
-                  <div style={{ minWidth:22, height:22, borderRadius:6, background:"rgba(255,255,255,.12)", display:"grid", placeItems:"center", fontSize:12, fontWeight:800, color:"#fff" }}>
-                    {d.total}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+          <div style={{ fontSize:22, fontWeight:900, color:"#fb923c" }}>{correct + wrong}</div>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,.5)", marginTop:1 }}>Jami urinishlar</div>
         </div>
       </div>
     </div>
@@ -256,17 +203,16 @@ export default function PuzzlesPage() {
   const { data: stats } = usePuzzleStats();
   const [activeSection, setActiveSection] = useState("mot1");
 
-  const correct  = stats?.correct  ?? 21;
-  const wrong    = stats?.incorrect ?? 3;
-  const accuracy = stats?.accuracyPct ?? 88;
-  const xp       = 1080;
+  const correct  = stats?.correct  ?? 0;
+  const wrong    = stats?.incorrect ?? 0;
+  const accuracy = stats?.accuracyPct ?? 0;
 
   return (
     <div>
       {/* 3-column layout */}
       <div style={{ display:"grid", gridTemplateColumns:"240px 1fr 270px", gap:16, alignItems:"start" }}>
         {/* Left */}
-        <StatsPanel correct={correct} wrong={wrong} accuracy={accuracy} xp={xp} />
+        <StatsPanel correct={correct} wrong={wrong} accuracy={accuracy} />
 
         {/* Center */}
         <PuzzleCenter puzzles={puzzles} />

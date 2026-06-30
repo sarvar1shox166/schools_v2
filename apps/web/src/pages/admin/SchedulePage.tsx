@@ -288,7 +288,7 @@ function ViewModal({ slot, allSlots, onClose, onEdit, onDelete, isDeleting }: {
           { label: "Vaqt", value: String(slot.startTime).slice(0, 5) },
           { label: "Kunlar", value: kunlar || DAY_SHORT[slot.dayOfWeek] },
           { label: "Xona", value: slot.roomName ?? "—" },
-          { label: "Format", value: slot.isOnline ? `Online (${slot.meetingPlatform === "meet" ? "Google Meet" : "Zoom"})` : "Offline" },
+          { label: "Platforma", value: slot.meetingPlatform === "meet" ? "Google Meet" : "Zoom" },
           ...(slot.meetingUrl ? [{ label: "Havola", value: slot.meetingUrl }] : []),
         ].map(({ label, value }) => (
           <div key={label} style={{
@@ -332,7 +332,6 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
     customName: "",
     day: String(day),
     time: hour,
-    isOnline: false,
     meetingPlatform: "zoom" as "zoom" | "meet",
     meetingUrl: "",
   });
@@ -403,57 +402,36 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
           </div>
         </div>
 
-        {/* Online toggle */}
+        {/* Platform */}
         <div>
-          <label style={labelStyle}>FORMAT</label>
+          <label style={labelStyle}>PLATFORMA</label>
           <div style={{ display: "flex", gap: 8 }}>
-            {[{ v: false, label: "Offline" }, { v: true, label: "Online" }].map(({ v, label }) => (
-              <button key={String(v)} onClick={() => setForm({ ...form, isOnline: v })}
+            {(["zoom", "meet"] as const).map((p) => (
+              <button key={p} onClick={() => setForm({ ...form, meetingPlatform: p })}
                 style={{
                   flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
-                  border: form.isOnline === v ? "none" : "1px solid var(--border)",
-                  background: form.isOnline === v ? "var(--accent)" : "var(--surface-2)",
-                  color: form.isOnline === v ? "#fff" : "var(--text-dim)",
-                  fontWeight: 600, fontSize: 13,
+                  border: form.meetingPlatform === p ? "none" : "1px solid var(--border)",
+                  background: form.meetingPlatform === p ? (p === "zoom" ? "#2D8CFF" : "#1a73e8") : "var(--surface-2)",
+                  color: form.meetingPlatform === p ? "#fff" : "var(--text-dim)",
+                  fontWeight: 700, fontSize: 13,
                 }}>
-                {label}
+                {p === "zoom" ? "🎥 Zoom" : "🟢 Google Meet"}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Platform + URL when online */}
-        {form.isOnline && (
-          <>
-            <div>
-              <label style={labelStyle}>PLATFORMA</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(["zoom", "meet"] as const).map((p) => (
-                  <button key={p} onClick={() => setForm({ ...form, meetingPlatform: p })}
-                    style={{
-                      flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
-                      border: form.meetingPlatform === p ? "none" : "1px solid var(--border)",
-                      background: form.meetingPlatform === p ? (p === "zoom" ? "#2D8CFF" : "#1a73e8") : "var(--surface-2)",
-                      color: form.meetingPlatform === p ? "#fff" : "var(--text-dim)",
-                      fontWeight: 700, fontSize: 13,
-                    }}>
-                    {p === "zoom" ? "🎥 Zoom" : "🟢 Google Meet"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label style={labelStyle}>HAVOLA (ixtiyoriy)</label>
-              <input className="inp" style={{ width: "100%" }}
-                placeholder={form.meetingPlatform === "zoom" ? "https://zoom.us/j/..." : "https://meet.google.com/..."}
-                value={form.meetingUrl}
-                onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
-                Bo'sh qoldirsangiz avtomatik havola yaratiladi
-              </div>
-            </div>
-          </>
-        )}
+        {/* Meeting URL */}
+        <div>
+          <label style={labelStyle}>HAVOLA (ixtiyoriy)</label>
+          <input className="inp" style={{ width: "100%" }}
+            placeholder={form.meetingPlatform === "zoom" ? "https://zoom.us/j/..." : "https://meet.google.com/..."}
+            value={form.meetingUrl}
+            onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
+          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
+            Bo'sh qoldirsangiz avtomatik havola yaratiladi
+          </div>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
@@ -466,9 +444,9 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
             customName: isGroupMode ? undefined : form.customName.trim(),
             dayOfWeek: Number(form.day),
             startTime: form.time,
-            isOnline: form.isOnline,
-            meetingPlatform: form.isOnline ? form.meetingPlatform : undefined,
-            meetingUrl: form.isOnline && form.meetingUrl ? form.meetingUrl : undefined,
+            isOnline: true,
+            meetingPlatform: form.meetingPlatform,
+            meetingUrl: form.meetingUrl || undefined,
           })}>
           <Icon name="check" size={14} /> {isPending ? "Saqlanmoqda..." : "Qo'shish"}
         </button>
@@ -488,7 +466,6 @@ function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
     customName: slot.customName ?? "",
     day: String(slot.dayOfWeek),
     time: String(slot.startTime).slice(0, 5),
-    isOnline: slot.isOnline ?? false,
     meetingPlatform: (slot.meetingPlatform ?? "zoom") as "zoom" | "meet",
     meetingUrl: slot.meetingUrl ?? "",
   });
@@ -560,51 +537,33 @@ function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
         </div>
 
         <div>
-          <label style={labelStyle}>FORMAT</label>
+          <label style={labelStyle}>PLATFORMA</label>
           <div style={{ display: "flex", gap: 8 }}>
-            {[{ v: false, label: "Offline" }, { v: true, label: "Online" }].map(({ v, label }) => (
-              <button key={String(v)} onClick={() => setForm({ ...form, isOnline: v })}
+            {(["zoom", "meet"] as const).map((p) => (
+              <button key={p} onClick={() => setForm({ ...form, meetingPlatform: p })}
                 style={{
                   flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
-                  border: form.isOnline === v ? "none" : "1px solid var(--border)",
-                  background: form.isOnline === v ? "var(--accent)" : "var(--surface-2)",
-                  color: form.isOnline === v ? "#fff" : "var(--text-dim)",
-                  fontWeight: 600, fontSize: 13,
+                  border: form.meetingPlatform === p ? "none" : "1px solid var(--border)",
+                  background: form.meetingPlatform === p ? (p === "zoom" ? "#2D8CFF" : "#1a73e8") : "var(--surface-2)",
+                  color: form.meetingPlatform === p ? "#fff" : "var(--text-dim)",
+                  fontWeight: 700, fontSize: 13,
                 }}>
-                {label}
+                {p === "zoom" ? "🎥 Zoom" : "🟢 Google Meet"}
               </button>
             ))}
           </div>
         </div>
 
-        {form.isOnline && (
-          <>
-            <div>
-              <label style={labelStyle}>PLATFORMA</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(["zoom", "meet"] as const).map((p) => (
-                  <button key={p} onClick={() => setForm({ ...form, meetingPlatform: p })}
-                    style={{
-                      flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
-                      border: form.meetingPlatform === p ? "none" : "1px solid var(--border)",
-                      background: form.meetingPlatform === p ? (p === "zoom" ? "#2D8CFF" : "#1a73e8") : "var(--surface-2)",
-                      color: form.meetingPlatform === p ? "#fff" : "var(--text-dim)",
-                      fontWeight: 700, fontSize: 13,
-                    }}>
-                    {p === "zoom" ? "🎥 Zoom" : "🟢 Google Meet"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label style={labelStyle}>HAVOLA</label>
-              <input className="inp" style={{ width: "100%" }}
-                placeholder={form.meetingPlatform === "zoom" ? "https://zoom.us/j/..." : "https://meet.google.com/..."}
-                value={form.meetingUrl}
-                onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
-            </div>
-          </>
-        )}
+        <div>
+          <label style={labelStyle}>HAVOLA (ixtiyoriy)</label>
+          <input className="inp" style={{ width: "100%" }}
+            placeholder={form.meetingPlatform === "zoom" ? "https://zoom.us/j/..." : "https://meet.google.com/..."}
+            value={form.meetingUrl}
+            onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
+          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
+            Bo'sh qoldirsangiz avtomatik havola yaratiladi
+          </div>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
@@ -615,9 +574,9 @@ function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
             customName: form.lessonType !== "guruh" ? form.customName.trim() : undefined,
             dayOfWeek: Number(form.day),
             startTime: form.time,
-            isOnline: form.isOnline,
-            meetingPlatform: form.isOnline ? form.meetingPlatform : undefined,
-            meetingUrl: form.isOnline && form.meetingUrl ? form.meetingUrl : undefined,
+            isOnline: true,
+            meetingPlatform: form.meetingPlatform,
+            meetingUrl: form.meetingUrl || undefined,
           })}>
           <Icon name="check" size={14} /> {isPending ? "Saqlanmoqda..." : "Saqlash"}
         </button>
@@ -652,7 +611,7 @@ function LessonCard({ slot, onClick }: { slot: ScheduleSlot; onClick: () => void
           </span>
         )}
         <span style={{ color, fontWeight: 700 }}>
-          {slot.isOnline ? (slot.meetingPlatform === "meet" ? "meet" : "zoom") : "offline"}
+          {slot.meetingPlatform === "meet" ? "meet" : "zoom"}
         </span>
         {slot.teacherName && (
           <span style={{ color: "var(--text-faint)" }}>

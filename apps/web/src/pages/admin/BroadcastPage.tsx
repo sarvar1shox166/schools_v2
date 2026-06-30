@@ -17,25 +17,6 @@ const CHANNELS: { key: Channel; label: string; icon: string }[] = [
   { key: "telegram", label: "Telegram bot",       icon: "send"    },
 ];
 
-type SentMsg = {
-  id: string;
-  title: string;
-  audience: string;
-  channel: string;
-  date: string;
-  reach: number;
-};
-
-const SENT_MSGS: SentMsg[] = [
-  { id:"1", title:"Bayram tabrigi",          audience:"Barcha o'quvchilar", channel:"Telegram", date:"08.06.2026 09:00", reach:248 },
-  { id:"2", title:"To'lov eslatmasi (Iyun)", audience:"Qarzdorlar",          channel:"SMS",      date:"05.06.2026 10:00", reach:14  },
-  { id:"3", title:"Yangi turnir e'loni",     audience:"Ota-onalar",          channel:"Push",     date:"03.06.2026 18:00", reach:201 },
-  { id:"4", title:"Dars jadvali o'zgardi",   audience:"Taktika — B guruh",   channel:"Telegram", date:"01.06.2026 12:00", reach:8   },
-];
-
-const CHANNEL_ICON: Record<string, string> = {
-  Telegram: "send", SMS: "message", Push: "bell",
-};
 
 export default function BroadcastPage() {
   const [targetRole, setTargetRole] = useState<TargetRole>("all");
@@ -228,40 +209,10 @@ export default function BroadcastPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {SENT_MSGS.map((m, i) => (
-              <div key={m.id} style={{
-                padding: "16px 22px",
-                borderBottom: i < SENT_MSGS.length - 1 ? "1px solid var(--border)" : "none",
-                display: "flex", alignItems: "flex-start", gap: 12,
-              }}>
-                <div style={{
-                  width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-                  background: "var(--surface-2)",
-                  color: "var(--text-dim)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <Icon name={CHANNEL_ICON[m.channel] ?? "message"} size={15} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 750, fontSize: 14, marginBottom: 3 }}>{m.title}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--text-faint)" }}>
-                    {m.audience} · {m.channel}
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
-                    {m.date} · {m.reach} kishi
-                  </div>
-                </div>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  padding: "3px 10px", borderRadius: 99, flexShrink: 0,
-                  background: "#dcfce7", color: "#16a34a",
-                  fontSize: 11.5, fontWeight: 700,
-                }}>
-                  <Icon name="check" size={10} /> yuborildi
-                </span>
-              </div>
-            ))}
+          <div style={{ padding: "48px 22px", textAlign: "center", color: "var(--text-faint)" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Hali xabar yuborilmagan</div>
+            <div style={{ fontSize: 12.5 }}>Yuborgan xabarlaringiz bu yerda ko'rinadi</div>
           </div>
         </Card>
       </div>

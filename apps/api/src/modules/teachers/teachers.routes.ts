@@ -14,21 +14,6 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial();
 
-/**
- * Deterministic mock rating in the 4.0-5.0 range, derived from the teacher's
- * id (hashed) and experience years. No real rating data source exists yet
- * (see Phase 17 out-of-scope note).
- */
-function computeMockRating(id: string, expYears: number | null): number {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  }
-  const base = 4.0 + (hash % 81) / 100; // 4.00 - 4.80
-  const expBonus = Math.min(0.2, (expYears ?? 0) * 0.02); // up to +0.20
-  return Math.round((base + expBonus) * 10) / 10;
-}
-
 export async function teachersRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
@@ -37,14 +22,16 @@ export async function teachersRoutes(app: FastifyInstance) {
     const { rows } = await pool.query(
       `SELECT t.id, u.full_name AS "fullName", u.phone, t.spec, t.title,
               t.exp_years AS "expYears", t.joined_at AS "joinedAt",
-              (SELECT count(*) FROM groups g WHERE g.teacher_id = t.id) AS "groupsCount"
+              (SELECT count(*) FROM groups g WHERE g.teacher_id = t.id) AS "groupsCount",
+              (SELECT ROUND(AVG(rating)::numeric, 1)
+               FROM teacher_reviews WHERE teacher_id = t.id) AS "rating"
        FROM teachers t
        JOIN users u ON u.id = t.user_id
        WHERE t.tenant_id = $1
        ORDER BY u.full_name`,
       [tenantId]
     );
-    return rows.map((row) => ({ ...row, rating: computeMockRating(row.id, row.expYears) }));
+    return rows.map((row) => ({ ...row, rating: row.rating ? Number(row.rating) : null }));
   });
 
   app.post("/teachers", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
@@ -135,7 +122,7 @@ export async function teachersRoutes(app: FastifyInstance) {
     );
     return rows.map((r) => ({
       ...r,
-      avgRating: r.avgRating > 0 ? Number(r.avgRating) : computeMockRating(r.id, null),
+      avgRating: r.avgRating > 0 ? Number(r.avgRating) : null,
     }));
   });
 

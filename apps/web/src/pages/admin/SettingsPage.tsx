@@ -402,6 +402,9 @@ function RollarTab() {
           <Icon name="plus" size={14} /> Rol
         </button>
       </div>
+      <div style={{ padding: "10px 20px", background: "#fef9c3", borderBottom: "1px solid #fde68a", display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: "#92400e" }}>
+        ⚠️ Rollar boshqaruvi hali backend bilan bog'lanmagan — bu yerda kiritilgan o'zgarishlar saqlanmaydi.
+      </div>
 
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>

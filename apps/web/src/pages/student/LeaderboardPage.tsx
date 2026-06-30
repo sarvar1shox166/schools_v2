@@ -29,10 +29,7 @@ function Av({ name, size = 40 }: { name: string; size?: number }) {
   );
 }
 
-type Tab = "monthly" | "weekly" | "group";
-
 export default function LeaderboardPage() {
-  const [tab, setTab] = useState<Tab>("monthly");
   const { data = [], isLoading } = useLeaderboard();
   const { data: xp } = useMyXp();
   const user = useAuthStore((s) => s.user);
@@ -72,23 +69,8 @@ export default function LeaderboardPage() {
             🏆 Reyting jadvali
           </h2>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "rgba(255,255,255,.35)" }}>
-            A guruh · Iyun 2026
+            XP bo'yicha umumiy reyting
           </p>
-        </div>
-
-        {/* Tabs */}
-        <div style={{
-          display: "flex", gap: 2,
-          background: "rgba(255,255,255,.06)", borderRadius: 12, padding: 4,
-        }}>
-          {([["monthly","Oylik"],["weekly","Haftalik"],["group","O'zimni guruhim"]] as [Tab,string][]).map(([k,l]) => (
-            <button key={k} onClick={() => setTab(k)} style={{
-              padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer",
-              fontWeight: 700, fontSize: 13, transition: "all .15s",
-              background: tab === k ? "#3b82f6" : "transparent",
-              color: tab === k ? "#fff" : "rgba(255,255,255,.45)",
-            }}>{l}</button>
-          ))}
         </div>
       </div>
 
@@ -231,7 +213,7 @@ export default function LeaderboardPage() {
               {myRank ? `${myRank}-o'rin` : "—"}
             </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", marginTop: 4 }}>
-              A guruhdagi o'ring
+              Sizning o'rningiz
             </div>
           </div>
 

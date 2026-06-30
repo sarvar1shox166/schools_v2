@@ -37,13 +37,6 @@ const TIME_CONTROLS = [
   { tc:"...",  type:"BOSHQA",  color:"rgba(255,255,255,.25)" },
 ];
 
-/* ── Demo online players ─────────────────────────────────────────────────── */
-const DEMO_PLAYERS = [
-  { id:"d1", name:"Sardor Nazarov",  elo:1520, tc:"3+2 Blits",   color:"#f59e0b" },
-  { id:"d2", name:"Kamola Yusupova", elo:1240, tc:"1+0 Bullet",  color:"#7c3aed" },
-  { id:"d3", name:"Bobur Nazarov",   elo:1180, tc:"10+0 Rapid",  color:"#22c55e" },
-];
-
 function initials(name: string) {
   return name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
 }
@@ -260,9 +253,10 @@ function IdleScreen({ timeControl, setTimeControl, onStart, onlinePlayers, onCha
   const [modal, setModal] = useState<{ tc:string; type:string; color:string }|null>(null);
   const [customTime, setCustomTime] = useState(false);
 
-  const players = onlinePlayers.length > 0
-    ? onlinePlayers.map((p, i) => ({ id:p.studentId, name:p.fullName, elo:1200, tc:"5+0 Blits", color:["#f59e0b","#7c3aed","#22c55e","#3b82f6"][i%4] }))
-    : DEMO_PLAYERS;
+  const players = onlinePlayers.map((p, i) => ({
+    id:p.studentId, name:p.fullName, elo:1200, tc:"5+0 Blits",
+    color:["#f59e0b","#7c3aed","#22c55e","#3b82f6"][i%4],
+  }));
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
@@ -303,17 +297,13 @@ function IdleScreen({ timeControl, setTimeControl, onStart, onlinePlayers, onCha
           })}
         </div>
 
-        {/* Footer stats */}
-        <div style={{ display:"flex", alignItems:"center", gap:24, padding:"12px 20px",
+        {/* Footer */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 20px",
           borderTop:"1px solid rgba(255,255,255,.07)", background:"rgba(0,0,0,.15)" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, color:"rgba(255,255,255,.55)" }}>
-            <span style={{ width:8,height:8,borderRadius:"50%",background:"#4ade80",display:"inline-block",flexShrink:0 }}/>
-            <b style={{ color:"#fff" }}>94 929</b> ta o'yinchi
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:13, color:"rgba(255,255,255,.55)" }}>
-            <span style={{ fontSize:14 }}>✂</span>
-            <b style={{ color:"#fff" }}>41 204</b> ta o'yin o'yinalmoqda
-          </div>
+          <span style={{ width:8,height:8,borderRadius:"50%",background:"#4ade80",display:"inline-block",flexShrink:0 }}/>
+          <span style={{ fontSize:13, color:"rgba(255,255,255,.55)" }}>
+            Kompyuterga qarshi o'ynash uchun quyidagi vaqt nazoratini tanlang
+          </span>
         </div>
       </div>
 
@@ -333,6 +323,11 @@ function IdleScreen({ timeControl, setTimeControl, onStart, onlinePlayers, onCha
 
         {/* Player rows */}
         <div>
+          {players.length === 0 && (
+            <div style={{ padding:"24px 20px", textAlign:"center", color:"rgba(255,255,255,.3)", fontSize:13 }}>
+              Hozir online o'yinchilar yo'q — biroz kutib turing
+            </div>
+          )}
           {players.map((p, i) => (
             <div key={p.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px",
               borderTop: i > 0 ? "1px solid rgba(255,255,255,.06)" : "none" }}>

@@ -208,7 +208,7 @@ export default function ProfilePage() {
               </div>
               <div style={{ fontSize: 20, fontWeight: 900, marginTop: 10 }}>{name}</div>
               <div style={{ fontSize: 13, color: "rgba(255,255,255,.4)", marginTop: 4 }}>
-                A guruh
+                O'quvchi
               </div>
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 5, marginTop: 10,

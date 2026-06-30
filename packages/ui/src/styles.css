@@ -141,6 +141,9 @@ svg.ic { display: block; flex: none; }
 }
 .app.collapsed { --sb-w: 76px; }
 
+/* Desktop: backdrop always hidden (shown only on mobile via media query) */
+.mob-backdrop { display: none; }
+
 /* ---------- Sidebar ---------- */
 .sidebar {
   background: var(--sidebar-bg);

@@ -25,9 +25,9 @@ const ASOSLAR: Section[] = [
   {
     title: "SHAXMAT DONALARI",
     lessons: [
-      { id:"rux",      title:"Rux",              desc:"Rux to'g'ri chiziq bo'yicha harakatlanadi", icon:"♜", iconColor:"rgba(255,255,255,.55)", done:3, total:6, state:"progress" },
-      { id:"fil",      title:"Fil",              desc:"Fil diagonal bo'yicha harakatlanadi",        icon:"♝", iconColor:"rgba(255,255,255,.55)", done:2, total:6, state:"progress" },
-      { id:"farzin",   title:"Farzin",           desc:"Farzin = rux + fil",                         icon:"♛", iconColor:"rgba(255,255,255,.55)", done:1, total:5, state:"progress" },
+      { id:"rux",      title:"Rux",              desc:"Rux to'g'ri chiziq bo'yicha harakatlanadi", icon:"♜", iconColor:"rgba(255,255,255,.55)", done:0, total:6, state:"active"   },
+      { id:"fil",      title:"Fil",              desc:"Fil diagonal bo'yicha harakatlanadi",        icon:"♝", iconColor:"rgba(255,255,255,.3)",  done:0, total:6, state:"locked"   },
+      { id:"farzin",   title:"Farzin",           desc:"Farzin = rux + fil",                         icon:"♛", iconColor:"rgba(255,255,255,.3)",  done:0, total:5, state:"locked"   },
       { id:"shoh",     title:"Shoh",             desc:"Eng muhim dona",                              icon:"♚", iconColor:"rgba(255,255,255,.3)",  done:0, total:5, state:"locked"   },
       { id:"ot",       title:"Ot",               desc:"Ot \"L\" shaklida harakatlanadi",             icon:"♞", iconColor:"rgba(255,255,255,.3)",  done:0, total:6, state:"locked"   },
       { id:"piyoda",   title:"Piyoda",           desc:"Faqat oldinga yuradi",                        icon:"♟", iconColor:"rgba(255,255,255,.3)",  done:0, total:5, state:"locked"   },
@@ -66,8 +66,8 @@ const MASHQ: Section[] = [
   {
     title: "TAKTIK MASHQLAR",
     lessons: [
-      { id:"fork",    title:"Vilka",         desc:"Bir vaqtda ikki donaga hujum",       icon:"⚡", iconColor:"#fb923c", done:4, total:10, state:"progress" },
-      { id:"pin",     title:"Mixlash",       desc:"Donani o'rnidan qimirlatma",         icon:"📌", iconColor:"#f87171", done:2, total:8,  state:"progress" },
+      { id:"fork",    title:"Vilka",         desc:"Bir vaqtda ikki donaga hujum",       icon:"⚡", iconColor:"#fb923c", done:0, total:10, state:"active"   },
+      { id:"pin",     title:"Mixlash",       desc:"Donani o'rnidan qimirlatma",         icon:"📌", iconColor:"#f87171", done:0, total:8,  state:"locked"   },
       { id:"skewer",  title:"Cho'g'ir",      desc:"Qimmatli donani siqishtirish",       icon:"🎯", iconColor:"#60a5fa", done:0, total:7,  state:"locked"   },
       { id:"disc",    title:"Kashf hujum",   desc:"Yashirin hujumni ochish",            icon:"👁️", iconColor:"#a78bfa", done:0, total:6,  state:"locked"   },
     ],
@@ -85,8 +85,8 @@ const KOORDINATLAR: Section[] = [
   {
     title: "ASOSIY",
     lessons: [
-      { id:"files",   title:"Ustunlar (a–h)",  desc:"Taxtaning vertikal chiziqlari",    icon:"🔤", iconColor:"#60a5fa", done:3, total:5, state:"progress" },
-      { id:"ranks",   title:"Qatorlar (1–8)",  desc:"Taxtaning gorizontal chiziqlari",  icon:"🔢", iconColor:"#34d399", done:2, total:5, state:"progress" },
+      { id:"files",   title:"Ustunlar (a–h)",  desc:"Taxtaning vertikal chiziqlari",    icon:"🔤", iconColor:"#60a5fa", done:0, total:5, state:"active"  },
+      { id:"ranks",   title:"Qatorlar (1–8)",  desc:"Taxtaning gorizontal chiziqlari",  icon:"🔢", iconColor:"#34d399", done:0, total:5, state:"locked"  },
       { id:"squares", title:"Katak nomi",      desc:"a1 dan h8 gacha",                  icon:"♟", iconColor:"rgba(255,255,255,.3)", done:0, total:8, state:"locked" },
     ],
   },

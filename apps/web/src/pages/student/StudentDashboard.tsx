@@ -149,9 +149,9 @@ export default function StudentDashboard() {
 
       {/* 4 STAT CARDS */}
       <div className="grid cols-4" style={{ marginBottom: "var(--gap)" }}>
-        <KidStatCard emoji="♛" value={String(elo)} label="ELO Reyting" delta="▲ +45 bu oy" deltaUp ghost="♛" valueColor="var(--kacc, #3F8CFF)" />
-        <KidStatCard emoji="🔥" value={String(streak)} label="Kun streak" delta="Rekord: 14 kun" ghost="♞" valueColor="var(--kwarn, #F59E0B)" />
-        <KidStatCard emoji="🎯" value={String(solvedCount)} label="Masalalar" delta="▲ +8 bu hafta" deltaUp ghost="♝" valueColor="var(--ksuc, #10B981)" />
+        <KidStatCard emoji="♛" value={String(elo)} label="ELO Reyting" delta="PvP o'yinlardan" deltaUp ghost="♛" valueColor="var(--kacc, #3F8CFF)" />
+        <KidStatCard emoji="🔥" value={String(streak)} label="Kun streak" delta={streak > 0 ? "Davom etmoqda!" : "Bugun mashq qil"} deltaUp={streak > 0} ghost="♞" valueColor="var(--kwarn, #F59E0B)" />
+        <KidStatCard emoji="🎯" value={String(solvedCount)} label="Masalalar" delta="Jami yechilgan" deltaUp ghost="♝" valueColor="var(--ksuc, #10B981)" />
         <KidStatCard emoji="🏆" value={`${level}-daraja`} label={levelName} delta={`${levelPct}% → keyingi`} ghost="♚" />
       </div>
 
@@ -286,24 +286,30 @@ export default function StudentDashboard() {
 
           <Card>
             <div style={{ padding: 16 }}>
-              <div style={{ fontWeight: 750, fontSize: 14, marginBottom: 12 }}>📊 Mavzular bo'yicha natija</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {[
-                  { label: "♟ Debyut", pct: 72, color: "var(--kacc, #3F8CFF)" },
-                  { label: "⚔️ Taktika", pct: 55, color: "var(--kwarn, #F59E0B)" },
-                  { label: "♔ Endshpil", pct: 38, color: "var(--ksuc, #10B981)" },
-                ].map((row) => (
-                  <div key={row.label}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: 12.5 }}>
-                      <span style={{ color: "var(--text-faint)" }}>{row.label}</span>
-                      <b style={{ color: row.color }}>{row.pct}%</b>
-                    </div>
-                    <div className="pbar">
-                      <span style={{ width: `${row.pct}%`, background: row.color }} />
-                    </div>
+              <div style={{ fontWeight: 750, fontSize: 14, marginBottom: 10 }}>📦 Faol paket</div>
+              {activePkg ? (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{activePkg.packageName}</div>
+                  <div style={{ height: 8, borderRadius: 99, background: "var(--surface-3)", overflow: "hidden", marginBottom: 8 }}>
+                    <div style={{
+                      height: "100%", borderRadius: 99,
+                      width: `${creditPct}%`,
+                      background: creditPct > 30 ? "linear-gradient(90deg,var(--kacc,#3F8CFF),#60a5fa)" : "linear-gradient(90deg,#ef4444,#f87171)",
+                      transition: "width .6s",
+                    }} />
                   </div>
-                ))}
-              </div>
+                  <div style={{ fontSize: 12, color: "var(--text-faint)", display: "flex", justifyContent: "space-between" }}>
+                    <span>{activePkg.usedLessons} ishlatildi</span>
+                    <span style={{ fontWeight: 700, color: creditPct > 30 ? "var(--kacc,#3F8CFF)" : "#ef4444" }}>
+                      {remainingLessons} dars qoldi
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: "var(--text-faint)", textAlign: "center", padding: "12px 0" }}>
+                  Aktiv paket topilmadi
+                </div>
+              )}
             </div>
           </Card>
         </div>

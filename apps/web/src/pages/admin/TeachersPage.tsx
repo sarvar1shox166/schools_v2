@@ -215,7 +215,7 @@ function TeacherCard({ teacher: t, onEdit, onDelete }: { teacher: Teacher; onEdi
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", textAlign: "center", paddingTop: 16, paddingBottom: 2 }}>
           <StatCol value={t.groupsCount} label="Guruh" />
           <StatCol value={t.expYears ?? 0} label="Tajriba" />
-          <StatCol value={t.rating.toFixed(1)} label="Reyting" star />
+          <StatCol value={t.rating != null ? t.rating.toFixed(1) : "—"} label="Reyting" star />
         </div>
       </div>
 

@@ -7,46 +7,31 @@ export interface XpResult {
   newAchievements: { code: string; name: string; description: string; icon: string }[];
 }
 
-function levelForXp(xp: number) {
-  return Math.floor(xp / 200) + 1;
-}
 
 export async function awardXp(client: PoolClient, studentId: string, amount: number): Promise<XpResult> {
   const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
-  const existing = await client.query(
-    `SELECT xp, streak, last_active_date::text AS last_active_date FROM student_xp WHERE student_id = $1 FOR UPDATE`,
-    [studentId]
-  );
-
-  let xp = 0;
-  let streak = 0;
-  let lastActive: string | null = null;
-  if (existing.rows.length > 0) {
-    xp = existing.rows[0].xp;
-    streak = existing.rows[0].streak;
-    lastActive = existing.rows[0].last_active_date
-      ? String(existing.rows[0].last_active_date).slice(0, 10)
-      : null;
-  }
-
-  if (lastActive !== today) {
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    streak = lastActive === yesterday ? streak + 1 : 1;
-  }
-
-  xp += amount;
-  const level = levelForXp(xp);
-
-  await client.query(
+  // Atomic upsert avoids read-modify-write race when two concurrent calls
+  // both see no existing row and race to insert for the first time.
+  const res = await client.query(
     `INSERT INTO student_xp (student_id, xp, level, streak, last_active_date)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (student_id) DO UPDATE SET xp = $2, level = $3, streak = $4, last_active_date = $5`,
-    [studentId, xp, level, streak, today]
+     VALUES ($1, $2, floor($2::numeric / 200) + 1, 1, $3)
+     ON CONFLICT (student_id) DO UPDATE SET
+       xp   = student_xp.xp + $2,
+       level = floor((student_xp.xp + $2) / 200) + 1,
+       streak = CASE
+                  WHEN student_xp.last_active_date = $3 THEN student_xp.streak
+                  WHEN student_xp.last_active_date = $4 THEN student_xp.streak + 1
+                  ELSE 1
+                END,
+       last_active_date = $3
+     RETURNING xp, level, streak`,
+    [studentId, amount, today, yesterday]
   );
 
+  const { xp, level, streak } = res.rows[0] as { xp: number; level: number; streak: number };
   const newAchievements = await checkAchievements(client, studentId, xp, streak);
-
   return { xp, level, streak, newAchievements };
 }
 

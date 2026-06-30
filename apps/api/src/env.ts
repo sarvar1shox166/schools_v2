@@ -15,6 +15,7 @@ const envSchema = z.object({
   CLICK_SECRET_KEY: z.string().default("dev-click-secret"),
   PAYME_SECRET_KEY: z.string().default("dev-payme-secret"),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
+  REDIS_URL: z.string().url().optional(),
 });
 
 export const env = envSchema.parse(process.env);

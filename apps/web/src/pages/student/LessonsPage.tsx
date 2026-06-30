@@ -8,7 +8,6 @@ import {
   useNextLesson,
   useSchedule,
   type Homework,
-  type NextLesson,
   type ScheduleSlot,
 } from "../../lib/queries.js";
 
@@ -19,45 +18,6 @@ const ATT_COLOR: Record<string,string> = { p:"#22c55e", l:"#f59e0b", a:"#ef4444"
 const ATT_MARK:  Record<string,string> = { p:"✓", l:"—", a:"✕" };
 const ATT_LABEL: Record<string,string> = { p:"Keldi", l:"Kechikdi", a:"Kelmadi" };
 
-/* ── Demo fallback data (used when API returns nothing) ─────────────────── */
-function buildDemoNext(): NextLesson {
-  const t = new Date(); t.setDate(t.getDate() + 1); t.setHours(14,0,0,0);
-  return {
-    id:"demo", groupId:"g1",
-    groupName:"Boshlangʿich — A guruh",
-    color:"#3F8CFF",
-    dayOfWeek: 3,
-    startTime:"14:00",
-    isOnline: true,
-    meetingUrl:"#",
-    teacherName:"Alisher Karimov",
-    teacherPhone:"+998 90 123 45 67",
-    nextAt: t.toISOString(),
-  };
-}
-
-const DEMO_SCHEDULE: ScheduleSlot[] = [
-  { id:"s1", groupId:"g1", groupName:"Boshlangʿich A", color:"#22c55e",  dayOfWeek:1, startTime:"09:00", roomId:null, roomName:null, teacherName:"Alisher K.", isOnline:true, meetingUrl:"#" },
-  { id:"s2", groupId:"g1", groupName:"Boshlangʿich A", color:"#ef4444",  dayOfWeek:3, startTime:"09:00", roomId:null, roomName:null, teacherName:"Alisher K.", isOnline:true, meetingUrl:"#" },
-  { id:"s3", groupId:"g1", groupName:"Boshlangʿich A", color:"#3F8CFF", dayOfWeek:5, startTime:"09:00", roomId:null, roomName:null, teacherName:"Alisher K.", isOnline:true, meetingUrl:"#" },
-];
-
-
-const DEMO_HOMEWORK: Homework[] = [
-  { id:"h1", title:"e4 e5 — Italyan ochilishi yodlash",    description:null, dueDate:"2026-06-15", xpReward:30,  done:false },
-  { id:"h2", title:"Taktik mashq 1–10 (PDF varagʿi)", description:null, dueDate:"2026-06-10", xpReward:40,  done:false },
-  { id:"h3", title:"Debyut diagrammasi chizish",                 description:null, dueDate:"2026-06-07", xpReward:20,  done:true  },
-  { id:"h4", title:"5 ta boshqotirma yechish",                   description:null, dueDate:"2026-06-05", xpReward:50,  done:true  },
-];
-
-
-const DEMO_ATT_RECORDS = [
-  ...["p","p","l","p","p","p","a","p","p","p"].map((s,i)=>({ date:`2026-05-${String(i+2).padStart(2,"0")}`, status:s as "p"|"l"|"a" })),
-  ...["l","p","p","p","p","l","p","p","p","p"].map((s,i)=>({ date:`2026-05-${String(i+12).padStart(2,"0")}`, status:s as "p"|"l"|"a" })),
-  ...["p","p","l","p","p","p","p","p","p","p"].map((s,i)=>({ date:`2026-06-${String(i+1).padStart(2,"0")}`, status:s as "p"|"l"|"a" })),
-  ...["p","p","p","p"].map((s,i)=>({ date:`2026-06-${String(i+11).padStart(2,"0")}`, status:s as "p"|"l"|"a" })),
-];
-const DEMO_ATTENDANCE = { records: DEMO_ATT_RECORDS, totals:{ p:20, l:3, a:1 }, percent:84 };
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 function fmtDueDate(due: string | null): string {
@@ -150,20 +110,19 @@ export default function LessonsPage() {
 
   useEffect(() => { const t=setInterval(()=>setTick(v=>v+1),1000); return ()=>clearInterval(t); }, []);
 
-  /* use real data if available, else demo */
-  const next       = nextRaw       ?? buildDemoNext();
-  const schedule   = scheduleRaw?.length ? scheduleRaw : DEMO_SCHEDULE;
-  const attendance = attendanceRaw       ?? DEMO_ATTENDANCE;
-  const homework   = homeworkRaw?.length ? homeworkRaw : DEMO_HOMEWORK;
+  const next       = nextRaw ?? null;
+  const schedule   = scheduleRaw ?? [];
+  const attendance = attendanceRaw ?? null;
+  const homework   = homeworkRaw ?? [];
 
   const countdown = useMemo(() => {
+    if (!next) return { h:0, m:0, s:0 };
     const diff = Math.max(0, new Date(next.nextAt).getTime()-Date.now());
     return { h:Math.floor(diff/3600000), m:Math.floor((diff%3600000)/60000), s:Math.floor((diff%60000)/1000) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, next.nextAt]);
+  }, [tick, next?.nextAt]);
 
   async function handleComplete(id:string, xp:number) {
-    if (id.startsWith("h")) return; // demo item, skip
     const res = await completeHW.mutateAsync(id);
     if (!res.alreadyCompleted) showXp(res.xpAwarded??xp, "Uy vazifasi bajarildi!");
   }
@@ -171,99 +130,100 @@ export default function LessonsPage() {
   const [attPopover, setAttPopover] = useState<{date:string;status:string;note?:string|null}|null>(null);
 
   const doneHWCount = homework.filter(h=>h.done).length;
-  const isToday     = new Date(next.nextAt).toDateString()===new Date().toDateString();
+  const isToday     = next ? new Date(next.nextAt).toDateString()===new Date().toDateString() : false;
   const sortedSched = [...schedule].sort((a,b)=>((a.dayOfWeek-new Date().getDay()+7)%7)-((b.dayOfWeek-new Date().getDay()+7)%7));
 
   return (
     <div>
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <div style={{
-        background:"linear-gradient(135deg,#1565c0 0%,#1976d2 60%,#1e88e5 100%)",
-        borderRadius:20, padding:"26px 28px", marginBottom:"var(--gap)",
-        display:"flex", gap:24, alignItems:"center",
-        position:"relative", overflow:"hidden",
-      }}>
-        <div style={{ position:"absolute",right:-60,top:-60,width:280,height:280,borderRadius:"50%",background:"rgba(255,255,255,.05)",pointerEvents:"none" }}/>
-        <div style={{ position:"absolute",right:160,bottom:-80,width:180,height:180,borderRadius:"50%",background:"rgba(255,255,255,.04)",pointerEvents:"none" }}/>
-
-        {/* Left */}
-        <div style={{ flex:1, minWidth:0 }}>
-          {/* Pills */}
-          <div style={{ display:"flex",gap:8,marginBottom:14,flexWrap:"wrap" }}>
-            {next.isOnline && (
-              <span style={{ background:"rgba(255,255,255,.18)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
-                📹 Zoom orqali
-              </span>
-            )}
-            <span style={{ background:"rgba(239,68,68,.3)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
-              🔴 {isToday?"Bugun":DAY_SHORT[next.dayOfWeek]} · {next.startTime.slice(0,5)}
-            </span>
-            <span style={{ background:"rgba(255,255,255,.18)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
-              🎓 {next.groupName.split(" ")[0]}
-            </span>
-          </div>
-
-          {/* Title */}
-          <h2 style={{ fontSize:24,fontWeight:900,color:"#fff",margin:"0 0 20px",lineHeight:1.2 }}>
-            {next.groupName}
-          </h2>
-
-          {/* Countdown */}
-          <div style={{ display:"flex",alignItems:"flex-end",gap:6,marginBottom:24 }}>
-            {([{v:countdown.h,l:"SOAT"},null,{v:countdown.m,l:"DAQIQA"},null,{v:countdown.s,l:"SONIYA"}] as ({v:number;l:string}|null)[]).map((item,i)=>
-              item===null
-                ? <div key={i} style={{ fontSize:26,fontWeight:900,color:"rgba(255,255,255,.6)",paddingBottom:22,lineHeight:1 }}>:</div>
-                : <div key={i} style={{ textAlign:"center" }}>
-                    <div style={{ background:"rgba(0,0,0,.28)",borderRadius:12,padding:"10px 14px",minWidth:58 }}>
-                      <div style={{ fontSize:28,fontWeight:900,color:"#fff",fontVariantNumeric:"tabular-nums",lineHeight:1 }}>
-                        {String(item.v).padStart(2,"0")}
-                      </div>
-                    </div>
-                    <div style={{ fontSize:10,fontWeight:700,color:"rgba(255,255,255,.55)",marginTop:5,letterSpacing:.5 }}>{item.l}</div>
-                  </div>
-            )}
-            <span style={{ fontSize:13,color:"rgba(255,255,255,.65)",marginLeft:6,paddingBottom:22 }}>qoldi</span>
-          </div>
-
-          {/* Buttons */}
-          <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
-            {next.meetingUrl && next.meetingUrl!=="null" ? (
-              <a href={next.meetingUrl} target="_blank" rel="noreferrer" className="btn"
-                style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }}>
-                📹 Zoom ga kirish
-              </a>
-            ) : (
-              <button className="btn" style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }} disabled>
-                📹 Zoom ga kirish
-              </button>
-            )}
-            <button className="btn" style={{ background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.25)",color:"#fff",gap:6 }}>
-              ⬇ Material yuklab olish
-            </button>
-            <button className="btn" style={{ background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.25)",color:"#fff",gap:6 }}>
-              💬 Savol berish
-            </button>
-          </div>
-        </div>
-
-        {/* Teacher card */}
+      {next ? (
         <div style={{
-          background:"rgba(0,0,0,.22)",backdropFilter:"blur(12px)",borderRadius:16,padding:20,
-          minWidth:220,maxWidth:260,border:"1px solid rgba(255,255,255,.15)",flexShrink:0,position:"relative",zIndex:1,
+          background:"linear-gradient(135deg,#1565c0 0%,#1976d2 60%,#1e88e5 100%)",
+          borderRadius:20, padding:"26px 28px", marginBottom:"var(--gap)",
+          display:"flex", gap:24, alignItems:"center",
+          position:"relative", overflow:"hidden",
         }}>
-          <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:12 }}>
-            <Avatar name={next.teacherName??"?"} size="md" />
-            <div>
-              <div style={{ fontWeight:800,fontSize:14.5,color:"#fff" }}>{next.teacherName??"—"}</div>
-              <div style={{ fontSize:11.5,color:"rgba(255,255,255,.55)",marginTop:2 }}>FIDE Master · 8 yil</div>
+          <div style={{ position:"absolute",right:-60,top:-60,width:280,height:280,borderRadius:"50%",background:"rgba(255,255,255,.05)",pointerEvents:"none" }}/>
+          <div style={{ position:"absolute",right:160,bottom:-80,width:180,height:180,borderRadius:"50%",background:"rgba(255,255,255,.04)",pointerEvents:"none" }}/>
+
+          {/* Left */}
+          <div style={{ flex:1, minWidth:0 }}>
+            {/* Pills */}
+            <div style={{ display:"flex",gap:8,marginBottom:14,flexWrap:"wrap" }}>
+              {next.isOnline && (
+                <span style={{ background:"rgba(255,255,255,.18)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
+                  📹 Zoom orqali
+                </span>
+              )}
+              <span style={{ background:"rgba(239,68,68,.3)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
+                🔴 {isToday?"Bugun":DAY_SHORT[next.dayOfWeek]} · {next.startTime.slice(0,5)}
+              </span>
+              <span style={{ background:"rgba(255,255,255,.18)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
+                🎓 {next.groupName.split(" ")[0]}
+              </span>
+            </div>
+
+            {/* Title */}
+            <h2 style={{ fontSize:24,fontWeight:900,color:"#fff",margin:"0 0 20px",lineHeight:1.2 }}>
+              {next.groupName}
+            </h2>
+
+            {/* Countdown */}
+            <div style={{ display:"flex",alignItems:"flex-end",gap:6,marginBottom:24 }}>
+              {([{v:countdown.h,l:"SOAT"},null,{v:countdown.m,l:"DAQIQA"},null,{v:countdown.s,l:"SONIYA"}] as ({v:number;l:string}|null)[]).map((item,i)=>
+                item===null
+                  ? <div key={i} style={{ fontSize:26,fontWeight:900,color:"rgba(255,255,255,.6)",paddingBottom:22,lineHeight:1 }}>:</div>
+                  : <div key={i} style={{ textAlign:"center" }}>
+                      <div style={{ background:"rgba(0,0,0,.28)",borderRadius:12,padding:"10px 14px",minWidth:58 }}>
+                        <div style={{ fontSize:28,fontWeight:900,color:"#fff",fontVariantNumeric:"tabular-nums",lineHeight:1 }}>
+                          {String(item.v).padStart(2,"0")}
+                        </div>
+                      </div>
+                      <div style={{ fontSize:10,fontWeight:700,color:"rgba(255,255,255,.55)",marginTop:5,letterSpacing:.5 }}>{item.l}</div>
+                    </div>
+              )}
+              <span style={{ fontSize:13,color:"rgba(255,255,255,.65)",marginLeft:6,paddingBottom:22 }}>qoldi</span>
+            </div>
+
+            {/* Buttons */}
+            <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
+              {next.meetingUrl && next.meetingUrl!=="null" ? (
+                <a href={next.meetingUrl} target="_blank" rel="noreferrer" className="btn"
+                  style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }}>
+                  📹 Zoom ga kirish
+                </a>
+              ) : (
+                <button className="btn" style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }} disabled>
+                  📹 Zoom ga kirish
+                </button>
+              )}
             </div>
           </div>
-          <div style={{ display:"flex",alignItems:"center",gap:3,marginBottom:12 }}>
-            {"★★★★★".split("").map((c,i)=><span key={i} style={{ fontSize:14,color:"#f59e0b" }}>{c}</span>)}
-            <span style={{ fontSize:11.5,color:"rgba(255,255,255,.5)",marginLeft:5 }}>4.9</span>
-          </div>
+
+          {/* Teacher card */}
+          {next.teacherName && (
+            <div style={{
+              background:"rgba(0,0,0,.22)",backdropFilter:"blur(12px)",borderRadius:16,padding:20,
+              minWidth:180,maxWidth:240,border:"1px solid rgba(255,255,255,.15)",flexShrink:0,position:"relative",zIndex:1,
+            }}>
+              <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+                <Avatar name={next.teacherName} size="md" />
+                <div>
+                  <div style={{ fontWeight:800,fontSize:14.5,color:"#fff" }}>{next.teacherName}</div>
+                  <div style={{ fontSize:11.5,color:"rgba(255,255,255,.55)",marginTop:2 }}>O'qituvchi</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      ) : (
+        <div style={{
+          background:"var(--surface-2)",border:"1.5px solid var(--border)",borderRadius:16,
+          padding:"24px",marginBottom:"var(--gap)",textAlign:"center",color:"var(--text-faint)",fontSize:14,
+        }}>
+          📅 Kelgusi dars topilmadi — jadval admin tomonidan tuziladi
+        </div>
+      )}
 
       {/* ── 2-col grid ───────────────────────────────────────────────────── */}
       <div style={{ display:"grid",gridTemplateColumns:"1.4fr 1fr",gap:"var(--gap)",alignItems:"start" }}>
@@ -276,6 +236,11 @@ export default function LessonsPage() {
             <SHead icon="📅" title="Haftalik jadval" sub={getWeekRange()}
               right={<span className="badge ok" style={{ fontSize:11 }}>{schedule.length} dars/hafta</span>} />
             <div style={{ paddingBottom:6 }}>
+              {sortedSched.length === 0 && (
+                <div style={{ padding:"18px 16px",color:"var(--text-faint)",fontSize:13 }}>
+                  Jadval hali tuzilmagan
+                </div>
+              )}
               {sortedSched.map(slot=>{
                 const st = slotStatus(slot);
                 const sd = getDateForDay(slot.dayOfWeek);
@@ -306,6 +271,11 @@ export default function LessonsPage() {
             <SHead icon="📋" title="Uy vazifalari" sub="Belgilab boring"
               right={<span className="badge ok" style={{ fontSize:11 }}>{doneHWCount}/{homework.length}</span>} />
             <div>
+              {homework.length === 0 && (
+                <div style={{ padding:"18px 16px",color:"var(--text-faint)",fontSize:13 }}>
+                  Hali uy vazifasi yo'q
+                </div>
+              )}
               {homework.map(hw=>(
                 <div key={hw.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"11px 16px",borderBottom:"1px solid var(--border)" }}>
                   <div
@@ -385,51 +355,63 @@ export default function LessonsPage() {
           <Card>
             <SHead icon="✅" title="Davomat tarixi" />
             <div style={{ padding:"0 16px 16px" }}>
-              <div style={{ display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,position:"relative" }}
-                onClick={e=>{ if((e.target as HTMLElement).dataset.attIdx===undefined) setAttPopover(null); }}>
-                {attendance.records.map((r,i)=>{
-                  const isActive = attPopover?.date===r.date;
-                  return (
-                    <div key={i}
-                      data-att-idx={i}
-                      onClick={e=>{ e.stopPropagation(); setAttPopover(isActive?null:{date:r.date,status:r.status,note:(r as any).note}); }}
-                      style={{ width:30,height:30,borderRadius:7,background:ATT_COLOR[r.status]??"#475569",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",fontWeight:800,cursor:"pointer",outline:isActive?"2px solid #fff":"none",outlineOffset:1 }}>
-                      {ATT_MARK[r.status]}
-                    </div>
-                  );
-                })}
-              </div>
-              {attPopover && (
-                <div style={{ marginBottom:12,background:"var(--kb2,rgba(255,255,255,.06))",border:`1px solid ${ATT_COLOR[attPopover.status]??"#475569"}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:12 }}>
-                  <div style={{ width:10,height:10,borderRadius:"50%",background:ATT_COLOR[attPopover.status]??"#475569",flexShrink:0 }}/>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontWeight:700,fontSize:13 }}>
-                      {(()=>{ const d=new Date(attPopover.date); return `${DAY_SHORT[d.getDay()]}, ${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`; })()}
-                    </div>
-                    {attPopover.note && <div style={{ fontSize:12,color:"var(--text-faint)",marginTop:2 }}>{attPopover.note}</div>}
-                  </div>
-                  <span style={{ fontSize:12,fontWeight:700,color:ATT_COLOR[attPopover.status]??"#fff",flexShrink:0 }}>
-                    {ATT_LABEL[attPopover.status]}
-                  </span>
+              {!attendance ? (
+                <div style={{ padding:"18px 0",color:"var(--text-faint)",fontSize:13,textAlign:"center" }}>
+                  Davomat ma'lumotlari yuklanmoqda...
                 </div>
-              )}
-              <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14 }}>
-                {[
-                  { v:attendance.totals.p, l:"Keldi",    bg:"rgba(34,197,94,.12)",  clr:"#22c55e" },
-                  { v:attendance.totals.l, l:"Kechikdi", bg:"rgba(245,158,11,.12)", clr:"#f59e0b" },
-                  { v:attendance.totals.a, l:"Kelmadi",  bg:"rgba(239,68,68,.12)",  clr:"#ef4444" },
-                ].map(s=>(
-                  <div key={s.l} style={{ background:s.bg,border:"1px solid var(--border)",borderRadius:10,padding:"10px 8px",textAlign:"center" }}>
-                    <div style={{ fontSize:22,fontWeight:900,color:s.clr }}>{s.v}</div>
-                    <div style={{ fontSize:11,color:"var(--text-faint)",marginTop:2 }}>{s.l}</div>
+              ) : attendance.records.length === 0 ? (
+                <div style={{ padding:"18px 0",color:"var(--text-faint)",fontSize:13,textAlign:"center" }}>
+                  Hali davomat qayd etilmagan
+                </div>
+              ) : (
+                <>
+                  <div style={{ display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,position:"relative" }}
+                    onClick={e=>{ if((e.target as HTMLElement).dataset.attIdx===undefined) setAttPopover(null); }}>
+                    {attendance.records.map((r,i)=>{
+                      const isActive = attPopover?.date===r.date;
+                      return (
+                        <div key={i}
+                          data-att-idx={i}
+                          onClick={e=>{ e.stopPropagation(); setAttPopover(isActive?null:{date:r.date,status:r.status,note:(r as any).note}); }}
+                          style={{ width:30,height:30,borderRadius:7,background:ATT_COLOR[r.status]??"#475569",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",fontWeight:800,cursor:"pointer",outline:isActive?"2px solid #fff":"none",outlineOffset:1 }}>
+                          {ATT_MARK[r.status]}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-              <div style={{ display:"flex",justifyContent:"space-between",marginBottom:7,fontSize:12.5 }}>
-                <span style={{ color:"var(--text-faint)" }}>Umumiy davomat</span>
-                <b style={{ color:"#22c55e" }}>{attendance.percent}%</b>
-              </div>
-              <div className="pbar flat"><span style={{ width:`${attendance.percent}%`,background:"#22c55e" }}/></div>
+                  {attPopover && (
+                    <div style={{ marginBottom:12,background:"var(--kb2,rgba(255,255,255,.06))",border:`1px solid ${ATT_COLOR[attPopover.status]??"#475569"}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:12 }}>
+                      <div style={{ width:10,height:10,borderRadius:"50%",background:ATT_COLOR[attPopover.status]??"#475569",flexShrink:0 }}/>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontWeight:700,fontSize:13 }}>
+                          {(()=>{ const d=new Date(attPopover.date); return `${DAY_SHORT[d.getDay()]}, ${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`; })()}
+                        </div>
+                        {attPopover.note && <div style={{ fontSize:12,color:"var(--text-faint)",marginTop:2 }}>{attPopover.note}</div>}
+                      </div>
+                      <span style={{ fontSize:12,fontWeight:700,color:ATT_COLOR[attPopover.status]??"#fff",flexShrink:0 }}>
+                        {ATT_LABEL[attPopover.status]}
+                      </span>
+                    </div>
+                  )}
+                  <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14 }}>
+                    {[
+                      { v:attendance.totals.p, l:"Keldi",    bg:"rgba(34,197,94,.12)",  clr:"#22c55e" },
+                      { v:attendance.totals.l, l:"Kechikdi", bg:"rgba(245,158,11,.12)", clr:"#f59e0b" },
+                      { v:attendance.totals.a, l:"Kelmadi",  bg:"rgba(239,68,68,.12)",  clr:"#ef4444" },
+                    ].map(s=>(
+                      <div key={s.l} style={{ background:s.bg,border:"1px solid var(--border)",borderRadius:10,padding:"10px 8px",textAlign:"center" }}>
+                        <div style={{ fontSize:22,fontWeight:900,color:s.clr }}>{s.v}</div>
+                        <div style={{ fontSize:11,color:"var(--text-faint)",marginTop:2 }}>{s.l}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display:"flex",justifyContent:"space-between",marginBottom:7,fontSize:12.5 }}>
+                    <span style={{ color:"var(--text-faint)" }}>Umumiy davomat</span>
+                    <b style={{ color:"#22c55e" }}>{attendance.percent}%</b>
+                  </div>
+                  <div className="pbar flat"><span style={{ width:`${attendance.percent}%`,background:"#22c55e" }}/></div>
+                </>
+              )}
             </div>
           </Card>
 

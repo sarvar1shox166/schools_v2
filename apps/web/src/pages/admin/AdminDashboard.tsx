@@ -1,12 +1,14 @@
 import { Avatar, Card, CardHead, Delta, Icon, StatCard, StatusBadge } from "@chess-school/ui";
-import { useGroupFillRate, useReportsOverview, useStudentGrowth, useTodaySchedule } from "../../lib/queries.js";
+import { useApplications, useGroupFillRate, useReportsOverview, useStudentGrowth, useTodaySchedule } from "../../lib/queries.js";
 
-const MOCK_APPLICATIONS = [
-  { id: "1", name: "Asilbek Komilov",   phone: "+998 90 111 22 33", when: "Bugun 10:24",  note: "Boshlang'ich guruh", status: "yangi" },
-  { id: "2", name: "Malika Rashidova",  phone: "+998 91 444 55 66", when: "Kecha 18:05",  note: "Taktika kursi",      status: "yangi" },
-  { id: "3", name: "Bobur Nazarov",     phone: "+998 93 777 88 99", when: "Kecha 14:30",  note: "Bolalar kursi",      status: "qongiroq" },
-  { id: "4", name: "Sarvar Yo'ldoshev", phone: "+998 99 222 33 44", when: "2 kun oldin",  note: "Ro'yxatdan o'tdi",  status: "faol" },
-];
+function formatRelativeDate(iso: string): string {
+  const d = new Date(iso);
+  const diffDays = Math.floor((Date.now() - d.getTime()) / 86400000);
+  const t = d.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
+  if (diffDays === 0) return `Bugun ${t}`;
+  if (diffDays === 1) return `Kecha ${t}`;
+  return `${diffDays} kun oldin`;
+}
 
 const MOCK_SCHEDULE = [
   { id: "1", time: "09:00", name: "Boshlang'ich — A guruh", teacher: "Alisher K.", students: 12, room: "1-zal", color: "#3F8CFF" },
@@ -45,6 +47,7 @@ export default function AdminDashboard() {
   const { data: todaySchedule } = useTodaySchedule();
   const { data: growth } = useStudentGrowth();
   const { data: fillRate } = useGroupFillRate();
+  const { data: applications } = useApplications("yangi");
 
   const growthData = (growth && growth.length > 0) ? growth.map((g, i) => ({
     month: ["Yan","Fev","Mar","Apr","May","Iyu","Iyl","Avg","Sen","Okt","Noy","Dek"][Number(g.month.slice(5)) - 1] ?? g.month.slice(5),
@@ -117,19 +120,25 @@ export default function AdminDashboard() {
               </tr>
             </thead>
             <tbody>
-              {MOCK_APPLICATIONS.map((a) => (
+              {(applications ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ textAlign: "center", padding: "24px 16px", color: "var(--text-faint)", fontSize: 13 }}>
+                    Yangi arizalar yo'q
+                  </td>
+                </tr>
+              ) : (applications ?? []).map((a) => (
                 <tr key={a.id}>
                   <td>
                     <div className="with-av">
-                      <Avatar name={a.name} size="sm" />
+                      <Avatar name={a.fullName} size="sm" />
                       <div>
-                        <div className="cell-main">{a.name}</div>
-                        <div className="cell-sub">{a.note}</div>
+                        <div className="cell-main">{a.fullName}</div>
+                        <div className="cell-sub">{a.note ?? a.level ?? "—"}</div>
                       </div>
                     </div>
                   </td>
                   <td className="mono" style={{ fontSize: 13 }}>{a.phone}</td>
-                  <td className="cell-sub">{a.when}</td>
+                  <td className="cell-sub">{formatRelativeDate(a.createdAt)}</td>
                   <td><StatusBadge status={a.status} /></td>
                 </tr>
               ))}
