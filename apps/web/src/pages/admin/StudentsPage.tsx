@@ -162,7 +162,6 @@ export default function StudentsPage() {
                   <th>GURUH</th>
                   <th>TO'LOV</th>
                   <th>HOLATI</th>
-                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -247,24 +246,6 @@ export default function StudentsPage() {
                         }}>
                           {s.status}
                         </span>
-                      </td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div style={{ display: "flex", gap: 2 }}>
-                          <button
-                            className="iconbtn"
-                            style={{ width: 30, height: 30 }}
-                            onClick={() => navigate(`/admin/students/${s.id}`)}
-                          >
-                            <Icon name="edit" size={13} />
-                          </button>
-                          <button
-                            className="iconbtn"
-                            style={{ width: 30, height: 30, color: "var(--danger)" }}
-                            onClick={() => setModal({ mode: "delete", student: s })}
-                          >
-                            <Icon name="trash" size={13} />
-                          </button>
-                        </div>
                       </td>
                     </tr>
                   );
