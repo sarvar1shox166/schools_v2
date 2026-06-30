@@ -171,7 +171,10 @@ export default function StudentsPage() {
                   const psStyle = ps ? (PAY_STATUS_COLOR[ps] ?? PAY_STATUS_COLOR.no_package) : null;
                   const psLabel = ps ? (PAY_STATUS_LABEL[ps] ?? ps) : null;
                   return (
-                    <tr key={s.id}>
+                    <tr key={s.id}
+                      onClick={() => navigate(`/admin/students/${s.id}`)}
+                      style={{ cursor: "pointer" }}
+                    >
                       <td>
                         <div className="with-av">
                           <div style={{ borderRadius: 10, flexShrink: 0, display: "inline-flex" }}><Avatar name={s.fullName} size="sm" /></div>
@@ -245,12 +248,12 @@ export default function StudentsPage() {
                           {s.status}
                         </span>
                       </td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <div style={{ display: "flex", gap: 2 }}>
                           <button
                             className="iconbtn"
                             style={{ width: 30, height: 30 }}
-                            onClick={() => setModal({ mode: "edit", student: s })}
+                            onClick={() => navigate(`/admin/students/${s.id}`)}
                           >
                             <Icon name="edit" size={13} />
                           </button>

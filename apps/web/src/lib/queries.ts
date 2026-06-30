@@ -1439,6 +1439,31 @@ export function useUpdateGroup() {
   });
 }
 
+export interface StudentDetail extends Student {
+  login: string | null;
+  eloRating: number | null;
+  paymentStatus: "active" | "debt" | "inactive" | "no_package" | null;
+  activePackageExpires: string | null;
+  xp: { xp: number; level: number; streak: number } | null;
+  totalLessons: number;
+  presentCount: number;
+}
+
+export function useStudent(id: string | undefined) {
+  return useQuery({
+    queryKey: ["student", id],
+    queryFn: async () => (await api.get<StudentDetail>(`/students/${id}`)).data,
+    enabled: !!id,
+  });
+}
+
+export function useResetStudentPassword() {
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post<{ tempPassword: string }>(`/students/${id}/reset-password`)).data,
+  });
+}
+
 export function useUpdateStudent() {
   const qc = useQueryClient();
   return useMutation({

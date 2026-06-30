@@ -112,6 +112,52 @@ export async function studentsRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/students/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT s.id, u.full_name AS "fullName", u.phone, u.login,
+              s.level, s.age, s.status, s.joined_at AS "joinedAt",
+              s.elo_rating AS "eloRating",
+              COALESCE(
+                (SELECT json_agg(json_build_object('id', g.id, 'name', g.name,
+                   'teacherName', (SELECT full_name FROM users WHERE id = (
+                     SELECT user_id FROM teachers WHERE id = g.teacher_id))))
+                 FROM group_members gm JOIN groups g ON g.id = gm.group_id
+                 WHERE gm.student_id = s.id), '[]'
+              ) AS groups,
+              sps.payment_status AS "paymentStatus",
+              sps.active_package_expires AS "activePackageExpires",
+              (SELECT json_build_object(
+                 'xp', sx.xp, 'level', sx.level, 'streak', sx.streak
+               ) FROM student_xp sx WHERE sx.student_id = s.id
+              ) AS xp,
+              (SELECT count(*)::int FROM attendance_records ar WHERE ar.student_id = s.id) AS "totalLessons",
+              (SELECT count(*)::int FROM attendance_records ar WHERE ar.student_id = s.id AND ar.status = 'p') AS "presentCount"
+       FROM students s
+       JOIN users u ON u.id = s.user_id
+       LEFT JOIN student_payment_status sps ON sps.student_id = s.id
+       WHERE s.id = $1 AND s.tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (rows.length === 0) return reply.code(404).send({ error: "Not found" });
+    return rows[0];
+  });
+
+  app.post("/students/:id/reset-password", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+    const newPassword = randomBytes(4).toString("hex");
+    const passwordHash = await hashPassword(newPassword);
+    const { rowCount } = await pool.query(
+      `UPDATE users SET password_hash = $1
+       WHERE id = (SELECT user_id FROM students WHERE id = $2 AND tenant_id = $3)`,
+      [passwordHash, id, tenantId]
+    );
+    if (!rowCount) return reply.code(404).send({ error: "Not found" });
+    return { tempPassword: newPassword };
+  });
+
   app.patch("/students/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const body = updateSchema.parse(request.body);
