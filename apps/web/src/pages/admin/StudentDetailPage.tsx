@@ -211,11 +211,11 @@ export default function StudentDetailPage() {
             {/* Info rows */}
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {[
-                { label: "Telefon",   value: student.phone },
-                { label: "Yoshi",     value: student.age ? `${student.age} yosh` : "—" },
-                { label: "Darajasi",  value: student.level ?? "—" },
-                { label: "Holati",    value: student.status },
-                { label: "ELO",       value: student.eloRating ? String(student.eloRating) : "—" },
+                { label: "Telefon",    value: student.phone },
+                { label: "Yoshi",      value: student.age ? `${student.age} yosh` : "—" },
+                { label: "Darajasi",   value: student.level ?? "—" },
+                { label: "Holati",     value: student.status },
+                { label: "ELO",        value: student.xp?.elo ? String(student.xp.elo) : "—" },
                 { label: "Qo'shilgan", value: new Date(student.joinedAt).toLocaleDateString("uz-Latn-UZ") },
               ].map(({ label, value }) => (
                 <div key={label} style={{

@@ -118,7 +118,6 @@ export async function studentsRoutes(app: FastifyInstance) {
     const { rows } = await pool.query(
       `SELECT s.id, u.full_name AS "fullName", u.phone, u.login,
               s.level, s.age, s.status, s.joined_at AS "joinedAt",
-              s.elo_rating AS "eloRating",
               COALESCE(
                 (SELECT json_agg(json_build_object('id', g.id, 'name', g.name,
                    'teacherName', (SELECT full_name FROM users WHERE id = (
@@ -129,7 +128,7 @@ export async function studentsRoutes(app: FastifyInstance) {
               sps.payment_status AS "paymentStatus",
               sps.active_package_expires AS "activePackageExpires",
               (SELECT json_build_object(
-                 'xp', sx.xp, 'level', sx.level, 'streak', sx.streak
+                 'xp', sx.xp, 'level', sx.level, 'streak', sx.streak, 'elo', sx.elo
                ) FROM student_xp sx WHERE sx.student_id = s.id
               ) AS xp,
               (SELECT count(*)::int FROM attendance_records ar WHERE ar.student_id = s.id) AS "totalLessons",
