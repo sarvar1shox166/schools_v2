@@ -665,6 +665,7 @@ export function useAttemptPuzzle() {
       if (data.finished && data.correct) {
         qc.invalidateQueries({ queryKey: ["myXp"] });
         qc.invalidateQueries({ queryKey: ["leaderboard"] });
+        qc.invalidateQueries({ queryKey: ["puzzleStats"] });
       }
     },
   });
