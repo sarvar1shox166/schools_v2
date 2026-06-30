@@ -3,35 +3,52 @@ import { z } from "zod";
 import { pool } from "../../db/pool.js";
 
 const createSchema = z.object({
-  groupId: z.string().uuid(),
+  groupId: z.string().uuid().optional(),
+  lessonType: z.enum(["guruh", "individual", "diagnostika"]).default("guruh"),
+  customName: z.string().min(1).optional(),
   dayOfWeek: z.number().int().min(0).max(6),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   roomId: z.string().uuid().optional(),
   isOnline: z.boolean().optional(),
-  meetingUrl: z.string().url().optional(),
+  meetingUrl: z.string().url().optional().or(z.literal("")),
+  meetingPlatform: z.enum(["zoom", "meet"]).default("zoom"),
 });
 
-const updateSchema = createSchema.partial().omit({ groupId: true });
+const updateSchema = createSchema.partial();
 
 export async function scheduleRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
   app.get("/schedule", async (request) => {
-    const { tenantId } = request.user;
+    const { tenantId, role, sub } = request.user;
+
+    const params: unknown[] = [tenantId];
+    let studentFilter = "";
+    if (role === "student") {
+      studentFilter = `AND g.id IN (
+        SELECT gm.group_id FROM group_members gm
+        JOIN students s ON s.id = gm.student_id
+        WHERE s.user_id = $2
+      )`;
+      params.push(sub);
+    }
+
     const { rows } = await pool.query(
       `SELECT sl.id, sl.group_id AS "groupId", g.name AS "groupName", g.color,
               sl.day_of_week AS "dayOfWeek", sl.start_time AS "startTime",
               sl.room_id AS "roomId", r.name AS "roomName",
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
+              sl.meeting_platform AS "meetingPlatform",
+              sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
               tu.full_name AS "teacherName"
        FROM schedule_slots sl
-       JOIN groups g ON g.id = sl.group_id
+       LEFT JOIN groups g ON g.id = sl.group_id
        LEFT JOIN rooms r ON r.id = sl.room_id
        LEFT JOIN teachers t ON t.id = g.teacher_id
        LEFT JOIN users tu ON tu.id = t.user_id
-       WHERE g.tenant_id = $1
+       WHERE sl.tenant_id = $1 ${studentFilter}
        ORDER BY sl.day_of_week, sl.start_time`,
-      [tenantId]
+      params
     );
     return rows;
   });
@@ -59,13 +76,15 @@ export async function scheduleRoutes(app: FastifyInstance) {
               sl.day_of_week AS "dayOfWeek", sl.start_time AS "startTime",
               sl.room_id AS "roomId", r.name AS "roomName",
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
+              sl.meeting_platform AS "meetingPlatform",
+              sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
               tu.full_name AS "teacherName"
        FROM schedule_slots sl
-       JOIN groups g ON g.id = sl.group_id
+       LEFT JOIN groups g ON g.id = sl.group_id
        LEFT JOIN rooms r ON r.id = sl.room_id
        LEFT JOIN teachers t ON t.id = g.teacher_id
        LEFT JOIN users tu ON tu.id = t.user_id
-       WHERE g.tenant_id = $1 AND sl.day_of_week = $2 ${filter}
+       WHERE sl.tenant_id = $1 AND sl.day_of_week = $2 ${filter}
        ORDER BY sl.start_time`,
       params
     );
@@ -162,18 +181,32 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   app.post("/schedule", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
+    const { tenantId } = request.user;
     const isOnline = body.isOnline ?? false;
+    const meetingUrl = body.meetingUrl || null;
     const { rows } = await pool.query(
-      `INSERT INTO schedule_slots (group_id, day_of_week, start_time, room_id, is_online, meeting_url)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [body.groupId, body.dayOfWeek, body.startTime, body.roomId ?? null, isOnline, body.meetingUrl ?? null]
+      `INSERT INTO schedule_slots
+         (tenant_id, group_id, lesson_type, custom_name, day_of_week, start_time, room_id, is_online, meeting_url, meeting_platform)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [
+        tenantId,
+        body.groupId ?? null,
+        body.lessonType ?? "guruh",
+        body.customName ?? null,
+        body.dayOfWeek,
+        body.startTime,
+        body.roomId ?? null,
+        isOnline,
+        meetingUrl,
+        body.meetingPlatform ?? "zoom",
+      ]
     );
     const id = rows[0].id;
-    if (isOnline && !body.meetingUrl) {
-      await pool.query(`UPDATE schedule_slots SET meeting_url = $1 WHERE id = $2`, [
-        `https://meet.jit.si/ChessSchool-${id}`,
-        id,
-      ]);
+    if (isOnline && !meetingUrl) {
+      const autoUrl = body.meetingPlatform === "meet"
+        ? `https://meet.google.com/chess-school-${id.slice(0, 8)}`
+        : `https://zoom.us/j/${Math.floor(Math.random() * 9000000000 + 1000000000)}`;
+      await pool.query(`UPDATE schedule_slots SET meeting_url = $1 WHERE id = $2`, [autoUrl, id]);
     }
     return reply.code(201).send({ id });
   });
@@ -182,21 +215,37 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = updateSchema.parse(request.body);
 
-    let meetingUrl = body.meetingUrl ?? null;
+    let meetingUrl = body.meetingUrl || null;
     if (body.isOnline && !meetingUrl) {
-      const existing = await pool.query(`SELECT meeting_url AS "meetingUrl" FROM schedule_slots WHERE id = $1`, [id]);
-      meetingUrl = existing.rows[0]?.meetingUrl ?? `https://meet.jit.si/ChessSchool-${id}`;
+      const existing = await pool.query(
+        `SELECT meeting_url AS "meetingUrl", meeting_platform AS "meetingPlatform" FROM schedule_slots WHERE id = $1`,
+        [id]
+      );
+      const platform = body.meetingPlatform ?? existing.rows[0]?.meetingPlatform ?? "zoom";
+      meetingUrl = existing.rows[0]?.meetingUrl ?? (
+        platform === "meet"
+          ? `https://meet.google.com/chess-school-${id.slice(0, 8)}`
+          : `https://zoom.us/j/${Math.floor(Math.random() * 9000000000 + 1000000000)}`
+      );
     }
 
     await pool.query(
       `UPDATE schedule_slots SET
-         day_of_week = COALESCE($1, day_of_week),
-         start_time = COALESCE($2, start_time),
-         room_id = COALESCE($3, room_id),
-         is_online = COALESCE($4, is_online),
-         meeting_url = COALESCE($5, meeting_url)
-       WHERE id = $6`,
-      [body.dayOfWeek ?? null, body.startTime ?? null, body.roomId ?? null, body.isOnline ?? null, meetingUrl, id]
+         day_of_week      = COALESCE($1, day_of_week),
+         start_time       = COALESCE($2, start_time),
+         room_id          = COALESCE($3, room_id),
+         is_online        = COALESCE($4, is_online),
+         meeting_url      = COALESCE($5, meeting_url),
+         lesson_type      = COALESCE($6, lesson_type),
+         custom_name      = COALESCE($7, custom_name),
+         meeting_platform = COALESCE($8, meeting_platform)
+       WHERE id = $9`,
+      [
+        body.dayOfWeek ?? null, body.startTime ?? null, body.roomId ?? null,
+        body.isOnline ?? null, meetingUrl,
+        body.lessonType ?? null, body.customName ?? null,
+        body.meetingPlatform ?? null, id,
+      ]
     );
     return { ok: true };
   });

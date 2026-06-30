@@ -7,18 +7,9 @@ import {
   useMyLessons,
   useMyProfile,
   useMyStudents,
+  useMyStudentsProgress,
   useTodaySchedule,
 } from "../../lib/queries.js";
-
-/* ─── Mock student progress data ─── */
-const MOCK_PROGRESS = [
-  { id:"1", name:"Asilbek Komilov",    info:"Boshlang'ich · A guruh", pct:62 },
-  { id:"2", name:"Malika Rashidova",   info:"3-razryad · B guruh",    pct:74 },
-  { id:"3", name:"Bobur Nazarov",      info:"Boshlang'ich · C guruh", pct:88 },
-  { id:"4", name:"Sarvar Yo'ldoshev",  info:"1-razryad · F guruh",    pct:55 },
-  { id:"5", name:"Gulnoza Tosheva",    info:"Boshlang'ich · A guruh", pct:91 },
-  { id:"6", name:"Javohir Saidov",     info:"2-razryad · D guruh",    pct:67 },
-];
 
 /* ─── helpers ─── */
 function todayStr() {
@@ -65,6 +56,7 @@ export default function TeacherDashboard() {
   const { data: todaySchedule } = useTodaySchedule();
   const { data: myStudents }    = useMyStudents();
   const { data: lessons }       = useMyLessons();
+  const { data: progressData }  = useMyStudentsProgress("attendance");
 
   const todayLessons = useMemo(
     () => lessons?.filter(l => l.date.slice(0, 10) === date) ?? [],
@@ -219,7 +211,7 @@ export default function TeacherDashboard() {
                   <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
-                {studentsMap[nextLesson.groupName] ?? slotStudents.length} o'quvchi
+                {studentsMap[nextLesson.groupName ?? ""] ?? slotStudents.length} o'quvchi
               </span>
             </div>
           </div>
@@ -341,7 +333,7 @@ export default function TeacherDashboard() {
               const [h, mi] = s.startTime.split(":").map(Number);
               const lessonMins = h * 60 + mi;
               const isActive = lessonMins <= nm && nm < lessonMins + 60;
-              const cnt = studentsMap[s.groupName] ?? slotStudents.length;
+              const cnt = studentsMap[s.groupName ?? ""] ?? slotStudents.length;
               return (
                 <div key={s.id} style={{
                   padding:"14px 22px",
@@ -468,20 +460,26 @@ export default function TeacherDashboard() {
         </div>
 
         <div style={{ padding:"8px 0" }}>
-          {MOCK_PROGRESS.map((s, i) => (
+          {(progressData ?? []).length === 0 ? (
+            <div style={{ padding:"36px 22px", textAlign:"center", color:"var(--text-faint)", fontSize:13 }}>
+              O'quvchilar topilmadi
+            </div>
+          ) : (progressData ?? []).slice(0, 6).map((s, i, arr) => (
             <div key={s.id} style={{
               display:"flex", alignItems:"center", gap:14, padding:"14px 24px",
-              borderBottom: i < MOCK_PROGRESS.length - 1 ? "1px solid var(--border)" : "none",
+              borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
             }}>
-              <Avatar name={s.name} size="sm" />
+              <Avatar name={s.fullName} size="sm" />
               <div style={{ width:200, flexShrink:0 }}>
-                <div style={{ fontWeight:700, fontSize:14 }}>{s.name}</div>
-                <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:2 }}>{s.info}</div>
+                <div style={{ fontWeight:700, fontSize:14 }}>{s.fullName}</div>
+                <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:2 }}>
+                  {s.level ?? "—"} daraja
+                </div>
               </div>
               <div style={{ flex:1, height:8, borderRadius:99, background:"var(--surface-2)", overflow:"hidden" }}>
                 <div style={{
                   height:"100%", borderRadius:99,
-                  width:`${s.pct}%`,
+                  width:`${s.attendanceRate}%`,
                   background:"#3b82f6",
                   transition:"width .4s ease",
                 }}/>
@@ -489,9 +487,9 @@ export default function TeacherDashboard() {
               <div style={{
                 width:44, textAlign:"right", flexShrink:0,
                 fontSize:14, fontWeight:800,
-                color: s.pct >= 85 ? "#16a34a" : "#d97706",
+                color: s.attendanceRate >= 85 ? "#16a34a" : "#d97706",
               }}>
-                {s.pct}%
+                {s.attendanceRate}%
               </div>
             </div>
           ))}

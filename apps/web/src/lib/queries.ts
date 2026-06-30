@@ -10,7 +10,7 @@ export interface Teacher {
   expYears: number | null;
   joinedAt: string;
   groupsCount: number;
-  rating: number;
+  rating: number | null;
 }
 
 export interface StudentGroupRef {
@@ -44,8 +44,8 @@ export interface Group {
 
 export interface ScheduleSlot {
   id: string;
-  groupId: string;
-  groupName: string;
+  groupId: string | null;
+  groupName: string | null;
   color: string | null;
   dayOfWeek: number;
   startTime: string;
@@ -54,6 +54,9 @@ export interface ScheduleSlot {
   teacherName: string | null;
   isOnline: boolean;
   meetingUrl: string | null;
+  meetingPlatform: "zoom" | "meet";
+  lessonType: "guruh" | "individual" | "diagnostika";
+  customName: string | null;
 }
 
 export function useTeachers() {
@@ -198,10 +201,22 @@ export function useSchedule() {
   });
 }
 
+export interface CreateSlotPayload {
+  groupId?: string;
+  lessonType: "guruh" | "individual" | "diagnostika";
+  customName?: string;
+  dayOfWeek: number;
+  startTime: string;
+  roomId?: string;
+  isOnline?: boolean;
+  meetingUrl?: string;
+  meetingPlatform?: "zoom" | "meet";
+}
+
 export function useCreateScheduleSlot() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { groupId: string; dayOfWeek: number; startTime: string; roomId?: string; isOnline?: boolean; meetingUrl?: string }) =>
+    mutationFn: async (payload: CreateSlotPayload) =>
       (await api.post("/schedule", payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule"] }),
   });
@@ -210,7 +225,7 @@ export function useCreateScheduleSlot() {
 export function useUpdateScheduleSlot() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...payload }: { id: string; dayOfWeek?: number; startTime?: string; roomId?: string; isOnline?: boolean; meetingUrl?: string }) =>
+    mutationFn: async ({ id, ...payload }: { id: string } & Partial<CreateSlotPayload>) =>
       (await api.patch(`/schedule/${id}`, payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule"] }),
   });

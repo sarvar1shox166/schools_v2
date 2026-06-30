@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Avatar, Card, Icon, StatCard } from "@chess-school/ui";
 import {
   useCreateScheduleSlot, useUpdateScheduleSlot, useDeleteScheduleSlot,
-  useGroups, useSchedule, type ScheduleSlot,
+  useGroups, useSchedule, type ScheduleSlot, type CreateSlotPayload,
 } from "../../lib/queries.js";
 
 const DAYS = ["Dus", "Ses", "Cho", "Pay", "Jum", "Sha", "Yak"];
@@ -64,13 +64,12 @@ export default function SchedulePage() {
   const activeGroups = new Set(slots.map((s) => s.groupId)).size;
   const emptySlots = HOURS.length * 7 - totalLessons;
 
-  async function handleCreate(form: { groupId: string; dayOfWeek: number; startTime: string; isOnline: boolean; meetingUrl?: string }) {
-    if (!form.groupId) return;
+  async function handleCreate(form: CreateSlotPayload) {
     await createSlot.mutateAsync(form);
     setModal(null);
   }
 
-  async function handleUpdate(id: string, patch: { dayOfWeek?: number; startTime?: string; isOnline?: boolean; meetingUrl?: string }) {
+  async function handleUpdate(id: string, patch: Partial<CreateSlotPayload>) {
     await updateSlot.mutateAsync({ id, ...patch });
     setModal(null);
   }
@@ -190,7 +189,6 @@ export default function SchedulePage() {
               day={modal.day}
               hour={modal.hour}
               groups={groups}
-              teachers={teachers}
               onClose={() => setModal(null)}
               onCreate={handleCreate}
               isPending={createSlot.isPending}
@@ -263,7 +261,7 @@ function ViewModal({ slot, allSlots, onClose, onEdit, onDelete, isDeleting }: {
   onDelete: () => void; isDeleting: boolean;
 }) {
   const color = slot.color ?? "#3F8CFF";
-  const kunlar = getGroupDays(allSlots, slot.groupId);
+  const kunlar = slot.groupId ? getGroupDays(allSlots, slot.groupId) : "";
 
   return (
     <ModalBox>
@@ -275,7 +273,12 @@ function ViewModal({ slot, allSlots, onClose, onEdit, onDelete, isDeleting }: {
           background: `${color}22`, display: "grid", placeItems: "center", fontSize: 22,
         }}>♟</div>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 17 }}>{slot.groupName}</div>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>
+            {slot.lessonType !== "guruh" ? (slot.customName ?? "—") : (slot.groupName ?? "—")}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 3 }}>
+            {slot.lessonType === "individual" ? "Individual dars" : slot.lessonType === "diagnostika" ? "Diagnostika" : "Guruh darsi"}
+          </div>
         </div>
       </div>
 
@@ -285,7 +288,7 @@ function ViewModal({ slot, allSlots, onClose, onEdit, onDelete, isDeleting }: {
           { label: "Vaqt", value: String(slot.startTime).slice(0, 5) },
           { label: "Kunlar", value: kunlar || DAY_SHORT[slot.dayOfWeek] },
           { label: "Xona", value: slot.roomName ?? "—" },
-          { label: "Turi", value: slot.isOnline ? "Online (Zoom)" : "Offline" },
+          { label: "Format", value: slot.isOnline ? `Online (${slot.meetingPlatform === "meet" ? "Google Meet" : "Zoom"})` : "Offline" },
           ...(slot.meetingUrl ? [{ label: "Havola", value: slot.meetingUrl }] : []),
         ].map(({ label, value }) => (
           <div key={label} style={{
@@ -319,36 +322,73 @@ function ViewModal({ slot, allSlots, onClose, onEdit, onDelete, isDeleting }: {
 function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
   day: number; hour: string;
   groups: { id: string; name: string }[];
-  teachers: string[];
   onClose: () => void;
-  onCreate: (f: { groupId: string; dayOfWeek: number; startTime: string; isOnline: boolean; meetingUrl?: string }) => void;
+  onCreate: (f: CreateSlotPayload) => void;
   isPending: boolean;
 }) {
+  const [lessonType, setLessonType] = useState<"guruh" | "individual" | "diagnostika">("guruh");
   const [form, setForm] = useState({
     groupId: groups[0]?.id ?? "",
+    customName: "",
     day: String(day),
     time: hour,
     isOnline: false,
+    meetingPlatform: "zoom" as "zoom" | "meet",
     meetingUrl: "",
   });
+
+  const isGroupMode = lessonType === "guruh";
+  const canSubmit = isGroupMode ? !!form.groupId : !!form.customName.trim();
 
   return (
     <ModalBox>
       <ModalHeader title={`Dars qo'shish — ${DAYS[day]} ${hour}`} onClose={onClose} />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+        {/* Lesson type */}
         <div>
-          <label style={labelStyle}>GURUH</label>
-          <select className="inp" style={{ width: "100%" }} value={form.groupId}
-            onChange={(e) => setForm({ ...form, groupId: e.target.value })}>
-            <option value="">Guruh tanlang...</option>
-            {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
+          <label style={labelStyle}>DARS TURI</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            {(["guruh", "individual", "diagnostika"] as const).map((t) => (
+              <button key={t} onClick={() => setLessonType(t)}
+                style={{
+                  flex: 1, padding: "9px 4px", borderRadius: 8, cursor: "pointer",
+                  border: lessonType === t ? "none" : "1px solid var(--border)",
+                  background: lessonType === t ? "var(--accent)" : "var(--surface-2)",
+                  color: lessonType === t ? "#fff" : "var(--text-dim)",
+                  fontWeight: 700, fontSize: 12, textTransform: "capitalize",
+                }}>
+                {t === "guruh" ? "Guruh" : t === "individual" ? "Individual" : "Diagnostika"}
+              </button>
+            ))}
+          </div>
         </div>
 
+        {/* Group or custom name */}
+        {isGroupMode ? (
+          <div>
+            <label style={labelStyle}>GURUH</label>
+            <select className="inp" style={{ width: "100%" }} value={form.groupId}
+              onChange={(e) => setForm({ ...form, groupId: e.target.value })}>
+              <option value="">Guruh tanlang...</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label style={labelStyle}>DARS NOMI</label>
+            <input className="inp" style={{ width: "100%" }}
+              placeholder={lessonType === "individual" ? "Masalan: Ali bilan individual dars" : "Masalan: Yangi o'quvchi diagnostikasi"}
+              value={form.customName}
+              onChange={(e) => setForm({ ...form, customName: e.target.value })} />
+          </div>
+        )}
+
+        {/* Day & time */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
-            <label style={labelStyle}>KUN</label>
+            <label style={labelStyle}>HAFTA KUNI</label>
             <select className="inp" style={{ width: "100%" }} value={form.day}
               onChange={(e) => setForm({ ...form, day: e.target.value })}>
               {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
@@ -363,10 +403,11 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
           </div>
         </div>
 
+        {/* Online toggle */}
         <div>
-          <label style={labelStyle}>TURI</label>
+          <label style={labelStyle}>FORMAT</label>
           <div style={{ display: "flex", gap: 8 }}>
-            {[{ v: false, label: "Offline" }, { v: true, label: "Online (Zoom)" }].map(({ v, label }) => (
+            {[{ v: false, label: "Offline" }, { v: true, label: "Online" }].map(({ v, label }) => (
               <button key={String(v)} onClick={() => setForm({ ...form, isOnline: v })}
                 style={{
                   flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
@@ -381,22 +422,53 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
           </div>
         </div>
 
+        {/* Platform + URL when online */}
         {form.isOnline && (
-          <div>
-            <label style={labelStyle}>ZOOM HAVOLA (ixtiyoriy)</label>
-            <input className="inp" style={{ width: "100%" }} placeholder="https://zoom.us/j/..."
-              value={form.meetingUrl} onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
-          </div>
+          <>
+            <div>
+              <label style={labelStyle}>PLATFORMA</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["zoom", "meet"] as const).map((p) => (
+                  <button key={p} onClick={() => setForm({ ...form, meetingPlatform: p })}
+                    style={{
+                      flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
+                      border: form.meetingPlatform === p ? "none" : "1px solid var(--border)",
+                      background: form.meetingPlatform === p ? (p === "zoom" ? "#2D8CFF" : "#1a73e8") : "var(--surface-2)",
+                      color: form.meetingPlatform === p ? "#fff" : "var(--text-dim)",
+                      fontWeight: 700, fontSize: 13,
+                    }}>
+                    {p === "zoom" ? "🎥 Zoom" : "🟢 Google Meet"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>HAVOLA (ixtiyoriy)</label>
+              <input className="inp" style={{ width: "100%" }}
+                placeholder={form.meetingPlatform === "zoom" ? "https://zoom.us/j/..." : "https://meet.google.com/..."}
+                value={form.meetingUrl}
+                onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
+                Bo'sh qoldirsangiz avtomatik havola yaratiladi
+              </div>
+            </div>
+          </>
         )}
       </div>
 
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
         <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
         <button className="btn primary" style={{ flex: 2 }}
-          disabled={!form.groupId || isPending}
+          disabled={!canSubmit || isPending}
           onClick={() => onCreate({
-            groupId: form.groupId, dayOfWeek: Number(form.day), startTime: form.time,
-            isOnline: form.isOnline, meetingUrl: form.meetingUrl || undefined,
+            lessonType,
+            groupId: isGroupMode ? form.groupId : undefined,
+            customName: isGroupMode ? undefined : form.customName.trim(),
+            dayOfWeek: Number(form.day),
+            startTime: form.time,
+            isOnline: form.isOnline,
+            meetingPlatform: form.isOnline ? form.meetingPlatform : undefined,
+            meetingUrl: form.isOnline && form.meetingUrl ? form.meetingUrl : undefined,
           })}>
           <Icon name="check" size={14} /> {isPending ? "Saqlanmoqda..." : "Qo'shish"}
         </button>
@@ -408,39 +480,73 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
 /* ─── Edit modal ─── */
 function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
   slot: ScheduleSlot; allSlots: ScheduleSlot[]; onClose: () => void;
-  onSave: (id: string, patch: { dayOfWeek?: number; startTime?: string; isOnline?: boolean; meetingUrl?: string }) => void;
+  onSave: (id: string, patch: Partial<CreateSlotPayload>) => void;
   isPending: boolean;
 }) {
   const [form, setForm] = useState({
+    lessonType: (slot.lessonType ?? "guruh") as "guruh" | "individual" | "diagnostika",
+    customName: slot.customName ?? "",
     day: String(slot.dayOfWeek),
     time: String(slot.startTime).slice(0, 5),
     isOnline: slot.isOnline ?? false,
+    meetingPlatform: (slot.meetingPlatform ?? "zoom") as "zoom" | "meet",
     meetingUrl: slot.meetingUrl ?? "",
   });
 
   const color = slot.color ?? "#3F8CFF";
+  const displayName = slot.lessonType !== "guruh" ? (slot.customName ?? "—") : (slot.groupName ?? "—");
 
   return (
     <ModalBox>
       <ModalHeader title="Darsni tahrirlash" onClose={onClose} />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
         <div style={{
-          width: 52, height: 52, borderRadius: 14, flexShrink: 0,
-          background: `${color}22`, display: "grid", placeItems: "center", fontSize: 22,
+          width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+          background: `${color}22`, display: "grid", placeItems: "center", fontSize: 20,
         }}>♟</div>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 17 }}>{slot.groupName}</div>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>{displayName}</div>
           <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
-            {getGroupDays(allSlots, slot.groupId) || DAY_SHORT[slot.dayOfWeek]}
+            {slot.groupId ? (getGroupDays(allSlots, slot.groupId) || DAY_SHORT[slot.dayOfWeek]) : DAY_SHORT[slot.dayOfWeek]}
           </div>
         </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Lesson type */}
+        <div>
+          <label style={labelStyle}>DARS TURI</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            {(["guruh", "individual", "diagnostika"] as const).map((t) => (
+              <button key={t} onClick={() => setForm({ ...form, lessonType: t })}
+                style={{
+                  flex: 1, padding: "8px 4px", borderRadius: 8, cursor: "pointer",
+                  border: form.lessonType === t ? "none" : "1px solid var(--border)",
+                  background: form.lessonType === t ? "var(--accent)" : "var(--surface-2)",
+                  color: form.lessonType === t ? "#fff" : "var(--text-dim)",
+                  fontWeight: 700, fontSize: 12,
+                }}>
+                {t === "guruh" ? "Guruh" : t === "individual" ? "Individual" : "Diagnostika"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom name for non-group */}
+        {form.lessonType !== "guruh" && (
+          <div>
+            <label style={labelStyle}>DARS NOMI</label>
+            <input className="inp" style={{ width: "100%" }}
+              placeholder="Dars nomini kiriting..."
+              value={form.customName}
+              onChange={(e) => setForm({ ...form, customName: e.target.value })} />
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
-            <label style={labelStyle}>KUN</label>
+            <label style={labelStyle}>HAFTA KUNI</label>
             <select className="inp" style={{ width: "100%" }} value={form.day}
               onChange={(e) => setForm({ ...form, day: e.target.value })}>
               {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
@@ -454,9 +560,9 @@ function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
         </div>
 
         <div>
-          <label style={labelStyle}>TURI</label>
+          <label style={labelStyle}>FORMAT</label>
           <div style={{ display: "flex", gap: 8 }}>
-            {[{ v: false, label: "Offline" }, { v: true, label: "Online (Zoom)" }].map(({ v, label }) => (
+            {[{ v: false, label: "Offline" }, { v: true, label: "Online" }].map(({ v, label }) => (
               <button key={String(v)} onClick={() => setForm({ ...form, isOnline: v })}
                 style={{
                   flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
@@ -472,11 +578,32 @@ function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
         </div>
 
         {form.isOnline && (
-          <div>
-            <label style={labelStyle}>ZOOM HAVOLA</label>
-            <input className="inp" style={{ width: "100%" }} placeholder="https://zoom.us/j/..."
-              value={form.meetingUrl} onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
-          </div>
+          <>
+            <div>
+              <label style={labelStyle}>PLATFORMA</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["zoom", "meet"] as const).map((p) => (
+                  <button key={p} onClick={() => setForm({ ...form, meetingPlatform: p })}
+                    style={{
+                      flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer",
+                      border: form.meetingPlatform === p ? "none" : "1px solid var(--border)",
+                      background: form.meetingPlatform === p ? (p === "zoom" ? "#2D8CFF" : "#1a73e8") : "var(--surface-2)",
+                      color: form.meetingPlatform === p ? "#fff" : "var(--text-dim)",
+                      fontWeight: 700, fontSize: 13,
+                    }}>
+                    {p === "zoom" ? "🎥 Zoom" : "🟢 Google Meet"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>HAVOLA</label>
+              <input className="inp" style={{ width: "100%" }}
+                placeholder={form.meetingPlatform === "zoom" ? "https://zoom.us/j/..." : "https://meet.google.com/..."}
+                value={form.meetingUrl}
+                onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} />
+            </div>
+          </>
         )}
       </div>
 
@@ -484,8 +611,13 @@ function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
         <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
         <button className="btn primary" style={{ flex: 2 }} disabled={isPending}
           onClick={() => onSave(slot.id, {
-            dayOfWeek: Number(form.day), startTime: form.time,
-            isOnline: form.isOnline, meetingUrl: form.meetingUrl || undefined,
+            lessonType: form.lessonType,
+            customName: form.lessonType !== "guruh" ? form.customName.trim() : undefined,
+            dayOfWeek: Number(form.day),
+            startTime: form.time,
+            isOnline: form.isOnline,
+            meetingPlatform: form.isOnline ? form.meetingPlatform : undefined,
+            meetingUrl: form.isOnline && form.meetingUrl ? form.meetingUrl : undefined,
           })}>
           <Icon name="check" size={14} /> {isPending ? "Saqlanmoqda..." : "Saqlash"}
         </button>
@@ -511,13 +643,20 @@ function LessonCard({ slot, onClick }: { slot: ScheduleSlot; onClick: () => void
       onMouseLeave={(e) => (e.currentTarget.style.filter = "")}
     >
       <div style={{ fontWeight: 700, fontSize: 12.5, lineHeight: 1.3, color: "var(--text)" }}>
-        {slot.groupName}
+        {slot.lessonType !== "guruh" ? (slot.customName ?? "—") : (slot.groupName ?? "—")}
       </div>
-      <div style={{ fontSize: 11, marginTop: 3 }}>
-        <span style={{ color, fontWeight: 700 }}>{slot.isOnline ? "online" : "offline"}</span>
+      <div style={{ fontSize: 11, marginTop: 3, display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {slot.lessonType !== "guruh" && (
+          <span style={{ color: "#f59e0b", fontWeight: 700 }}>
+            {slot.lessonType === "individual" ? "ind." : "diag."}
+          </span>
+        )}
+        <span style={{ color, fontWeight: 700 }}>
+          {slot.isOnline ? (slot.meetingPlatform === "meet" ? "meet" : "zoom") : "offline"}
+        </span>
         {slot.teacherName && (
           <span style={{ color: "var(--text-faint)" }}>
-            {" "}{slot.teacherName.split(" ").slice(0, 2).map((w, i) => i === 0 ? w : w[0] + ".").join(" ")}
+            {slot.teacherName.split(" ").slice(0, 2).map((w, i) => i === 0 ? w : w[0] + ".").join(" ")}
           </span>
         )}
       </div>
