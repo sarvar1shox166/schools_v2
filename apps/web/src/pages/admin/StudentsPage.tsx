@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Avatar, Card, Icon } from "@chess-school/ui";
 import {
   useStudents,
@@ -60,6 +61,7 @@ const PAY_STATUS_COLOR: Record<string, { bg: string; color: string }> = {
 
 /* ─── Page ─── */
 export default function StudentsPage() {
+  const navigate = useNavigate();
   const { data: students = [], isLoading } = useStudents();
   const [tab, setTab] = useState<FilterTab>("hammasi");
   const [q, setQ] = useState("");
@@ -98,7 +100,7 @@ export default function StudentsPage() {
           <button className="btn">
             <Icon name="download" size={15} /> Eksport
           </button>
-          <button className="btn primary" onClick={() => setModal({ mode: "add" })}>
+          <button className="btn primary" onClick={() => navigate("/admin/students/new")}>
             <Icon name="plus" size={15} /> Qo'shish
           </button>
         </div>

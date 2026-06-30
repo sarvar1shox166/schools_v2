@@ -3,6 +3,7 @@ import LoginPage from "./pages/auth/LoginPage.js";
 import AdminDashboard from "./pages/admin/AdminDashboard.js";
 import TeachersPage from "./pages/admin/TeachersPage.js";
 import StudentsPage from "./pages/admin/StudentsPage.js";
+import NewStudentPage from "./pages/admin/NewStudentPage.js";
 import GroupsPage from "./pages/admin/GroupsPage.js";
 import SchedulePage from "./pages/admin/SchedulePage.js";
 import AttendancePage from "./pages/admin/AttendancePage.js";
@@ -142,7 +143,8 @@ export default function App() {
         <Route element={<AppShell title="Admin paneli" nav={ADMIN_NAV} />}>
           <Route path="/admin"                element={<AdminDashboard />} />
           <Route path="/admin/teachers"       element={<TeachersPage />} />
-          <Route path="/admin/students"       element={<StudentsPage />} />
+          <Route path="/admin/students"         element={<StudentsPage />} />
+          <Route path="/admin/students/new"   element={<NewStudentPage />} />
           <Route path="/admin/groups"         element={<GroupsPage />} />
           <Route path="/admin/schedule"       element={<SchedulePage />} />
           <Route path="/admin/attendance"     element={<AttendancePage />} />

@@ -417,6 +417,7 @@ export function useAssignPackage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
       qc.invalidateQueries({ queryKey: ["studentPackages"] });
+      qc.invalidateQueries({ queryKey: ["students"] });
     },
   });
 }
