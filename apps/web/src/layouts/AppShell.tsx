@@ -68,7 +68,7 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   const location = useLocation();
   const { data: unread } = useUnreadNotifications();
   const isStudent = user?.role === "student";
-  const { data: xpData } = useMyXp();
+  const { data: xpData } = useMyXp(isStudent);
 
   const studentMeta = isStudent ? (STUDENT_PAGE_META[location.pathname] ?? { title, sub: "" }) : null;
 

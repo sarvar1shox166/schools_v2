@@ -654,10 +654,11 @@ export function useAttemptPuzzle() {
   });
 }
 
-export function useMyXp() {
+export function useMyXp(enabled = true) {
   return useQuery({
     queryKey: ["myXp"],
     queryFn: async () => (await api.get<MyXp>("/me/xp")).data,
+    enabled,
   });
 }
 

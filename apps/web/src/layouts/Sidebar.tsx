@@ -40,7 +40,7 @@ export function Sidebar({ sections, brandSub, gender, onGenderChange }: SidebarP
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const isStudent = user?.role === "student";
-  const { data: xpData } = useMyXp();
+  const { data: xpData } = useMyXp(isStudent);
 
   const xpLevel = xpData?.level ?? 1;
   const levelName = LEVEL_NAMES[Math.min(xpLevel - 1, LEVEL_NAMES.length - 1)] ?? LEVEL_NAMES[0];
