@@ -55,7 +55,8 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   app.get("/schedule/today", async (request) => {
     const { tenantId, role, sub } = request.user;
-    const dayOfWeek = new Date().getDay();
+    // DB convention: 0=Mon, 1=Tue, ..., 6=Sun  (JS getDay: 0=Sun, 1=Mon)
+    const dayOfWeek = (new Date().getDay() + 6) % 7;
 
     const params: unknown[] = [tenantId, dayOfWeek];
     let filter = "";
@@ -114,7 +115,9 @@ export async function scheduleRoutes(app: FastifyInstance) {
     let best: { row: (typeof rows)[number]; at: Date } | null = null;
     for (const row of rows) {
       const [h, m] = String(row.startTime).split(":").map(Number);
-      let dayDiff = (row.dayOfWeek - now.getDay() + 7) % 7;
+      // DB: 0=Mon..6=Sun; JS getDay: 0=Sun..6=Sat
+      const nowDow = (now.getDay() + 6) % 7;
+      let dayDiff = (row.dayOfWeek - nowDow + 7) % 7;
       const candidate = new Date(now);
       candidate.setDate(now.getDate() + dayDiff);
       candidate.setHours(h, m, 0, 0);

@@ -5,7 +5,7 @@ import { useAuthStore } from "../../lib/auth-store.js";
 import { type ScheduleSlot, useAttendanceHistory, useDailyPuzzle, useMyPackages, useMyXp, useNextLesson, useSchedule } from "../../lib/queries.js";
 
 const LEVEL_NAMES = ["Yangi boshlovchi", "Boshlang'ich", "O'rta", "Ilg'or", "Usta"];
-const DAY_SHORT = ["Yak", "Du", "Se", "Chor", "Pay", "Ju", "Sha"];
+const DAY_SHORT = ["Du", "Se", "Chor", "Pay", "Ju", "Sha", "Yak"]; // 0=Mon (matches DB convention)
 
 function xpForLevel(level: number) { return level * 200; }
 
@@ -19,7 +19,7 @@ function isLessonLiveNow(startTime: string, durationMin = 90): boolean {
 
 function getDateForDay(dayOfWeek: number): Date {
   const today = new Date();
-  const diff = (dayOfWeek - today.getDay() + 7) % 7;
+  const diff = (dayOfWeek - (today.getDay() + 6) % 7 + 7) % 7;
   const d = new Date(today); d.setDate(today.getDate() + diff);
   return d;
 }
@@ -115,7 +115,7 @@ export default function StudentDashboard() {
   const earnedAchievements = (xpData?.achievements ?? []).filter((a) => a.earned);
   const liveNow = nextLesson && isLessonLiveNow(nextLesson.startTime);
 
-  const today = new Date().getDay();
+  const today = (new Date().getDay() + 6) % 7; // 0=Mon
   const weekSchedule = [...(schedule ?? [])]
     .sort((a, b) => ((a.dayOfWeek - today + 7) % 7) - ((b.dayOfWeek - today + 7) % 7))
     .slice(0, 5);

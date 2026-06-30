@@ -12,7 +12,7 @@ import {
 } from "../../lib/queries.js";
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
-const DAY_SHORT  = ["Yak","Du","Se","Chor","Pay","Ju","Sha"];
+const DAY_SHORT  = ["Du","Se","Chor","Pay","Ju","Sha","Yak"]; // 0=Mon (matches DB convention)
 const UZ_MONTHS  = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
 const ATT_COLOR: Record<string,string> = { p:"#22c55e", l:"#f59e0b", a:"#ef4444" };
 const ATT_MARK:  Record<string,string> = { p:"✓", l:"—", a:"✕" };
@@ -51,7 +51,7 @@ function addMins(t: string, mins: number): string {
 
 function getDateForDay(dow: number): Date {
   const today = new Date();
-  const d = new Date(today); d.setDate(today.getDate()+((dow-today.getDay()+7)%7));
+  const d = new Date(today); d.setDate(today.getDate()+((dow-(today.getDay()+6)%7+7)%7));
   return d;
 }
 
@@ -131,7 +131,8 @@ export default function LessonsPage() {
 
   const doneHWCount = homework.filter(h=>h.done).length;
   const isToday     = next ? new Date(next.nextAt).toDateString()===new Date().toDateString() : false;
-  const sortedSched = [...schedule].sort((a,b)=>((a.dayOfWeek-new Date().getDay()+7)%7)-((b.dayOfWeek-new Date().getDay()+7)%7));
+  const todayDow = (new Date().getDay()+6)%7;
+  const sortedSched = [...schedule].sort((a,b)=>((a.dayOfWeek-todayDow+7)%7)-((b.dayOfWeek-todayDow+7)%7));
 
   return (
     <div>
@@ -384,7 +385,7 @@ export default function LessonsPage() {
                       <div style={{ width:10,height:10,borderRadius:"50%",background:ATT_COLOR[attPopover.status]??"#475569",flexShrink:0 }}/>
                       <div style={{ flex:1,minWidth:0 }}>
                         <div style={{ fontWeight:700,fontSize:13 }}>
-                          {(()=>{ const d=new Date(attPopover.date); return `${DAY_SHORT[d.getDay()]}, ${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`; })()}
+                          {(()=>{ const d=new Date(attPopover.date); return `${DAY_SHORT[(d.getDay()+6)%7]}, ${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`; })()}
                         </div>
                         {attPopover.note && <div style={{ fontSize:12,color:"var(--text-faint)",marginTop:2 }}>{attPopover.note}</div>}
                       </div>

@@ -224,7 +224,7 @@ function MarkModal({
   const markAtt = useMarkAttendance();
 
   /* Get slot for the selected group (any slot — take first matching today's day) */
-  const todayDow = new Date().getDay(); // 0=Sun
+  const todayDow = (new Date().getDay() + 6) % 7; // 0=Mon (DB convention)
   const slot = schedule.find(s => s.groupId === groupId && s.dayOfWeek === todayDow)
     ?? schedule.find(s => s.groupId === groupId);
 
