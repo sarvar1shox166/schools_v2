@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Chess } from "@chess-school/chess-engine";
-import { useCreatePuzzle } from "../../lib/queries.js";
+import { useCreatePuzzle, type PuzzleSection } from "../../lib/queries.js";
 
 const INITIAL_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -48,6 +48,14 @@ const DIFF = [
   { v:"oson"  as const, label:"Oson",  xp:50  },
   { v:"orta"  as const, label:"O'rta", xp:75  },
   { v:"qiyin" as const, label:"Qiyin", xp:100 },
+];
+
+const SECTIONS: { v: PuzzleSection; label: string; icon: string; color: string }[] = [
+  { v:"mot1",   label:"1 xodlik motlar",     icon:"♛", color:"#22c55e" },
+  { v:"mot2",   label:"2 xodlik motlar",     icon:"♚", color:"#3b82f6" },
+  { v:"mot3",   label:"3 xodlik motlar",     icon:"♞", color:"#f59e0b" },
+  { v:"series", label:"Zadachalar seriyasi", icon:"🎯", color:"#ec4899" },
+  { v:"time",   label:"Time zadachalar",     icon:"⏱️", color:"#f87171" },
 ];
 
 /* ── FEN helpers ─────────────────────────────────────────────── */
@@ -272,6 +280,7 @@ export default function TPuzzleCreatePage() {
   /* form */
   const [title,      setTitle]      = useState("");
   const [difficulty, setDifficulty] = useState<"oson"|"orta"|"qiyin">("oson");
+  const [section,    setSection]    = useState<PuzzleSection>("mot1");
 
   const currentFen = buildFen(pieces, turn, cas, ep);
   const displayPieces = mode === "solution" ? parseFen(solFen) : pieces;
@@ -378,13 +387,15 @@ export default function TPuzzleCreatePage() {
     if (!title.trim() || solutionMoves.length === 0) return;
     try {
       await createPuzzle.mutateAsync({
-        fen: startFen, solution: solutionMoves, difficulty,
+        fen: startFen, solution: solutionMoves, difficulty, section,
         xpReward: DIFF.find(d => d.v === difficulty)?.xp ?? 50,
         title: title.trim(),
       });
       navigate("/teacher/puzzles");
     } catch {}
   }
+
+  const isDuplicate = (createPuzzle.error as { response?: { status?: number } } | null)?.response?.status === 409;
 
   const canSave = title.trim().length > 0 && solutionMoves.length > 0 && !createPuzzle.isPending;
 
@@ -505,6 +516,27 @@ export default function TPuzzleCreatePage() {
 
           {mode === "setup" ? (
             <>
+              {/* Section */}
+              <Section title="Bo'lim">
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  {SECTIONS.map(s => (
+                    <button key={s.v} onClick={() => setSection(s.v)}
+                      style={{
+                        display:"flex", alignItems:"center", gap:10,
+                        padding:"8px 10px", border:"none", borderRadius:8, cursor:"pointer",
+                        background: section===s.v ? `${s.color}22` : "rgba(255,255,255,.04)",
+                        outline: section===s.v ? `2px solid ${s.color}` : "2px solid transparent",
+                        transition:"all .1s", textAlign:"left",
+                      }}>
+                      <span style={{ fontSize:18, width:26, textAlign:"center", color:s.color }}>{s.icon}</span>
+                      <span style={{ fontSize:12, fontWeight:700, color: section===s.v ? "#fff" : "#bbb" }}>
+                        {s.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Section>
+
               {/* Turn */}
               <Section>
                 <select value={turn} onChange={e => setTurn(e.target.value as "w"|"b")} style={SEL_STYLE}>
@@ -635,7 +667,9 @@ export default function TPuzzleCreatePage() {
               {createPuzzle.isError && (
                 <div style={{ padding:"10px 12px", borderRadius:8, background:"rgba(239,68,68,.15)",
                   border:"1px solid rgba(239,68,68,.3)", color:"#f87171", fontSize:13 }}>
-                  Saqlashda xatolik yuz berdi.
+                  {isDuplicate
+                    ? "⚠️ Bu pozitsiya allaqachon bazada mavjud. Boshqa pozitsiya tanlang."
+                    : "Saqlashda xatolik yuz berdi."}
                 </div>
               )}
 

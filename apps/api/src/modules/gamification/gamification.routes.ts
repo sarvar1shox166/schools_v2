@@ -4,6 +4,8 @@ import { checkPuzzleMove } from "@chess-school/chess-engine";
 import { pool } from "../../db/pool.js";
 import { awardXp } from "./xp.js";
 
+const PUZZLE_SECTIONS = ["mot1", "mot2", "mot3", "series", "time"] as const;
+
 const createPuzzleSchema = z.object({
   fen: z.string().min(6),
   solution: z.array(z.string().min(4)).min(1),
@@ -12,6 +14,7 @@ const createPuzzleSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),
   groupId: z.string().uuid().optional(),
+  section: z.enum(PUZZLE_SECTIONS).default("mot1"),
 });
 
 async function getTeacherIdForUser(userId: string): Promise<string | null> {
@@ -34,12 +37,26 @@ export async function gamificationRoutes(app: FastifyInstance) {
 
   // ---- Puzzles ----
 
-  app.get("/puzzles", async () => {
+  app.get("/puzzles", async (request) => {
+    const { section } = request.query as { section?: string };
     const { rows } = await pool.query(
-      `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, (created_by IS NOT NULL) AS "createdByTeacher"
-       FROM puzzles ORDER BY created_at`
+      section
+        ? `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, (created_by IS NOT NULL) AS "createdByTeacher"
+           FROM puzzles WHERE section = $1 ORDER BY created_at`
+        : `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, (created_by IS NOT NULL) AS "createdByTeacher"
+           FROM puzzles ORDER BY created_at`,
+      section ? [section] : []
     );
     return rows;
+  });
+
+  app.get("/puzzles/section-counts", async () => {
+    const { rows } = await pool.query(
+      `SELECT section, COUNT(*)::int AS count FROM puzzles GROUP BY section`
+    );
+    const counts: Record<string, number> = {};
+    for (const row of rows) counts[row.section] = row.count;
+    return counts;
   });
 
   app.get("/puzzles/:id/hint", { onRequest: [app.requireRole("student")] }, async (request, reply) => {
@@ -67,7 +84,7 @@ export async function gamificationRoutes(app: FastifyInstance) {
     const teacherId = await getTeacherIdForUser(request.user.sub);
     if (!teacherId) return reply.code(404).send({ error: "Teacher not found" });
     const { rows } = await pool.query(
-      `SELECT id, fen, solution, difficulty, xp_reward AS "xpReward", title, description, created_at AS "createdAt"
+      `SELECT id, fen, solution, difficulty, xp_reward AS "xpReward", title, description, section, created_at AS "createdAt"
        FROM puzzles WHERE created_by = $1 ORDER BY created_at DESC`,
       [teacherId]
     );
@@ -111,14 +128,25 @@ export async function gamificationRoutes(app: FastifyInstance) {
 
   app.post("/puzzles", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
     const body = createPuzzleSchema.parse(request.body);
+
+    // Duplicate FEN check (compare first 4 FEN fields — position, turn, castling, ep)
+    const normFen = body.fen.split(" ").slice(0, 4).join(" ");
+    const dupCheck = await pool.query(
+      `SELECT id FROM puzzles
+       WHERE (split_part(fen,' ',1)||' '||split_part(fen,' ',2)||' '||split_part(fen,' ',3)||' '||split_part(fen,' ',4)) = $1
+       LIMIT 1`,
+      [normFen]
+    );
+    if (dupCheck.rows.length > 0) return reply.code(409).send({ error: "duplicate_fen" });
+
     let createdBy: string | null = null;
     if (request.user.role === "teacher") {
       createdBy = await getTeacherIdForUser(request.user.sub);
     }
     const { rows } = await pool.query(
-      `INSERT INTO puzzles (fen, solution, difficulty, xp_reward, title, description, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [body.fen, body.solution, body.difficulty, body.xpReward, body.title ?? null, body.description ?? null, createdBy]
+      `INSERT INTO puzzles (fen, solution, difficulty, xp_reward, title, description, section, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [body.fen, body.solution, body.difficulty, body.xpReward, body.title ?? null, body.description ?? null, body.section, createdBy]
     );
     return reply.code(201).send({ id: rows[0].id });
   });

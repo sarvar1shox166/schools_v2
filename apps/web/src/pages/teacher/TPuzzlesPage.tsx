@@ -10,6 +10,14 @@ const FILTER_TABS = [
   { v: "qiyin", label: "Qiyin" },
 ];
 
+const SECTION_LABELS: Record<string, string> = {
+  mot1:   "1 xodlik",
+  mot2:   "2 xodlik",
+  mot3:   "3 xodlik",
+  series: "Seriya",
+  time:   "Time",
+};
+
 const DIFF_COLOR: Record<string, { bg: string; text: string; label: string }> = {
   oson:  { bg: "#d1fae5", text: "#065f46", label: "Oson" },
   orta:  { bg: "#fef3c7", text: "#92400e", label: "O'rta" },
@@ -215,7 +223,18 @@ export default function TPuzzlesPage() {
                     borderRadius:10, background:"var(--surface-2)",
                   }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontWeight:600, fontSize:14 }}>{puzzle.title ?? "—"}</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={{ fontWeight:600, fontSize:14 }}>{puzzle.title ?? "—"}</span>
+                        {puzzle.section && (
+                          <span style={{
+                            fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:99,
+                            background:"rgba(255,255,255,.07)", color:"var(--text-dim)",
+                            border:"1px solid var(--border)",
+                          }}>
+                            {SECTION_LABELS[puzzle.section] ?? puzzle.section}
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:2, fontFamily:"monospace",
                         whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                         {puzzle.fen}

@@ -1,20 +1,20 @@
 import { useState } from "react";
 import { Chess } from "chess.js";
-import { useAttemptPuzzle, usePuzzleHint, usePuzzleStats, usePuzzles } from "../../lib/queries.js";
+import { useAttemptPuzzle, usePuzzleHint, usePuzzleStats, usePuzzles, usePuzzleSectionCounts, type PuzzleSection } from "../../lib/queries.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
 
 /* ── Sections ────────────────────────────────────────────────────────────── */
-interface Section { id: string; title: string; sub: string; icon: string; color: string; locked?: boolean; }
-const SECTIONS: Section[] = [
-  { id:"mot1",   title:"1 xodlik motlar",     sub:"1 ta masala",  icon:"♛", color:"#22c55e" },
-  { id:"mot2",   title:"2 xodlik motlar",     sub:"1 ta masala",  icon:"♚", color:"#3b82f6" },
-  { id:"mot3",   title:"3 xodlik motlar",     sub:"Tez orada",    icon:"♞", color:"#f59e0b", locked:true },
-  { id:"series", title:"Zadachalar seriyasi", sub:"1 ta masala",  icon:"🎯", color:"#ec4899" },
-  { id:"time",   title:"Time zadachalar",     sub:"Tez orada",    icon:"⏱️", color:"#f87171", locked:true },
+interface SectionMeta { id: PuzzleSection; title: string; icon: string; color: string; locked?: boolean; }
+const SECTIONS: SectionMeta[] = [
+  { id:"mot1",   title:"1 xodlik motlar",     icon:"♛", color:"#22c55e" },
+  { id:"mot2",   title:"2 xodlik motlar",     icon:"♚", color:"#3b82f6" },
+  { id:"mot3",   title:"3 xodlik motlar",     icon:"♞", color:"#f59e0b", locked:true },
+  { id:"series", title:"Zadachalar seriyasi", icon:"🎯", color:"#ec4899" },
+  { id:"time",   title:"Time zadachalar",     icon:"⏱️", color:"#f87171", locked:true },
 ];
 
 /* ── Left panel ──────────────────────────────────────────────────────────── */
-function StatsPanel({ correct, wrong, accuracy }: { correct:number; wrong:number; accuracy:number }) {
+function StatsPanel({ correct, wrong, accuracy }: { correct:number; wrong:number; accuracy:number; }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       {/* Umumiy statistika */}
@@ -51,7 +51,11 @@ function StatsPanel({ correct, wrong, accuracy }: { correct:number; wrong:number
 }
 
 /* ── Right panel ─────────────────────────────────────────────────────────── */
-function SectionsPanel({ active, onSelect }: { active:string; onSelect:(id:string)=>void }) {
+function SectionsPanel({ active, onSelect, counts }: {
+  active: PuzzleSection;
+  onSelect: (id: PuzzleSection) => void;
+  counts: Record<string, number>;
+}) {
   return (
     <div style={{ background:"rgba(255,255,255,.04)", border:"1.5px solid rgba(255,255,255,.08)", borderRadius:16, padding:16 }}>
       <div style={{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,.4)", letterSpacing:"0.08em", marginBottom:12 }}>
@@ -60,6 +64,7 @@ function SectionsPanel({ active, onSelect }: { active:string; onSelect:(id:strin
       <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
         {SECTIONS.map(s => {
           const isActive = s.id === active;
+          const cnt = counts[s.id] ?? 0;
           return (
             <div key={s.id} onClick={()=>!s.locked && onSelect(s.id)}
               style={{ display:"flex", alignItems:"center", gap:12,
@@ -78,7 +83,9 @@ function SectionsPanel({ active, onSelect }: { active:string; onSelect:(id:strin
                 <div style={{ fontSize:13, fontWeight:700, color: isActive ? "#fff" : "rgba(255,255,255,.75)", marginBottom:1 }}>
                   {s.title}
                 </div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,.35)" }}>{s.sub}</div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,.35)" }}>
+                  {s.locked ? "Tez orada" : cnt > 0 ? `${cnt} ta masala` : "Masala yo'q"}
+                </div>
               </div>
               {s.locked && <div style={{ marginLeft:"auto", fontSize:14 }}>🔒</div>}
             </div>
@@ -199,9 +206,10 @@ function PuzzleCenter({ puzzles }: { puzzles: ReturnType<typeof usePuzzles>["dat
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
 export default function PuzzlesPage() {
-  const { data: puzzles } = usePuzzles();
+  const [activeSection, setActiveSection] = useState<PuzzleSection>("mot1");
+  const { data: puzzles } = usePuzzles(activeSection);
   const { data: stats } = usePuzzleStats();
-  const [activeSection, setActiveSection] = useState("mot1");
+  const { data: counts = {} } = usePuzzleSectionCounts();
 
   const correct  = stats?.correct  ?? 0;
   const wrong    = stats?.incorrect ?? 0;
@@ -218,7 +226,7 @@ export default function PuzzlesPage() {
         <PuzzleCenter puzzles={puzzles} />
 
         {/* Right */}
-        <SectionsPanel active={activeSection} onSelect={setActiveSection} />
+        <SectionsPanel active={activeSection} onSelect={setActiveSection} counts={counts} />
       </div>
     </div>
   );
