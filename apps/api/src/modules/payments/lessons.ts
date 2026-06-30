@@ -1,14 +1,14 @@
 import type { PoolClient } from "pg";
 import { notifyStudent } from "../notifications/notify.js";
 
-export async function consumeLesson(client: PoolClient, studentId: string) {
+export async function consumeLesson(client: PoolClient, studentId: string): Promise<boolean> {
   const { rows } = await client.query(
     `SELECT id, used_lessons, total_lessons FROM student_packages
      WHERE student_id = $1 AND status = 'active' AND used_lessons < total_lessons
      ORDER BY purchased_at ASC LIMIT 1 FOR UPDATE`,
     [studentId]
   );
-  if (rows.length === 0) return;
+  if (rows.length === 0) return false;
 
   const pkg = rows[0];
   const used = pkg.used_lessons + 1;
@@ -21,6 +21,7 @@ export async function consumeLesson(client: PoolClient, studentId: string) {
   if (status === "finished") {
     await notifyStudent(client, studentId, "Sizning dars paketingiz tugadi. Davom etish uchun yangi paket sotib oling.");
   }
+  return true;
 }
 
 export async function refundLesson(client: PoolClient, studentId: string) {

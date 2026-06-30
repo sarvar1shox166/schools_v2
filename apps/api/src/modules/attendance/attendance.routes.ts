@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { consumeLesson, refundLesson } from "../payments/lessons.js";
+import { createNotification } from "../notifications/notify.js";
 import { recordLessonSession } from "../payroll/lesson-sessions.js";
 
 const querySchema = z.object({
@@ -160,6 +161,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     async (request) => {
       const body = markSchema.parse(request.body);
       const userId = request.user.sub;
+      const { tenantId } = request.user;
 
       const client = await pool.connect();
       try {
@@ -185,7 +187,29 @@ export async function attendanceRoutes(app: FastifyInstance) {
           );
 
           if (!oldCounted && newCounted) {
-            await consumeLesson(client, r.studentId);
+            const consumed = await consumeLesson(client, r.studentId);
+            if (!consumed && tenantId) {
+              // Paket yo'q — adminlarga ogohlantirish
+              const studentRes = await client.query(
+                `SELECT u.full_name FROM students s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
+                [r.studentId]
+              );
+              const studentName = studentRes.rows[0]?.full_name ?? "O'quvchi";
+              const adminRes = await client.query(
+                `SELECT id FROM users WHERE tenant_id = $1 AND role IN ('admin','super_admin')`,
+                [tenantId]
+              );
+              for (const admin of adminRes.rows) {
+                await createNotification(client, {
+                  tenantId,
+                  userId: admin.id,
+                  type: "no_package",
+                  icon: "alert",
+                  title: "To'lov talab qilinadi",
+                  body: `${studentName} davomatga belgilandi, lekin faol paketi yo'q. To'lovni rasmiylashtiring.`,
+                });
+              }
+            }
           } else if (oldCounted && !newCounted) {
             await refundLesson(client, r.studentId);
           }
