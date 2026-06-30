@@ -5,16 +5,25 @@ import { pool } from "../../db/pool.js";
 import type { JwtPayload } from "../../plugins/auth.js";
 import { getComputerMove, difficultyToSkill } from "./stockfish.service.js";
 
+interface OnlinePlayer {
+  socket: WebSocket;
+  studentId: string;
+  fullName: string;
+  elo: number;
+}
+
 interface QueuedPlayer {
   socket: WebSocket;
   studentId: string;
   fullName: string;
+  elo: number;
 }
 
 interface GamePlayer {
   socket: WebSocket;
   studentId: string;
   fullName: string;
+  elo: number;
 }
 
 interface Game {
@@ -24,17 +33,14 @@ interface Game {
   black: GamePlayer;
 }
 
-interface OnlinePlayer {
-  socket: WebSocket;
-  studentId: string;
-  fullName: string;
-}
-
 interface Challenge {
   fromStudentId: string;
   fromSocket: WebSocket;
   fromName: string;
+  fromElo: number;
   toStudentId: string;
+  tc: string;
+  tcType: string;
 }
 
 const queue: QueuedPlayer[] = [];
@@ -50,15 +56,27 @@ function send(socket: WebSocket, payload: unknown) {
 }
 
 function broadcastOnlineList() {
-  const list = [...onlinePlayers.values()]
-    .filter((p) => !socketGames.has(p.socket))
-    .map((p) => ({ studentId: p.studentId, fullName: p.fullName }));
+  const inGame = new Set([...socketGames.keys()]);
+  const list = [...onlinePlayers.values()].map((p) => ({
+    studentId: p.studentId,
+    fullName: p.fullName,
+    elo: p.elo,
+    inGame: inGame.has(p.socket),
+  }));
   for (const p of onlinePlayers.values()) {
-    send(p.socket, { type: "online_list", players: list.filter((x) => x.studentId !== p.studentId) });
+    send(p.socket, {
+      type: "online_list",
+      players: list.filter((x) => x.studentId !== p.studentId),
+    });
   }
 }
 
-function startGame(a: { socket: WebSocket; studentId: string; fullName: string }, b: { socket: WebSocket; studentId: string; fullName: string }) {
+function startGame(
+  a: { socket: WebSocket; studentId: string; fullName: string; elo: number },
+  b: { socket: WebSocket; studentId: string; fullName: string; elo: number },
+  tc?: string,
+  tcType?: string,
+) {
   const id = `${a.studentId}-${b.studentId}-${Date.now()}`;
   const chess = new Chess();
   const game: Game = { id, chess, white: a, black: b };
@@ -66,8 +84,8 @@ function startGame(a: { socket: WebSocket; studentId: string; fullName: string }
   socketGames.set(a.socket, id);
   socketGames.set(b.socket, id);
 
-  send(a.socket, { type: "matched", color: "w", opponent: b.fullName, fen: chess.fen() });
-  send(b.socket, { type: "matched", color: "b", opponent: a.fullName, fen: chess.fen() });
+  send(a.socket, { type: "matched", color: "w", opponent: b.fullName, opponentElo: b.elo, fen: chess.fen(), tc, tcType });
+  send(b.socket, { type: "matched", color: "b", opponent: a.fullName, opponentElo: a.elo, fen: chess.fen(), tc, tcType });
   broadcastOnlineList();
 }
 
@@ -92,15 +110,15 @@ async function updateElo(game: Game, reason: string) {
     [[game.white.studentId, game.black.studentId]]
   );
   const eloMap = new Map(rows.map((r) => [r.studentId, r.elo as number]));
-  const eloWhite = eloMap.get(game.white.studentId) ?? 1200;
-  const eloBlack = eloMap.get(game.black.studentId) ?? 1200;
+  const eloWhite = eloMap.get(game.white.studentId) ?? game.white.elo;
+  const eloBlack = eloMap.get(game.black.studentId) ?? game.black.elo;
 
   const expectedWhite = 1 / (1 + 10 ** ((eloBlack - eloWhite) / 400));
   const K = 16;
   const newEloWhite = Math.round(eloWhite + K * (scoreWhite - expectedWhite));
   const newEloBlack = Math.round(eloBlack + K * ((1 - scoreWhite) - (1 - expectedWhite)));
 
-  const updates: [string, number, number, "win"|"draw"|"loss", string, number][] = [
+  const updates: [string, number, number, "win" | "draw" | "loss", string, number][] = [
     [game.white.studentId, newEloWhite, newEloWhite - eloWhite,
       scoreWhite === 1 ? "win" : scoreWhite === 0 ? "loss" : "draw",
       game.black.fullName, eloBlack],
@@ -140,23 +158,18 @@ function tryMatch() {
   while (queue.length >= 2) {
     const a = queue.shift()!;
     const b = queue.shift()!;
-    if (a.socket.readyState !== a.socket.OPEN) {
-      queue.unshift(b);
-      continue;
-    }
-    if (b.socket.readyState !== b.socket.OPEN) {
-      queue.unshift(a);
-      continue;
-    }
-
+    if (a.socket.readyState !== a.socket.OPEN) { queue.unshift(b); continue; }
+    if (b.socket.readyState !== b.socket.OPEN) { queue.unshift(a); continue; }
     startGame(a, b);
   }
 }
 
-async function getStudent(userId: string): Promise<{ studentId: string; fullName: string } | null> {
+async function getStudent(userId: string): Promise<{ studentId: string; fullName: string; elo: number } | null> {
   const { rows } = await pool.query(
-    `SELECT s.id AS "studentId", u.full_name AS "fullName"
-     FROM students s JOIN users u ON u.id = s.user_id
+    `SELECT s.id AS "studentId", u.full_name AS "fullName", COALESCE(sx.elo, 1200) AS elo
+     FROM students s
+     JOIN users u ON u.id = s.user_id
+     LEFT JOIN student_xp sx ON sx.student_id = s.id
      WHERE s.user_id = $1`,
     [userId]
   );
@@ -172,7 +185,7 @@ export async function pvpRoutes(app: FastifyInstance) {
       opponentElo: number;
     };
 
-    if (!opponentName || !["win","draw","loss"].includes(result)) {
+    if (!opponentName || !["win", "draw", "loss"].includes(result)) {
       return reply.code(400).send({ error: "invalid params" });
     }
 
@@ -202,10 +215,7 @@ export async function pvpRoutes(app: FastifyInstance) {
        ON CONFLICT (student_id) DO UPDATE SET elo = $2`,
       [studentId, newElo]
     );
-    await pool.query(
-      `INSERT INTO elo_history (student_id, elo) VALUES ($1, $2)`,
-      [studentId, newElo]
-    );
+    await pool.query(`INSERT INTO elo_history (student_id, elo) VALUES ($1, $2)`, [studentId, newElo]);
     await pool.query(
       `INSERT INTO game_results (student_id, opponent_name, result, elo_change) VALUES ($1, $2, $3, $4)`,
       [studentId, opponentName, result, eloChange]
@@ -214,88 +224,109 @@ export async function pvpRoutes(app: FastifyInstance) {
     return reply.send({ newElo, eloChange });
   });
 
-  /* ── Computer move HTTP endpoint ──────────────────────────────────────── */
+  /* ── Computer move ────────────────────────────────────────────────────── */
   app.post("/pvp/computer-move", async (request, reply) => {
     const { fen, difficulty, unbeatable } = request.body as {
-      fen: string;
-      difficulty: number;
-      unbeatable?: boolean;
+      fen: string; difficulty: number; unbeatable?: boolean;
     };
+    if (!fen || typeof fen !== "string") return reply.code(400).send({ error: "fen required" });
 
-    if (!fen || typeof fen !== "string") {
-      return reply.code(400).send({ error: "fen required" });
-    }
-
-    // Validate FEN via chess.js
     let chess: Chess;
-    try {
-      chess = new Chess(fen);
-    } catch {
-      return reply.code(400).send({ error: "invalid fen" });
-    }
-    if (chess.isGameOver()) {
-      return reply.send({ move: null, gameOver: true });
-    }
+    try { chess = new Chess(fen); } catch { return reply.code(400).send({ error: "invalid fen" }); }
+    if (chess.isGameOver()) return reply.send({ move: null, gameOver: true });
 
     const skillLevel = unbeatable ? 20 : difficultyToSkill(difficulty ?? 5);
-    // Stronger = more think time; unbeatable gets 3 seconds
     const movetime = unbeatable ? 3000 : Math.min(200 + difficulty * 80, 1200);
-
     const move = await getComputerMove(fen, skillLevel, movetime);
     return reply.send({ move });
   });
 
+  /* ── WebSocket PvP ────────────────────────────────────────────────────── */
   app.get("/ws/pvp", { websocket: true }, async (socket, request) => {
     const { token } = request.query as { token?: string };
-    if (!token) {
-      socket.close(4001, "Unauthorized");
-      return;
-    }
+    if (!token) { socket.close(4001, "Unauthorized"); return; }
 
     let payload: JwtPayload;
-    try {
-      payload = app.jwt.verify<JwtPayload>(token);
-    } catch {
-      socket.close(4001, "Unauthorized");
-      return;
-    }
+    try { payload = app.jwt.verify<JwtPayload>(token); }
+    catch { socket.close(4001, "Unauthorized"); return; }
 
-    if (payload.role !== "student") {
-      socket.close(4003, "Forbidden");
-      return;
-    }
+    if (payload.role !== "student") { socket.close(4003, "Forbidden"); return; }
 
     const student = await getStudent(payload.sub);
-    if (!student) {
-      socket.close(4004, "Student not found");
-      return;
+    if (!student) { socket.close(4004, "Student not found"); return; }
+
+    // Remove stale connections for the same student (e.g. page refresh)
+    for (const [oldSocket, p] of onlinePlayers.entries()) {
+      if (p.studentId === student.studentId) {
+        onlinePlayers.delete(oldSocket);
+        const qi = queue.findIndex((q) => q.socket === oldSocket);
+        if (qi !== -1) queue.splice(qi, 1);
+        oldSocket.close(4000, "Replaced by new connection");
+      }
     }
 
-    queue.push({ socket, studentId: student.studentId, fullName: student.fullName });
-    onlinePlayers.set(socket, { socket, studentId: student.studentId, fullName: student.fullName });
-    send(socket, { type: "queued" });
-    tryMatch();
+    // Add to lobby (not queue)
+    onlinePlayers.set(socket, { socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo });
+    send(socket, { type: "connected", myElo: student.elo });
     broadcastOnlineList();
 
     socket.on("message", (raw) => {
-      let msg: { type: string; from?: string; to?: string; promotion?: string; targetStudentId?: string; fromStudentId?: string };
-      try {
-        msg = JSON.parse(raw.toString());
-      } catch {
+      let msg: {
+        type: string;
+        from?: string; to?: string; promotion?: string;
+        targetStudentId?: string; fromStudentId?: string;
+        tc?: string; tcType?: string;
+      };
+      try { msg = JSON.parse(raw.toString()); }
+      catch { return; }
+
+      /* ── Join queue ── */
+      if (msg.type === "join_queue") {
+        const alreadyInQueue = queue.some((p) => p.studentId === student.studentId);
+        if (!alreadyInQueue) {
+          queue.push({ socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo });
+          send(socket, { type: "queued" });
+          tryMatch();
+        }
         return;
       }
 
+      /* ── Leave queue ── */
+      if (msg.type === "leave_queue") {
+        const idx = queue.findIndex((p) => p.socket === socket);
+        if (idx !== -1) queue.splice(idx, 1);
+        send(socket, { type: "left_queue" });
+        return;
+      }
+
+      /* ── Send challenge ── */
       if (msg.type === "challenge" && msg.targetStudentId) {
-        const target = [...onlinePlayers.values()].find((p) => p.studentId === msg.targetStudentId);
         const me = onlinePlayers.get(socket);
+        const target = [...onlinePlayers.values()].find((p) => p.studentId === msg.targetStudentId);
         if (!target || !me || socketGames.has(target.socket) || socketGames.has(socket)) return;
 
         const key = `${student.studentId}-${msg.targetStudentId}`;
-        challenges.set(key, { fromStudentId: student.studentId, fromSocket: socket, fromName: student.fullName, toStudentId: msg.targetStudentId });
-        send(target.socket, { type: "challenge_received", fromStudentId: student.studentId, fromName: student.fullName });
+        challenges.set(key, {
+          fromStudentId: student.studentId,
+          fromSocket: socket,
+          fromName: student.fullName,
+          fromElo: student.elo,
+          toStudentId: msg.targetStudentId,
+          tc: msg.tc ?? "5+0",
+          tcType: msg.tcType ?? "BLITS",
+        });
+        send(target.socket, {
+          type: "challenge_received",
+          fromStudentId: student.studentId,
+          fromName: student.fullName,
+          fromElo: student.elo,
+          tc: msg.tc ?? "5+0",
+          tcType: msg.tcType ?? "BLITS",
+        });
         return;
       }
 
+      /* ── Accept challenge ── */
       if (msg.type === "challenge_accept" && msg.fromStudentId) {
         const key = `${msg.fromStudentId}-${student.studentId}`;
         const challenge = challenges.get(key);
@@ -307,20 +338,30 @@ export async function pvpRoutes(app: FastifyInstance) {
         if (!me || !challenger) return;
         if (socketGames.has(me.socket) || socketGames.has(challenger.socket)) return;
 
-        send(challenger.socket, { type: "challenge_accepted", byStudentId: student.studentId, byName: student.fullName });
-        startGame(challenger, me);
+        // Remove both from queue if present
+        const removeFromQueue = (sock: WebSocket) => {
+          const idx = queue.findIndex((p) => p.socket === sock);
+          if (idx !== -1) queue.splice(idx, 1);
+        };
+        removeFromQueue(me.socket);
+        removeFromQueue(challenger.socket);
+
+        send(challenger.socket, { type: "challenge_accepted", byName: student.fullName });
+        startGame(challenger, me, challenge.tc, challenge.tcType);
         return;
       }
 
+      /* ── Decline challenge ── */
       if (msg.type === "challenge_decline" && msg.fromStudentId) {
         const key = `${msg.fromStudentId}-${student.studentId}`;
         const challenge = challenges.get(key);
         if (!challenge) return;
         challenges.delete(key);
-        send(challenge.fromSocket, { type: "challenge_declined", byStudentId: student.studentId, byName: student.fullName });
+        send(challenge.fromSocket, { type: "challenge_declined", byName: student.fullName });
         return;
       }
 
+      /* ── In-game messages ── */
       const gameId = socketGames.get(socket);
       if (!gameId) return;
       const game = games.get(gameId);
@@ -335,32 +376,22 @@ export async function pvpRoutes(app: FastifyInstance) {
         }
 
         let move;
-        try {
-          move = game.chess.move({ from: msg.from, to: msg.to, promotion: msg.promotion });
-        } catch {
-          move = null;
-        }
-        if (!move) {
-          send(socket, { type: "error", message: "Noto'g'ri yurish" });
-          return;
-        }
+        try { move = game.chess.move({ from: msg.from, to: msg.to, promotion: msg.promotion }); }
+        catch { move = null; }
+        if (!move) { send(socket, { type: "error", message: "Noto'g'ri yurish" }); return; }
 
         const status = gameStatus(game.chess);
-        const update = {
-          type: "move",
-          from: msg.from,
-          to: msg.to,
-          fen: game.chess.fen(),
-          turn: game.chess.turn(),
-          ...status,
-        };
+        const update = { type: "move", from: msg.from, to: msg.to, fen: game.chess.fen(), turn: game.chess.turn(), ...status };
         send(game.white.socket, update);
         send(game.black.socket, update);
 
+        // Fix: ELO update on checkmate/stalemate/draw
         if (status.gameOver) {
           games.delete(game.id);
           socketGames.delete(game.white.socket);
           socketGames.delete(game.black.socket);
+          broadcastOnlineList();
+          updateElo(game, status.result!).catch((err) => console.error("ELO update failed", err));
         }
         return;
       }
@@ -376,6 +407,7 @@ export async function pvpRoutes(app: FastifyInstance) {
       if (idx !== -1) queue.splice(idx, 1);
 
       onlinePlayers.delete(socket);
+
       for (const [key, challenge] of challenges) {
         if (challenge.fromSocket === socket || student.studentId === challenge.toStudentId) {
           challenges.delete(key);
@@ -383,18 +415,11 @@ export async function pvpRoutes(app: FastifyInstance) {
       }
 
       const gameId = socketGames.get(socket);
-      if (!gameId) {
-        broadcastOnlineList();
-        return;
-      }
+      if (!gameId) { broadcastOnlineList(); return; }
       const game = games.get(gameId);
-      if (!game) {
-        broadcastOnlineList();
-        return;
-      }
+      if (!game) { broadcastOnlineList(); return; }
 
-      const isWhite = game.white.socket === socket;
-      const opponent = isWhite ? game.black.socket : game.white.socket;
+      const opponent = game.white.socket === socket ? game.black.socket : game.white.socket;
       games.delete(game.id);
       socketGames.delete(game.white.socket);
       socketGames.delete(game.black.socket);

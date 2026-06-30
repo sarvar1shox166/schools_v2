@@ -519,12 +519,15 @@ export function useGeneratePayroll() {
   });
 }
 
+export type PuzzleSection = "mot1" | "mot2" | "mot3" | "series" | "time";
+
 export interface Puzzle {
   id: string;
   fen: string;
   difficulty: "oson" | "orta" | "qiyin";
   xpReward: number;
   title?: string | null;
+  section: PuzzleSection;
   createdByTeacher?: boolean;
 }
 
@@ -536,6 +539,7 @@ export interface MyPuzzle {
   xpReward: number;
   title: string | null;
   description: string | null;
+  section: PuzzleSection;
   createdAt: string;
 }
 
@@ -588,10 +592,18 @@ export function useDailyPuzzle() {
   });
 }
 
-export function usePuzzles() {
+export function usePuzzles(section?: PuzzleSection) {
   return useQuery({
-    queryKey: ["puzzles"],
-    queryFn: async () => (await api.get<Puzzle[]>("/puzzles")).data,
+    queryKey: ["puzzles", section],
+    queryFn: async () => (await api.get<Puzzle[]>("/puzzles", { params: section ? { section } : undefined })).data,
+    enabled: !!section,
+  });
+}
+
+export function usePuzzleSectionCounts() {
+  return useQuery({
+    queryKey: ["puzzleSectionCounts"],
+    queryFn: async () => (await api.get<Record<string, number>>("/puzzles/section-counts")).data,
   });
 }
 
@@ -612,8 +624,12 @@ export function useCreatePuzzle() {
       xpReward: number;
       title?: string;
       description?: string;
+      section: PuzzleSection;
     }) => (await api.post<{ id: string }>("/puzzles", payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["myPuzzles"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["myPuzzles"] });
+      qc.invalidateQueries({ queryKey: ["puzzleSectionCounts"] });
+    },
   });
 }
 
@@ -649,15 +665,17 @@ export function useAttemptPuzzle() {
       if (data.finished && data.correct) {
         qc.invalidateQueries({ queryKey: ["myXp"] });
         qc.invalidateQueries({ queryKey: ["leaderboard"] });
+        qc.invalidateQueries({ queryKey: ["puzzleStats"] });
       }
     },
   });
 }
 
-export function useMyXp() {
+export function useMyXp(enabled = true) {
   return useQuery({
     queryKey: ["myXp"],
     queryFn: async () => (await api.get<MyXp>("/me/xp")).data,
+    enabled,
   });
 }
 

@@ -173,6 +173,25 @@ function GameOverModal({
   );
 }
 
+/* ── Board size from container ────────────────────────────────────────────── */
+function useBoardSize(ref: React.RefObject<HTMLDivElement>) {
+  const [size, setSize] = useState(500);
+  useEffect(() => {
+    function calc() {
+      const el = ref.current;
+      const availH = window.innerHeight - 220; // topbar + padding + game topbar
+      const availW = el ? el.getBoundingClientRect().width : window.innerWidth - 520;
+      setSize(Math.floor(Math.min(availW, availH, 680)));
+    }
+    calc();
+    const obs = ref.current ? new ResizeObserver(calc) : null;
+    if (obs && ref.current) obs.observe(ref.current);
+    window.addEventListener("resize", calc);
+    return () => { obs?.disconnect(); window.removeEventListener("resize", calc); };
+  }, [ref]);
+  return size;
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 export default function PvpGamePage() {
   const navigate = useNavigate();
@@ -197,6 +216,9 @@ export default function PvpGamePage() {
   const isFlipped = resolvedColor === "black";
 
   const recordResult = useRecordGameResult();
+
+  const boardColRef = useRef<HTMLDivElement>(null);
+  const boardSize = useBoardSize(boardColRef);
 
   const chessRef = useRef(new Chess());
   const [fen, setFen] = useState(START_FEN);
@@ -357,9 +379,9 @@ export default function PvpGamePage() {
   const compName = unbeatable ? "👑 Yengilmas" : `Kompyuter (${difficulty}-daraja)`;
 
   return (
-    <div style={{ minHeight: "calc(100vh - 120px)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Top bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={() => navigate("/student/pvp")}
           style={{
             display: "flex", alignItems: "center", gap: 6, padding: "8px 16px",
@@ -388,12 +410,13 @@ export default function PvpGamePage() {
 
       {/* Main layout */}
       <div style={{
-        display: "grid", gridTemplateColumns: "1fr 300px", gap: 20, alignItems: "start",
-        height: "calc(100vh - 160px)",
+        display: "flex", gap: 16,
+        height: "calc(100vh - 220px)",
+        overflow: "hidden",
       }}>
-        {/* Board */}
-        <div style={{ height: "100%", display: "flex", alignItems: "flex-start" }}>
-          <div style={{ height: "100%", aspectRatio: "1 / 1", maxHeight: "100%", minWidth: 0 }}>
+        {/* Board column — fills remaining space */}
+        <div ref={boardColRef} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: boardSize, height: boardSize, flexShrink: 0 }}>
             <BoardWithCoords
               fen={fen}
               onMove={handleMove}
@@ -409,7 +432,7 @@ export default function PvpGamePage() {
         </div>
 
         {/* Right panel */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
           {/* Computer card */}
           <PlayerCard
             name={compName}
