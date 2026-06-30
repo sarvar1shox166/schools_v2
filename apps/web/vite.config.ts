@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      "/api/v1/ws": { target: "ws://localhost:3001", ws: true, rewrite: (p) => p },
       "/api": "http://localhost:3001",
       "/uploads": "http://localhost:3001",
       "/ws": { target: "ws://localhost:3001", ws: true },
