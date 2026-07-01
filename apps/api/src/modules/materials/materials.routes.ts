@@ -1,12 +1,9 @@
-import { createReadStream } from "node:fs";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
-
-const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads", "materials");
+import { uploadFile, deleteFile, getSignedDownloadUrl, localReadStream, USE_S3 } from "../../lib/storage.js";
 
 async function getTeacherIdForUser(userId: string): Promise<string | null> {
   const { rows } = await pool.query(`SELECT id FROM teachers WHERE user_id = $1`, [userId]);
@@ -114,18 +111,16 @@ export async function materialsRoutes(app: FastifyInstance) {
 
     const tenantId = request.user.tenantId;
     if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
-    const tenantDir = path.join(UPLOAD_ROOT, tenantId);
-    await mkdir(tenantDir, { recursive: true });
-    const storedName = `${randomUUID()}-${data.filename}`;
-    const filePath = path.join(tenantDir, storedName);
 
+    const ext = path.extname(data.filename) || "";
+    const key = `materials/${tenantId}/${randomUUID()}${ext}`;
     const buffer = await data.toBuffer();
-    await writeFile(filePath, buffer);
+    await uploadFile(buffer, key, data.mimetype);
 
     const { rows } = await pool.query(
       `INSERT INTO lesson_materials (tenant_id, teacher_id, group_id, title, file_name, file_path, mime_type, size_bytes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [tenantId, teacherId, groupId, title, data.filename, filePath, data.mimetype, buffer.length]
+      [tenantId, teacherId, groupId, title, data.filename, key, data.mimetype, buffer.length]
     );
 
     return reply.code(201).send({ id: rows[0].id });
@@ -134,7 +129,7 @@ export async function materialsRoutes(app: FastifyInstance) {
   app.get("/materials/:id/download", async (request, reply) => {
     const { id } = request.params as { id: string };
     const { rows } = await pool.query(
-      `SELECT file_path AS "filePath", file_name AS "fileName", mime_type AS "mimeType", tenant_id AS "tenantId", group_id AS "groupId"
+      `SELECT file_path AS "key", file_name AS "fileName", mime_type AS "mimeType", tenant_id AS "tenantId", group_id AS "groupId"
        FROM lesson_materials WHERE id = $1`,
       [id]
     );
@@ -151,20 +146,25 @@ export async function materialsRoutes(app: FastifyInstance) {
       if (access.rows.length === 0) return reply.code(403).send({ error: "Forbidden" });
     }
 
+    if (USE_S3) {
+      const signedUrl = await getSignedDownloadUrl(material.key, 3600);
+      return reply.redirect(302, signedUrl!);
+    }
+
     reply.header("Content-Disposition", `attachment; filename="${encodeURIComponent(material.fileName)}"`);
     reply.type(material.mimeType);
-    return reply.send(createReadStream(material.filePath));
+    return reply.send(localReadStream(material.key));
   });
 
   app.delete("/materials/:id", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const teacherId = await getTeacherIdForUser(request.user.sub);
     const { rows } = await pool.query(
-      `DELETE FROM lesson_materials WHERE id = $1 AND teacher_id = $2 RETURNING file_path AS "filePath"`,
+      `DELETE FROM lesson_materials WHERE id = $1 AND teacher_id = $2 RETURNING file_path AS "key"`,
       [id, teacherId]
     );
     if (rows.length === 0) return reply.code(404).send({ error: "Not found" });
-    await unlink(rows[0].filePath).catch(() => {});
+    await deleteFile(rows[0].key);
     return { ok: true };
   });
 }

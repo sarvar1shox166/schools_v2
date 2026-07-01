@@ -1,12 +1,10 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { awardXp } from "../gamification/xp.js";
-
-const UPLOADS_ROOT = path.resolve(process.cwd(), "uploads");
+import { uploadFile } from "../../lib/storage.js";
 
 const createVideoSchema = z.object({
   title: z.string().min(1),
@@ -94,15 +92,10 @@ export async function videosRoutes(app: FastifyInstance) {
     const data = await request.file();
     if (!data) return reply.code(400).send({ error: "Fayl topilmadi" });
 
-    const dir = path.join(UPLOADS_ROOT, "videos", tenantId);
-    await mkdir(dir, { recursive: true });
     const ext = path.extname(data.filename) || ".mp4";
-    const fileName = `${randomUUID()}${ext}`;
-    const filePath = path.join(dir, fileName);
+    const key = `videos/${tenantId}/${randomUUID()}${ext}`;
     const buffer = await data.toBuffer();
-    await writeFile(filePath, buffer);
-
-    const url = `/uploads/videos/${tenantId}/${fileName}`;
+    const url = await uploadFile(buffer, key, data.mimetype);
     return { url };
   });
 
@@ -113,15 +106,10 @@ export async function videosRoutes(app: FastifyInstance) {
     const data = await request.file();
     if (!data) return reply.code(400).send({ error: "Fayl topilmadi" });
 
-    const dir = path.join(UPLOADS_ROOT, "images", tenantId);
-    await mkdir(dir, { recursive: true });
     const ext = path.extname(data.filename) || ".jpg";
-    const fileName = `${randomUUID()}${ext}`;
-    const filePath = path.join(dir, fileName);
+    const key = `images/${tenantId}/${randomUUID()}${ext}`;
     const buffer = await data.toBuffer();
-    await writeFile(filePath, buffer);
-
-    const url = `/uploads/images/${tenantId}/${fileName}`;
+    const url = await uploadFile(buffer, key, data.mimetype);
     return { url };
   });
 
