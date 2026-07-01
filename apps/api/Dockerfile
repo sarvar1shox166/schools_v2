@@ -40,8 +40,8 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/packages/chess-engine/dist ./packages/chess-engine/dist
 COPY --from=builder /app/apps/api/dist              ./apps/api/dist
 
-# SQL migration files (needed at runtime)
-COPY apps/api/src/db/migrations ./apps/api/src/db/migrations
+# SQL migration files (migrate.js looks in dist/db/migrations)
+COPY apps/api/src/db/migrations ./apps/api/dist/db/migrations
 
 # Uploads directory (overridden by Docker volume in production)
 RUN mkdir -p /app/uploads
