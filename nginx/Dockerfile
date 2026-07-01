@@ -14,6 +14,7 @@ COPY tsconfig.base.json                   ./
 COPY packages/                            ./packages/
 COPY apps/web/                            ./apps/web/
 
+RUN npm run build -w packages/chess-engine
 RUN npm run build -w apps/web
 
 # ── Stage 2: Nginx ────────────────────────────────────────────────────────────
