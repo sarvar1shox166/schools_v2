@@ -14,12 +14,18 @@ echo "==> Secretlar generatsiya qilinmoqda..."
 JWT_SECRET=$(openssl rand -hex 32)
 JWT_REFRESH_SECRET=$(openssl rand -hex 32)
 
-printf "DB paroli kiriting (bo'sh qoldirmang): "
+printf "DB paroli kiriting (@ # : / ? & belgilarsiz): "
 read -r DB_PASS
 if [ -z "$DB_PASS" ]; then
   echo "Xato: DB paroli bo'sh bo'lishi mumkin emas."
   exit 1
 fi
+
+# URL uchun maxsus belgilarni encode qilish
+url_encode() {
+  echo "$1" | sed 's/#/%23/g; s/@/%40/g; s/:/%3A/g; s|/|%2F|g; s/?/%3F/g; s/&/%26/g'
+}
+DB_PASS_ENCODED=$(url_encode "$DB_PASS")
 
 printf "AWS S3 ishlatilsinmi? [y/N] "
 read -r USE_AWS
@@ -43,6 +49,7 @@ cat > "$OUT" <<EOF
 POSTGRES_DB=chess_school
 POSTGRES_USER=chess
 POSTGRES_PASSWORD=${DB_PASS}
+DATABASE_URL=postgres://chess:${DB_PASS_ENCODED}@db:5432/chess_school
 
 JWT_SECRET=${JWT_SECRET}
 JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
