@@ -37,7 +37,7 @@ export async function buildApp() {
   const app = Fastify({ logger: true });
 
   app.register(cors, { origin: true });
-  app.register(multipart, { limits: { fileSize: 500 * 1024 * 1024 } }); // 500 MB
+  app.register(multipart, { limits: { fileSize: 2 * 1024 * 1024 * 1024 } }); // 2 GB
   app.register(websocket);
   app.register(staticFiles, { root: UPLOADS_ROOT, prefix: "/uploads/" });
   app.register(authPlugin);
