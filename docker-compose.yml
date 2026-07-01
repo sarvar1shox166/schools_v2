@@ -1,45 +1,58 @@
 services:
-  postgres:
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: chess
-      POSTGRES_PASSWORD: chess
-      POSTGRES_DB: chess_school
-    ports:
-      - "5433:5432"
+      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-
+  # ── API (Fastify) ──────────────────────────────────────────────────────────
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
-    env_file: .env
-    environment:
-      DATABASE_URL: postgres://chess:chess@postgres:5432/chess_school
     depends_on:
-      - postgres
-      - redis
-    ports:
-      - "3001:3001"
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL:        postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      JWT_SECRET:          ${JWT_SECRET}
+      JWT_REFRESH_SECRET:  ${JWT_REFRESH_SECRET}
+      TELEGRAM_BOT_TOKEN:  ${TELEGRAM_BOT_TOKEN:-}
+      PORT:                3001
+      NODE_ENV:            production
+    volumes:
+      - uploads:/app/uploads
 
-  web:
+  # ── Nginx + React SPA ─────────────────────────────────────────────────────
+  nginx:
     build:
       context: .
-      dockerfile: apps/web/Dockerfile
+      dockerfile: nginx/Dockerfile
     restart: unless-stopped
     depends_on:
       - api
     ports:
-      - "5173:5173"
+      - "80:80"
+      - "443:443"
+    volumes:
+      # SSL sertifikatlari (Certbot yoki manual)
+      - certbot_conf:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
 
 volumes:
-  pg_data:
+  pgdata:
+  uploads:
+  certbot_conf:
+  certbot_www:

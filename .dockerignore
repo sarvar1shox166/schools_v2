@@ -1,0 +1,44 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build output (rebuilt inside Docker)
+**/dist
+apps/web/dist
+
+# Dev/local configs
+.env
+*.local
+.env.local
+
+# Git
+.git
+.gitignore
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor & OS
+.vscode
+.idea
+*.DS_Store
+Thumbs.db
+
+# Test & coverage
+coverage
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+
+# Docs & extras
+docs/
+*.md
+!README.md
+
+# Uploads (mounted as volume in prod)
+uploads/
+
+# Docker files themselves (avoid context bloat)
+nginx/certbot
+nginx/ssl
