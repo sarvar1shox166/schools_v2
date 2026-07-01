@@ -44,8 +44,8 @@ export async function teachersRoutes(app: FastifyInstance) {
     try {
       await client.query("BEGIN");
       const userRes = await client.query(
-        `INSERT INTO users (tenant_id, role, full_name, phone, password_hash)
-         VALUES ($1, 'teacher', $2, $3, $4) RETURNING id`,
+        `INSERT INTO users (tenant_id, role, full_name, phone, login, password_hash)
+         VALUES ($1, 'teacher', $2, $3, $3, $4) RETURNING id`,
         [tenantId, body.fullName, body.phone, passwordHash]
       );
       const userId = userRes.rows[0].id;
