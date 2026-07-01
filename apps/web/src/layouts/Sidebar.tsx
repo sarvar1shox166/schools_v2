@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import { NavLink } from "react-router-dom";
 import { Avatar, Icon } from "@chess-school/ui";
 import { haptic } from "../lib/telegram.js";
@@ -11,6 +13,52 @@ export interface NavItem {
   badge?: number | "danger";
   emoji?: string;
   navId?: string;
+  locked?: boolean;
+}
+
+function ComingSoonModal({ label, onClose }: { label: string; onClose: () => void }) {
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,.6)",
+        display: "grid", placeItems: "center", zIndex: 9999,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#1a1f35", border: "1.5px solid rgba(255,255,255,.12)",
+          borderRadius: 22, padding: "36px 40px", textAlign: "center",
+          minWidth: 320, maxWidth: "90vw",
+          boxShadow: "0 24px 64px rgba(0,0,0,.6)",
+        }}
+      >
+        <div style={{ fontSize: 52, marginBottom: 14 }}>🚀</div>
+        <div style={{ fontWeight: 900, fontSize: 20, marginBottom: 8 }}>
+          Tez orada!
+        </div>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,.55)", marginBottom: 6 }}>
+          <strong style={{ color: "rgba(255,255,255,.85)" }}>{label}</strong> bo'limi
+        </div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,.4)", marginBottom: 28 }}>
+          Ushbu bo'lim hozirda tayyorlanmoqda.<br />
+          Tez orada ishga tushadi!
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            padding: "11px 32px", borderRadius: 12, border: "none",
+            background: "linear-gradient(135deg,#4f46e5,#7c3aed)",
+            color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
+          }}
+        >
+          Tushunarli
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 export interface NavSection {
@@ -41,11 +89,13 @@ export function Sidebar({ sections, brandSub, gender, onGenderChange }: SidebarP
   const logout = useAuthStore((s) => s.logout);
   const isStudent = user?.role === "student";
   const { data: xpData } = useMyXp(isStudent);
+  const [lockedLabel, setLockedLabel] = useState<string | null>(null);
 
   const xpLevel = xpData?.level ?? 1;
   const levelName = LEVEL_NAMES[Math.min(xpLevel - 1, LEVEL_NAMES.length - 1)] ?? LEVEL_NAMES[0];
 
   return (
+    <>
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-mark">♞</div>
@@ -62,16 +112,8 @@ export function Sidebar({ sections, brandSub, gender, onGenderChange }: SidebarP
         {sections.map((sec) => (
           <div key={sec.group}>
             {!isStudent && <div className="nav-group-label">{sec.group}</div>}
-            {sec.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/student"}
-                className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}
-                title={item.label}
-                onClick={() => haptic("light")}
-                {...(item.navId ? { "data-navid": item.navId } : {})}
-              >
+            {sec.items.map((item) => {
+              const icon = (
                 <span className="nav-ico-badge">
                   {isStudent && item.navId === "learn"
                     ? LEARN_SVG
@@ -80,17 +122,47 @@ export function Sidebar({ sections, brandSub, gender, onGenderChange }: SidebarP
                     : <Icon name={item.icon} size={19} />
                   }
                 </span>
-                <span className="nav-label">{item.label}</span>
-                {item.badge != null && (
-                  <span
-                    className={"nav-badge" + (item.badge === "danger" ? "" : " muted")}
-                    style={item.badge === "danger" ? { background: "var(--danger)" } : {}}
+              );
+
+              if (item.locked) {
+                return (
+                  <button
+                    key={item.to}
+                    className="nav-item"
+                    title={item.label}
+                    onClick={() => { haptic("light"); setLockedLabel(item.label); }}
+                    style={{ width: "100%", background: "none", border: "none", cursor: "pointer", opacity: 0.55, position: "relative" }}
                   >
-                    {item.badge === "danger" ? "!" : item.badge}
-                  </span>
-                )}
-              </NavLink>
-            ))}
+                    {icon}
+                    <span className="nav-label">{item.label}</span>
+                    <span style={{ marginLeft: "auto", fontSize: 12 }}>🔒</span>
+                  </button>
+                );
+              }
+
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === "/student"}
+                  className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}
+                  title={item.label}
+                  onClick={() => haptic("light")}
+                  {...(item.navId ? { "data-navid": item.navId } : {})}
+                >
+                  {icon}
+                  <span className="nav-label">{item.label}</span>
+                  {item.badge != null && (
+                    <span
+                      className={"nav-badge" + (item.badge === "danger" ? "" : " muted")}
+                      style={item.badge === "danger" ? { background: "var(--danger)" } : {}}
+                    >
+                      {item.badge === "danger" ? "!" : item.badge}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
           </div>
         ))}
       </nav>
@@ -121,5 +193,10 @@ export function Sidebar({ sections, brandSub, gender, onGenderChange }: SidebarP
         </div>
       )}
     </aside>
+
+    {lockedLabel && (
+      <ComingSoonModal label={lockedLabel} onClose={() => setLockedLabel(null)} />
+    )}
+    </>
   );
 }

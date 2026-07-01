@@ -298,8 +298,8 @@ export default function PvpGamePage() {
 
       const status = checkStatus(chess);
       if (status) setGameOver(status);
-    } catch (err) {
-      console.error("Computer move error:", err);
+    } catch {
+      setGameOver(resolvedColor === "white" ? "black_wins_resign" : "white_wins_resign");
     } finally {
       setThinking(false);
     }
