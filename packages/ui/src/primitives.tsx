@@ -2,7 +2,14 @@ import type { CSSProperties, ReactNode } from "react";
 import { Icon } from "./Icon.js";
 import { avColor, initials } from "./utils.js";
 
-export function Avatar({ name, size = "", round = false }: { name: string; size?: string; round?: boolean }) {
+export function Avatar({ name, size = "", round = false, src }: { name: string; size?: string; round?: boolean; src?: string | null }) {
+  if (src) {
+    return (
+      <div className={"av " + size + (round ? " round" : "")} style={{ padding: 0, overflow: "hidden" }}>
+        <img src={src} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      </div>
+    );
+  }
   return (
     <div className={"av " + size + (round ? " round" : "")} style={{ background: avColor(name) }}>
       {initials(name)}

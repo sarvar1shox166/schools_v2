@@ -16,6 +16,8 @@ const createVideoSchema = z.object({
   thumbnailIcon: z.string().optional(),
 });
 
+const updateVideoSchema = createVideoSchema.partial();
+
 const progressSchema = z.object({
   progressPct: z.number().int().min(0).max(100),
 });
@@ -111,6 +113,31 @@ export async function videosRoutes(app: FastifyInstance) {
     const buffer = await data.toBuffer();
     const url = await uploadFile(buffer, key, data.mimetype);
     return { url };
+  });
+
+  app.patch("/videos/:id", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = updateVideoSchema.parse(request.body);
+    const { tenantId } = request.user;
+    const { rowCount } = await pool.query(
+      `UPDATE video_lessons SET
+         title = COALESCE($1, title),
+         category = COALESCE($2, category),
+         video_url = COALESCE($3, video_url),
+         duration_seconds = COALESCE($4, duration_seconds),
+         thumbnail_url = COALESCE($5, thumbnail_url),
+         thumbnail_color = COALESCE($6, thumbnail_color),
+         thumbnail_icon = COALESCE($7, thumbnail_icon)
+       WHERE id = $8 AND tenant_id = $9`,
+      [
+        body.title ?? null, body.category ?? null, body.videoUrl ?? null,
+        body.durationSeconds ?? null, body.thumbnailUrl ?? null,
+        body.thumbnailColor ?? null, body.thumbnailIcon ?? null,
+        id, tenantId,
+      ]
+    );
+    if (!rowCount) return reply.code(404).send({ error: "Not found" });
+    return { ok: true };
   });
 
   app.delete("/videos/:id", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {

@@ -98,6 +98,20 @@ export async function teachersRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  app.post("/teachers/:id/reset-password", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+    const newPassword = randomBytes(4).toString("hex");
+    const passwordHash = await hashPassword(newPassword);
+    const { rowCount } = await pool.query(
+      `UPDATE users SET password_hash = $1
+       WHERE id = (SELECT user_id FROM teachers WHERE id = $2 AND tenant_id = $3)`,
+      [passwordHash, id, tenantId]
+    );
+    if (!rowCount) return reply.code(404).send({ error: "Not found" });
+    return { tempPassword: newPassword };
+  });
+
   // Teacher rankings: real attendance + review data
   app.get("/teachers/rankings", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
     const { tenantId } = request.user;

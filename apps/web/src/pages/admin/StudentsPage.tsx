@@ -15,6 +15,7 @@ type Student = {
   fullName: string;
   phone: string;
   login?: string;
+  avatarUrl?: string | null;
   level: string | null;
   age: number | null;
   status: "yangi" | "faol" | "nofaol";
@@ -176,7 +177,7 @@ export default function StudentsPage() {
                     >
                       <td>
                         <div className="with-av">
-                          <div style={{ borderRadius: 10, flexShrink: 0, display: "inline-flex" }}><Avatar name={s.fullName} size="sm" /></div>
+                          <div style={{ borderRadius: 10, flexShrink: 0, display: "inline-flex" }}><Avatar name={s.fullName} size="sm" src={s.avatarUrl} /></div>
                           <div>
                             <div className="cell-main">{s.fullName}</div>
                             <div className="cell-sub">{new Date(s.joinedAt).toLocaleDateString("uz-Latn-UZ")}</div>
@@ -416,7 +417,7 @@ function StudentModal({ mode, student, onClose, onCreated }: StudentModalProps) 
             justifyContent: "center", fontWeight: 800, fontSize: 22, color: "#fff",
           }}>?</div>
         ) : (
-          <div style={{ borderRadius: 12, flexShrink: 0, display: "inline-flex" }}><Avatar name={student!.fullName} size="lg" /></div>
+          <div style={{ borderRadius: 12, flexShrink: 0, display: "inline-flex" }}><Avatar name={student!.fullName} size="lg" src={student!.avatarUrl} /></div>
         )}
         <div>
           <div style={{ fontWeight: 750, fontSize: 15 }}>

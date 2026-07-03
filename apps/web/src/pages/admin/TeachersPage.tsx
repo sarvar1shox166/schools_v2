@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Avatar, Card, Icon } from "@chess-school/ui";
-import { useCreateTeacher, useTeachers, useDeleteTeacher, useUpdateTeacher } from "../../lib/queries.js";
+import { useCreateTeacher, useTeachers, useDeleteTeacher, useUpdateTeacher, useResetTeacherPassword } from "../../lib/queries.js";
 import type { Teacher } from "../../lib/queries.js";
 
 const TITLE_OPTIONS = ["FIDE Master", "Milliy usta", "Trener", "Grossmeyster", "Xalqaro master"];
@@ -307,6 +307,7 @@ function EditModal({ teacher, onClose }: {
   onClose: () => void;
 }) {
   const updateTeacher = useUpdateTeacher();
+  const resetPassword = useResetTeacherPassword();
   const [form, setForm] = useState({
     fullName: teacher.fullName,
     phone: teacher.phone,
@@ -314,6 +315,19 @@ function EditModal({ teacher, onClose }: {
     expYears: teacher.expYears != null ? String(teacher.expYears) : "",
   });
   const [error, setError] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState<string | null>(null);
+
+  async function handleResetPassword() {
+    if (!confirm("Yangi parol yaratilsin? Eski parol ishlamay qoladi.")) return;
+    setError(null);
+    try {
+      const res = await resetPassword.mutateAsync(teacher.id);
+      setNewPassword(res.tempPassword);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg ?? "Xatolik yuz berdi");
+    }
+  }
 
   async function handleSave() {
     setError(null);
@@ -409,6 +423,27 @@ function EditModal({ teacher, onClose }: {
             <label style={labelStyle}>TELEFON</label>
             <input className="inp" value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </div>
+
+          {/* Parolni tiklash */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>LOGIN-PAROL</label>
+            {newPassword ? (
+              <div style={{
+                padding: "10px 14px", borderRadius: 10, background: "var(--surface-2)",
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+              }}>
+                <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 16, letterSpacing: 1 }}>
+                  {newPassword}
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-faint)" }}>Saqlab qo'ying</span>
+              </div>
+            ) : (
+              <button type="button" className="btn sm" style={{ width: "100%", justifyContent: "center" }}
+                onClick={handleResetPassword} disabled={resetPassword.isPending}>
+                <Icon name="refresh" size={13} /> {resetPassword.isPending ? "Yaratilmoqda..." : "Yangi parol yaratish"}
+              </button>
+            )}
           </div>
 
           {/* Error */}

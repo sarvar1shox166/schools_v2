@@ -217,15 +217,15 @@ function MarkModal({
   const [err, setErr] = useState("");
 
   const today = new Date().toISOString().split("T")[0];
-  const dateStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", weekday: "short" });
+  const [date, setDate] = useState(today);
 
   const { data: schedule = [] } = useSchedule();
   const { data: students = [], isLoading: stuLoading } = useStudents();
   const markAtt = useMarkAttendance();
 
-  /* Get slot for the selected group (any slot — take first matching today's day) */
-  const todayDow = (new Date().getDay() + 6) % 7; // 0=Mon (DB convention)
-  const slot = schedule.find(s => s.groupId === groupId && s.dayOfWeek === todayDow)
+  /* Get slot for the selected group, matching the selected date's day of week */
+  const selectedDow = (new Date(date + "T00:00:00").getDay() + 6) % 7; // 0=Mon (DB convention)
+  const slot = schedule.find(s => s.groupId === groupId && s.dayOfWeek === selectedDow)
     ?? schedule.find(s => s.groupId === groupId);
 
   /* Filter students to the selected group */
@@ -243,7 +243,7 @@ function MarkModal({
         studentId: s.id,
         status: LOCAL_TO_API[statuses[s.id] ?? "keldi"],
       }));
-      await markAtt.mutateAsync({ scheduleSlotId: slot.id, date: today, records });
+      await markAtt.mutateAsync({ scheduleSlotId: slot.id, date, records });
       onClose();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
@@ -293,7 +293,14 @@ function MarkModal({
               }} />
             </div>
           </div>
-          <span style={{ fontSize: 13, color: "var(--text-faint)", fontWeight: 600 }}>{dateStr}</span>
+          <input
+            type="date"
+            className="inp"
+            value={date}
+            max={today}
+            onChange={e => { if (e.target.value) setDate(e.target.value); }}
+            style={{ fontSize: 13, fontWeight: 600, padding: "6px 10px" }}
+          />
         </div>
 
         <div style={{ height: 1, background: "var(--border)" }} />

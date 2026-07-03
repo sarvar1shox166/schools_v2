@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Card, Icon, StatCard } from "@chess-school/ui";
 import {
-  useVideos, useCreateVideo, useDeleteVideo,
+  useVideos, useCreateVideo, useUpdateVideo, useDeleteVideo,
   useUploadVideo, useUploadImage,
   type VideoLesson,
 } from "../../lib/queries.js";
@@ -68,42 +68,56 @@ function FileUploadZone({ accept, label, value, onChange, uploading }: {
   );
 }
 
-// ---- Add Video Modal ----
-function AddVideoModal({ onClose }: { onClose: () => void }) {
+// ---- Add / Edit Video Modal ----
+function AddVideoModal({ video, onClose }: { video?: VideoLesson; onClose: () => void }) {
+  const isEdit = !!video;
   const createVideo = useCreateVideo();
+  const updateVideo = useUpdateVideo();
   const uploadVideo = useUploadVideo();
   const uploadImage = useUploadImage();
   const videoRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
-    title: "",
-    category: "debyut" as Category,
-    thumbnailColor: CAT_COLORS.debyut,
+    title: video?.title ?? "",
+    category: (video?.category ?? "debyut") as Category,
+    thumbnailColor: video?.thumbnailColor ?? CAT_COLORS.debyut,
   });
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [imgFile, setImgFile] = useState<File | null>(null);
-  const [videoPreview, setVideoPreview] = useState("");
-  const [imgPreview, setImgPreview] = useState("");
+  const [imgPreview, setImgPreview] = useState(video?.thumbnailUrl ?? "");
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    if (!form.title.trim() || !videoFile) return;
+    if (!form.title.trim() || (!isEdit && !videoFile)) return;
     setSaving(true);
     try {
-      const { url: videoUrl } = await uploadVideo.mutateAsync(videoFile);
+      let videoUrl: string | undefined;
+      if (videoFile) {
+        videoUrl = (await uploadVideo.mutateAsync(videoFile)).url;
+      }
       let thumbnailUrl: string | undefined;
       if (imgFile) {
-        const res = await uploadImage.mutateAsync(imgFile);
-        thumbnailUrl = res.url;
+        thumbnailUrl = (await uploadImage.mutateAsync(imgFile)).url;
       }
-      await createVideo.mutateAsync({
-        title: form.title.trim(),
-        category: form.category,
-        videoUrl,
-        thumbnailUrl,
-        thumbnailColor: form.thumbnailColor,
-      });
+      if (isEdit) {
+        await updateVideo.mutateAsync({
+          id: video!.id,
+          title: form.title.trim(),
+          category: form.category,
+          videoUrl,
+          thumbnailUrl,
+          thumbnailColor: form.thumbnailColor,
+        });
+      } else {
+        await createVideo.mutateAsync({
+          title: form.title.trim(),
+          category: form.category,
+          videoUrl: videoUrl!,
+          thumbnailUrl,
+          thumbnailColor: form.thumbnailColor,
+        });
+      }
       onClose();
     } finally {
       setSaving(false);
@@ -115,7 +129,7 @@ function AddVideoModal({ onClose }: { onClose: () => void }) {
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: "var(--surface)", borderRadius: 20, padding: "28px 32px", width: 520, maxWidth: "calc(100vw - 32px)", maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-          <div style={{ fontWeight: 800, fontSize: 17 }}>Video qo'shish</div>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>{isEdit ? "Videoni tahrirlash" : "Video qo'shish"}</div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center" }}>
             <Icon name="x" size={13} />
           </button>
@@ -123,7 +137,7 @@ function AddVideoModal({ onClose }: { onClose: () => void }) {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
-            <label style={labelSt}>VIDEO FAYL</label>
+            <label style={labelSt}>VIDEO FAYL {isEdit && "(ixtiyoriy — almashtirish uchun)"}</label>
             <div onClick={() => videoRef.current?.click()} style={{
               border: "2px dashed var(--border)", borderRadius: 10, padding: "20px 12px",
               textAlign: "center", cursor: "pointer", background: "var(--surface-2)",
@@ -132,6 +146,11 @@ function AddVideoModal({ onClose }: { onClose: () => void }) {
                 <div style={{ fontWeight: 600, fontSize: 13 }}>
                   <Icon name="check" size={14} style={{ color: "#059669", marginRight: 6 }} />
                   {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(1)} MB)
+                </div>
+              ) : isEdit ? (
+                <div style={{ color: "var(--text-faint)", fontSize: 13 }}>
+                  <Icon name="check" size={14} style={{ color: "#059669", marginRight: 6 }} />
+                  Mavjud video saqlanadi
                 </div>
               ) : (
                 <div style={{ color: "var(--text-faint)" }}>
@@ -182,7 +201,7 @@ function AddVideoModal({ onClose }: { onClose: () => void }) {
 
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
           <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
-          <button className="btn primary" style={{ flex: 2 }} disabled={!form.title.trim() || !videoFile || saving} onClick={handleSave}>
+          <button className="btn primary" style={{ flex: 2 }} disabled={!form.title.trim() || (!isEdit && !videoFile) || saving} onClick={handleSave}>
             <Icon name="upload" size={14} /> {saving ? "Yuklanmoqda..." : "Saqlash"}
           </button>
         </div>
@@ -192,7 +211,7 @@ function AddVideoModal({ onClose }: { onClose: () => void }) {
 }
 
 // ---- Video Card ----
-function VideoCard({ v, onDelete }: { v: VideoLesson; onDelete: () => void }) {
+function VideoCard({ v, onEdit, onDelete }: { v: VideoLesson; onEdit: () => void; onDelete: () => void }) {
   const color = CAT_COLORS[v.category] ?? "#3b82f6";
   const catLabel = CATEGORIES.find((c) => c.key === v.category)?.label ?? v.category;
 
@@ -216,6 +235,9 @@ function VideoCard({ v, onDelete }: { v: VideoLesson; onDelete: () => void }) {
           {v.durationSeconds && <span>⏱ {formatDuration(v.durationSeconds)}</span>}
         </div>
       </div>
+      <button onClick={onEdit} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <Icon name="edit" size={13} />
+      </button>
       <button onClick={onDelete} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}>
         <Icon name="trash" size={13} style={{ color: "#ef4444" }} />
       </button>
@@ -228,6 +250,7 @@ export default function VideoCoursesPage() {
   const { data: videos = [], isLoading } = useVideos();
   const deleteVideo = useDeleteVideo();
   const [showModal, setShowModal] = useState(false);
+  const [editVideo, setEditVideo] = useState<VideoLesson | null>(null);
   const [filterCat, setFilterCat] = useState<string>("hammasi");
 
   const filtered = filterCat === "hammasi" ? videos : videos.filter((v) => v.category === filterCat);
@@ -284,6 +307,7 @@ export default function VideoCoursesPage() {
           <div style={{ display: "flex", flexDirection: "column" }}>
             {filtered.map((v) => (
               <VideoCard key={v.id} v={v}
+                onEdit={() => setEditVideo(v)}
                 onDelete={() => { if (confirm(`"${v.title}" o'chirilsinmi?`)) deleteVideo.mutate(v.id); }} />
             ))}
           </div>
@@ -291,6 +315,7 @@ export default function VideoCoursesPage() {
       </Card>
 
       {showModal && <AddVideoModal onClose={() => setShowModal(false)} />}
+      {editVideo && <AddVideoModal video={editVideo} onClose={() => setEditVideo(null)} />}
     </div>
   );
 }

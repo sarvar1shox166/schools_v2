@@ -22,6 +22,7 @@ export interface Student {
   id: string;
   fullName: string;
   phone: string;
+  avatarUrl: string | null;
   level: string | null;
   age: number | null;
   status: "yangi" | "faol" | "nofaol";
@@ -1135,6 +1136,18 @@ export function useDeleteVideo() {
   });
 }
 
+export function useUpdateVideo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: {
+      id: string; title?: string; category?: string; videoUrl?: string;
+      durationSeconds?: number; thumbnailUrl?: string;
+      thumbnailColor?: string; thumbnailIcon?: string;
+    }) => (await api.patch(`/videos/${id}`, payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
+  });
+}
+
 export function useUploadVideo() {
   return useMutation({
     mutationFn: async (file: File) => {
@@ -1486,7 +1499,7 @@ export function useResetStudentPassword() {
 export function useUpdateStudent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; level?: string; age?: number; status?: string }) =>
+    mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; level?: string; age?: number; status?: string; avatarUrl?: string }) =>
       (await api.patch(`/students/${id}`, body)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["students"] }),
   });
@@ -1498,6 +1511,13 @@ export function useUpdateTeacher() {
     mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; spec?: string; title?: string; expYears?: number }) =>
       (await api.patch(`/teachers/${id}`, body)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["teachers"] }),
+  });
+}
+
+export function useResetTeacherPassword() {
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post<{ tempPassword: string }>(`/teachers/${id}/reset-password`)).data,
   });
 }
 

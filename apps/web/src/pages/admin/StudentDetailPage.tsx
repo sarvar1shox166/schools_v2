@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Card, Icon } from "@chess-school/ui";
 import {
   useStudent, useUpdateStudent, useDeleteStudent,
   useResetStudentPassword, useStudentPackages, useAssignPackage,
-  useGroups, usePackages,
+  useGroups, usePackages, useUploadImage,
   type Package, type StudentDetail,
 } from "../../lib/queries.js";
 
@@ -39,6 +39,15 @@ export default function StudentDetailPage() {
   const deleteStudent = useDeleteStudent();
   const resetPassword = useResetStudentPassword();
   const assignPackage = useAssignPackage();
+  const uploadImage = useUploadImage();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleAvatarPick(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !id) return;
+    const { url } = await uploadImage.mutateAsync(file);
+    await updateStudent.mutateAsync({ id, avatarUrl: url });
+  }
 
   /* Edit mode */
   const [editing, setEditing] = useState(false);
@@ -173,7 +182,21 @@ export default function StudentDetailPage() {
           {/* Profile card */}
           <Card style={{ padding: "28px 24px" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 24 }}>
-              <Avatar name={student.fullName} size="xl" />
+              <div
+                style={{ position: "relative", cursor: "pointer" }}
+                onClick={() => avatarInputRef.current?.click()}
+                title="Rasm yuklash"
+              >
+                <Avatar name={student.fullName} size="xl" src={student.avatarUrl} />
+                <div style={{
+                  position: "absolute", bottom: -2, right: -2, width: 26, height: 26, borderRadius: "50%",
+                  background: "var(--accent)", display: "grid", placeItems: "center",
+                  border: "2px solid var(--surface)",
+                }}>
+                  <Icon name="edit" size={12} style={{ color: "#fff" }} />
+                </div>
+                <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarPick} />
+              </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontWeight: 800, fontSize: 18 }}>{student.fullName}</div>
                 <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 3 }}>

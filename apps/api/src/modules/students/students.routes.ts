@@ -23,6 +23,7 @@ const updateSchema = z.object({
   level: z.string().optional(),
   age: z.number().int().positive().optional(),
   status: z.enum(["yangi", "faol", "nofaol"]).optional(),
+  avatarUrl: z.string().optional(),
 });
 
 export async function studentsRoutes(app: FastifyInstance) {
@@ -33,7 +34,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     const { page, pageSize } = listQuerySchema.parse(request.query);
 
     const BASE_SELECT = `
-      SELECT s.id, u.full_name AS "fullName", u.phone, u.login,
+      SELECT s.id, u.full_name AS "fullName", u.phone, u.login, u.avatar_url AS "avatarUrl",
              s.level, s.age, s.status, s.joined_at AS "joinedAt",
              COALESCE(
                (SELECT json_agg(json_build_object('id', g.id, 'name', g.name,
@@ -116,7 +117,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT s.id, u.full_name AS "fullName", u.phone, u.login,
+      `SELECT s.id, u.full_name AS "fullName", u.phone, u.login, u.avatar_url AS "avatarUrl",
               s.level, s.age, s.status, s.joined_at AS "joinedAt",
               COALESCE(
                 (SELECT json_agg(json_build_object('id', g.id, 'name', g.name,
@@ -162,11 +163,12 @@ export async function studentsRoutes(app: FastifyInstance) {
     const body = updateSchema.parse(request.body);
     const { tenantId } = request.user;
 
-    if (body.fullName || body.phone) {
+    if (body.fullName || body.phone || body.avatarUrl) {
       await pool.query(
-        `UPDATE users SET full_name = COALESCE($1, full_name), phone = COALESCE($2, phone), updated_at = now()
-         WHERE id = (SELECT user_id FROM students WHERE id = $3 AND tenant_id = $4)`,
-        [body.fullName ?? null, body.phone ?? null, id, tenantId]
+        `UPDATE users SET full_name = COALESCE($1, full_name), phone = COALESCE($2, phone),
+                avatar_url = COALESCE($3, avatar_url), updated_at = now()
+         WHERE id = (SELECT user_id FROM students WHERE id = $4 AND tenant_id = $5)`,
+        [body.fullName ?? null, body.phone ?? null, body.avatarUrl ?? null, id, tenantId]
       );
     }
 
