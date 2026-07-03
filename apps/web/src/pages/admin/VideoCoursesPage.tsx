@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Card, Icon, StatCard } from "@chess-school/ui";
 import {
   useVideos, useCreateVideo, useUpdateVideo, useDeleteVideo,
@@ -178,7 +179,7 @@ function AddVideoModal({ video, onClose }: { video?: VideoLesson; onClose: () =>
     }
   }
 
-  return (
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: "var(--surface)", borderRadius: 20, padding: "28px 32px", width: 520, maxWidth: "calc(100vw - 32px)", maxHeight: "90vh", overflowY: "auto" }}>
@@ -262,7 +263,8 @@ function AddVideoModal({ video, onClose }: { video?: VideoLesson; onClose: () =>
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

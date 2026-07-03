@@ -1,5 +1,6 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { Avatar, Card, Icon } from "@chess-school/ui";
 import {
   useStudent, useUpdateStudent, useDeleteStudent,
@@ -562,14 +563,15 @@ export default function StudentDetailPage() {
 
 /* ── Shared small components ── */
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
+  return createPortal(
     <div style={{
       position: "fixed", inset: 0, zIndex: 300,
       background: "rgba(0,0,0,.45)", backdropFilter: "blur(3px)",
       display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
     }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       {children}
-    </div>
+    </div>,
+    document.body
   );
 }
 

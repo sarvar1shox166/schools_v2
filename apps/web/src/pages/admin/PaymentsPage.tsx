@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Avatar, Card, Icon, StatCard } from "@chess-school/ui";
 import {
   useTransactions,
@@ -238,7 +239,7 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 200,
@@ -385,6 +386,7 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

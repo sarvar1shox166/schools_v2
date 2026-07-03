@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Card, Icon } from "@chess-school/ui";
 import {
   usePackages, useCreatePackage, useUpdatePackage, useDeletePackage,
@@ -84,7 +85,7 @@ function PackageModal({
 
   const isPending = create.isPending || update.isPending;
 
-  return (
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: "var(--surface)", borderRadius: 20, padding: "28px 32px", width: 520, maxWidth: "calc(100vw - 32px)", maxHeight: "90vh", overflowY: "auto" }}>
@@ -183,7 +184,8 @@ function PackageModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

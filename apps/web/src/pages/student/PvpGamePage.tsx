@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { Chess } from "@chess-school/chess-engine";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { api } from "../../lib/api.js";
@@ -140,7 +141,7 @@ function GameOverModal({
   };
   const sub = LABELS[result] ?? result;
 
-  return (
+  return createPortal(
     <div style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,.7)",
       display: "grid", placeItems: "center", zIndex: 9999,
@@ -169,7 +170,8 @@ function GameOverModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

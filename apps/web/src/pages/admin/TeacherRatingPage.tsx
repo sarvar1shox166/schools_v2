@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { Avatar, Card, CardHead, Icon, StatCard } from "@chess-school/ui";
 import {
   useTeacherRankings, useTeacherReviews, useAddTeacherReview, useTeachers,
@@ -28,10 +29,10 @@ function AddReviewModal({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
-  return (
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "var(--surface)", borderRadius: 20, padding: "28px 32px", width: 440, maxWidth: "calc(100vw - 32px)" }}>
+      <div style={{ background: "var(--surface)", borderRadius: 20, padding: "28px 32px", width: 440, maxWidth: "calc(100vw - 32px)", maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
           <div style={{ fontSize: 17, fontWeight: 800 }}>Baho qo'shish</div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center" }}>
@@ -79,7 +80,8 @@ function AddReviewModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

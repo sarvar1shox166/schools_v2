@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Avatar, Card, Icon } from "@chess-school/ui";
 import { useCreateTeacher, useTeachers, useDeleteTeacher, useUpdateTeacher, useResetTeacherPassword } from "../../lib/queries.js";
 import type { Teacher } from "../../lib/queries.js";
@@ -108,7 +109,7 @@ export default function TeachersPage() {
       )}
 
       {/* Temp password success dialog */}
-      {tempPasswordInfo && (
+      {tempPasswordInfo && createPortal(
         <div
           style={{
             position: "fixed", inset: 0, zIndex: 200,
@@ -157,7 +158,8 @@ export default function TeachersPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit modal */}
@@ -248,7 +250,7 @@ function DeleteTeacherModal({ teacher, onClose }: { teacher: Teacher; onClose: (
     }
   }
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 200,
@@ -297,7 +299,8 @@ function DeleteTeacherModal({ teacher, onClose }: { teacher: Teacher; onClose: (
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -346,7 +349,7 @@ function EditModal({ teacher, onClose }: {
     }
   }
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 200,
@@ -463,7 +466,8 @@ function EditModal({ teacher, onClose }: {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

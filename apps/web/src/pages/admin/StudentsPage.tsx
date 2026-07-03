@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { Avatar, Card, Icon } from "@chess-school/ui";
 import {
   useStudents,
@@ -558,7 +559,7 @@ function ModalShell({ children, onClose, width = 520 }: {
   onClose: () => void;
   width?: number;
 }) {
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 200,
@@ -576,7 +577,8 @@ function ModalShell({ children, onClose, width = 520 }: {
       }}>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

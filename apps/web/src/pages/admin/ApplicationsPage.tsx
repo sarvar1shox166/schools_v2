@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Avatar, Card, CardHead, Icon, StatCard } from "@chess-school/ui";
 import {
   useApplications,
@@ -379,7 +380,7 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 200,
@@ -451,7 +452,8 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -463,7 +465,7 @@ function ConvertResultModal({
   result: { studentId: string; tempPassword: string };
   onClose: () => void;
 }) {
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 201,
@@ -501,7 +503,8 @@ function ConvertResultModal({
           Yaxshi
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

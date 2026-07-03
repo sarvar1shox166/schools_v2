@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Card, Icon } from "@chess-school/ui";
 import {
   useGroups,
@@ -461,7 +462,7 @@ function ModalShell({ children, onClose, width = 480 }: {
   onClose: () => void;
   width?: number;
 }) {
-  return (
+  return createPortal(
     <div style={{
       position: "fixed", inset: 0, zIndex: 200,
       background: "rgba(0,0,0,.45)", backdropFilter: "blur(3px)",
@@ -476,7 +477,8 @@ function ModalShell({ children, onClose, width = 480 }: {
       }}>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

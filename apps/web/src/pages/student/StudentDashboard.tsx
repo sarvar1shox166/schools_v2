@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { Card, CardHead, Icon } from "@chess-school/ui";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { useAuthStore } from "../../lib/auth-store.js";
@@ -25,9 +26,9 @@ function LessonReviewPrompt() {
     setComment("");
   }
 
-  return (
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "var(--ksurface, var(--surface))", borderRadius: 18, width: 400, maxWidth: "100%", padding: "24px 22px" }}>
+      <div style={{ background: "var(--ksurface, var(--surface))", borderRadius: 18, width: 400, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", padding: "24px 22px" }}>
         <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>Darsni baholang</div>
         <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 16 }}>
           {lesson.teacherName} · {lesson.topic ?? "Dars"}
@@ -49,7 +50,8 @@ function LessonReviewPrompt() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

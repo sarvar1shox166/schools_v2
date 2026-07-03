@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Avatar, Card, Icon, StatCard } from "@chess-school/ui";
 import {
   useCreateScheduleSlot, useUpdateScheduleSlot, useDeleteScheduleSlot,
@@ -229,7 +230,7 @@ export default function SchedulePage() {
 
 /* ─── Modal overlay ─── */
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
@@ -239,7 +240,8 @@ function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClos
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {children}
-    </div>
+    </div>,
+    document.body
   );
 }
 

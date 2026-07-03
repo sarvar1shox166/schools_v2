@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Avatar, Card, CardHead, Icon, StatCard } from "@chess-school/ui";
 import {
   useGroups,
@@ -250,7 +251,7 @@ function MarkModal({
     }
   }
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 200,
@@ -358,7 +359,8 @@ function MarkModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

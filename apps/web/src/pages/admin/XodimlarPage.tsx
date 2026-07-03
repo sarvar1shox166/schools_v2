@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { Avatar, Card, Icon } from "@chess-school/ui";
 import {
-  useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff,
+  useStaff, useUpdateStaff, useDeleteStaff,
   type StaffMember,
 } from "../../lib/queries.js";
 
@@ -50,106 +52,14 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
-/* ─── TempPassword modal ─── */
-function TempPasswordModal({ name, password, onClose }: { name: string; password: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  function copy() {
-    navigator.clipboard.writeText(password);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-      <Card style={{ padding: 32, maxWidth: 400, width: "100%", textAlign: "center" }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>🔑</div>
-        <h3 style={{ margin: "0 0 8px", fontWeight: 800 }}>{name} qo'shildi</h3>
-        <p style={{ color: "var(--text-dim)", fontSize: 14, margin: "0 0 20px" }}>Vaqtinchalik parolni saqlang</p>
-        <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "12px 16px", fontFamily: "monospace", fontSize: 22, fontWeight: 800, letterSpacing: 4, marginBottom: 16 }}>
-          {password}
-        </div>
-        <p style={{ color: "var(--text-dim)", fontSize: 12, marginBottom: 20 }}>Login: telefon raqami</p>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" style={{ flex: 1 }} onClick={copy}>
-            <Icon name="download" size={14} /> {copied ? "Nusxalandi!" : "Nusxalash"}
-          </button>
-          <button className="btn primary" style={{ flex: 1 }} onClick={onClose}>
-            Yopish
-          </button>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-/* ─── Add modal ─── */
-function AddModal({ onClose, onCreate }: {
-  onClose: () => void;
-  onCreate: (data: { fullName: string; phone: string; role: "operator" | "accountant" | "admin" }) => void;
-}) {
-  const [form, setForm] = useState({ fullName: "", phone: "", role: "operator" as "operator" | "accountant" | "admin" });
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-      <Card style={{ padding: 28, maxWidth: 420, width: "100%" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontWeight: 800 }}>Yangi xodim</h3>
-          <button className="btn" style={{ padding: "4px 8px" }} onClick={onClose}><Icon name="x" size={16} /></button>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>TO'LIQ ISM</label>
-            <input className="input" style={{ width: "100%", boxSizing: "border-box" }} placeholder="Ism Familiya"
-              value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>TELEFON / LOGIN</label>
-            <input className="input" style={{ width: "100%", boxSizing: "border-box" }} placeholder="+998901234567"
-              value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>ROL</label>
-            <select className="input" style={{ width: "100%", boxSizing: "border-box" }}
-              value={form.role} onChange={e => setForm({ ...form, role: e.target.value as typeof form.role })}>
-              <option value="operator">Operator — Arizalar va davomat</option>
-              <option value="accountant">Buxgalter — Moliya bo'limi</option>
-              <option value="admin">Administrator — To'liq huquq</option>
-            </select>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-          <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
-          <button className="btn primary" style={{ flex: 2 }}
-            disabled={!form.fullName || !form.phone}
-            onClick={() => onCreate(form)}>
-            <Icon name="userPlus" size={14} /> Qo'shish
-          </button>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
 /* ─── Main page ─── */
 export default function XodimlarPage() {
+  const navigate = useNavigate();
   const { data: staff = [], isLoading } = useStaff();
-  const createMut = useCreateStaff();
   const updateMut = useUpdateStaff();
   const deleteMut = useDeleteStaff();
 
-  const [showAdd, setShowAdd] = useState(false);
-  const [tempPwd, setTempPwd] = useState<{ name: string; password: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<StaffMember | null>(null);
-
-  function handleCreate(data: { fullName: string; phone: string; role: "operator" | "accountant" | "admin" }) {
-    createMut.mutate(data, {
-      onSuccess: (res) => {
-        setShowAdd(false);
-        setTempPwd({ name: data.fullName, password: res.tempPassword });
-      },
-    });
-  }
 
   function toggleActive(member: StaffMember) {
     updateMut.mutate({ id: member.id, isActive: !member.isActive });
@@ -167,7 +77,7 @@ export default function XodimlarPage() {
             Tizim foydalanuvchilari va ularning rollari
           </p>
         </div>
-        <button className="btn primary" onClick={() => setShowAdd(true)}>
+        <button className="btn primary" onClick={() => navigate("/admin/staff/new")}>
           <Icon name="userPlus" size={15} /> Xodim qo'shish
         </button>
       </div>
@@ -263,17 +173,7 @@ export default function XodimlarPage() {
         )}
       </Card>
 
-      {showAdd && <AddModal onClose={() => setShowAdd(false)} onCreate={handleCreate} />}
-
-      {tempPwd && (
-        <TempPasswordModal
-          name={tempPwd.name}
-          password={tempPwd.password}
-          onClose={() => setTempPwd(null)}
-        />
-      )}
-
-      {confirmDelete && (
+      {confirmDelete && createPortal(
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
           <Card style={{ padding: 28, maxWidth: 380, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
@@ -289,7 +189,8 @@ export default function XodimlarPage() {
               </button>
             </div>
           </Card>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

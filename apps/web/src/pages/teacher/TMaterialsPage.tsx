@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Card, Icon } from "@chess-school/ui";
 import {
   useMaterials, useUploadMaterial, useDeleteMaterial,
@@ -49,10 +50,10 @@ function AddHomeworkModal({ groups, onClose }: { groups: { id: string; name: str
     onClose();
   }
 
-  return (
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "var(--surface)", borderRadius: 18, padding: "28px 32px", width: 460, maxWidth: "95vw" }}>
+      <div style={{ background: "var(--surface)", borderRadius: 18, padding: "28px 32px", width: 460, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div style={{ fontWeight: 800, fontSize: 17 }}>Vazifa berish</div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center" }}>
@@ -92,7 +93,8 @@ function AddHomeworkModal({ groups, onClose }: { groups: { id: string; name: str
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -109,10 +111,10 @@ function UploadMaterialModal({ groups, onClose }: { groups: { id: string; name: 
     onClose();
   }
 
-  return (
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "var(--surface)", borderRadius: 18, padding: "28px 32px", width: 440, maxWidth: "95vw" }}>
+      <div style={{ background: "var(--surface)", borderRadius: 18, padding: "28px 32px", width: 440, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div style={{ fontWeight: 800, fontSize: 17 }}>Fayl yuklash</div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center" }}>
@@ -161,7 +163,8 @@ function UploadMaterialModal({ groups, onClose }: { groups: { id: string; name: 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

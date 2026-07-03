@@ -19,6 +19,7 @@ import VideoCoursesPage from "./pages/admin/VideoCoursesPage.js";
 import VideoCourseDetailPage from "./pages/admin/VideoCourseDetailPage.js";
 import SettingsPage from "./pages/admin/SettingsPage.js";
 import XodimlarPage from "./pages/admin/XodimlarPage.js";
+import NewStaffPage from "./pages/admin/NewStaffPage.js";
 import PackagesPage from "./pages/admin/PackagesPage.js";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard.js";
 import TeacherIncomePage from "./pages/teacher/TeacherIncomePage.js";
@@ -158,6 +159,7 @@ export default function App() {
           <Route path="/admin/video-courses"           element={<VideoCoursesPage />} />
           <Route path="/admin/video-courses/:courseId" element={<VideoCourseDetailPage />} />
           <Route path="/admin/staff"                   element={<XodimlarPage />} />
+          <Route path="/admin/staff/new"               element={<NewStaffPage />} />
           <Route path="/admin/broadcast"               element={<BroadcastPage />} />
           <Route path="/admin/notifications"  element={<NotificationsPage />} />
           <Route path="/admin/reports"        element={<ReportsPage />} />
