@@ -358,8 +358,8 @@ function EditModal({ teacher, onClose }: {
       <div style={{
         background: "var(--surface)", borderRadius: 18,
         width: 480, maxWidth: "calc(100vw - 32px)",
+        maxHeight: "90vh", overflowY: "auto",
         boxShadow: "0 24px 64px rgba(0,0,0,.22)",
-        overflow: "hidden",
       }}>
         {/* Modal header */}
         <div style={{
