@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Avatar, Card, Icon, StatCard } from "@chess-school/ui";
 import {
   useCreateScheduleSlot, useUpdateScheduleSlot, useDeleteScheduleSlot,
-  useGroups, useSchedule, type ScheduleSlot, type CreateSlotPayload,
+  useGroups, useSchedule, useTeachers, type ScheduleSlot, type CreateSlotPayload, type Teacher,
 } from "../../lib/queries.js";
 
 const DAYS = ["Dus", "Ses", "Cho", "Pay", "Jum", "Sha", "Yak"];
@@ -31,12 +31,14 @@ function getGroupDays(slots: ScheduleSlot[], groupId: string): string {
 export default function SchedulePage() {
   const { data: slots = [], isLoading } = useSchedule();
   const { data: groups = [] } = useGroups();
+  const { data: allTeachers = [] } = useTeachers();
   const createSlot = useCreateScheduleSlot();
   const updateSlot = useUpdateScheduleSlot();
   const deleteSlot = useDeleteScheduleSlot();
 
   const [modal, setModal] = useState<ModalState>(null);
   const [teacherFilter, setTeacherFilter] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const teachers = useMemo(
     () => [...new Set(slots.map((s) => s.teacherName).filter(Boolean) as string[])],
@@ -65,13 +67,25 @@ export default function SchedulePage() {
   const emptySlots = HOURS.length * 7 - totalLessons;
 
   async function handleCreate(form: CreateSlotPayload) {
-    await createSlot.mutateAsync(form);
-    setModal(null);
+    setModalError(null);
+    try {
+      await createSlot.mutateAsync(form);
+      setModal(null);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
+      setModalError(msg?.message ?? msg?.error ?? "Xatolik yuz berdi");
+    }
   }
 
   async function handleUpdate(id: string, patch: Partial<CreateSlotPayload>) {
-    await updateSlot.mutateAsync({ id, ...patch });
-    setModal(null);
+    setModalError(null);
+    try {
+      await updateSlot.mutateAsync({ id, ...patch });
+      setModal(null);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
+      setModalError(msg?.message ?? msg?.error ?? "Xatolik yuz berdi");
+    }
   }
 
   async function handleDelete(id: string) {
@@ -173,7 +187,7 @@ export default function SchedulePage() {
 
       {/* Modals */}
       {modal && (
-        <ModalOverlay onClose={() => setModal(null)}>
+        <ModalOverlay onClose={() => { setModal(null); setModalError(null); }}>
           {modal.mode === "view" && (
             <ViewModal
               slot={modal.slot}
@@ -189,18 +203,22 @@ export default function SchedulePage() {
               day={modal.day}
               hour={modal.hour}
               groups={groups}
-              onClose={() => setModal(null)}
+              teachers={allTeachers}
+              onClose={() => { setModal(null); setModalError(null); }}
               onCreate={handleCreate}
               isPending={createSlot.isPending}
+              error={modalError}
             />
           )}
           {modal.mode === "edit" && (
             <EditModal
               slot={modal.slot}
               allSlots={slots}
-              onClose={() => setModal(null)}
+              teachers={allTeachers}
+              onClose={() => { setModal(null); setModalError(null); }}
               onSave={handleUpdate}
               isPending={updateSlot.isPending}
+              error={modalError}
             />
           )}
         </ModalOverlay>
@@ -319,16 +337,19 @@ function ViewModal({ slot, allSlots, onClose, onEdit, onDelete, isDeleting }: {
 }
 
 /* ─── Add modal ─── */
-function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
+function AddModal({ day, hour, groups, teachers, onClose, onCreate, isPending, error }: {
   day: number; hour: string;
   groups: { id: string; name: string }[];
+  teachers: Teacher[];
   onClose: () => void;
   onCreate: (f: CreateSlotPayload) => void;
   isPending: boolean;
+  error?: string | null;
 }) {
   const [lessonType, setLessonType] = useState<"guruh" | "individual" | "diagnostika">("guruh");
   const [form, setForm] = useState({
     groupId: groups[0]?.id ?? "",
+    teacherId: "",
     customName: "",
     day: String(day),
     time: hour,
@@ -375,13 +396,23 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
             </select>
           </div>
         ) : (
-          <div>
-            <label style={labelStyle}>DARS NOMI</label>
-            <input className="inp" style={{ width: "100%" }}
-              placeholder={lessonType === "individual" ? "Masalan: Ali bilan individual dars" : "Masalan: Yangi o'quvchi diagnostikasi"}
-              value={form.customName}
-              onChange={(e) => setForm({ ...form, customName: e.target.value })} />
-          </div>
+          <>
+            <div>
+              <label style={labelStyle}>DARS NOMI</label>
+              <input className="inp" style={{ width: "100%" }}
+                placeholder={lessonType === "individual" ? "Masalan: Ali bilan individual dars" : "Masalan: Yangi o'quvchi diagnostikasi"}
+                value={form.customName}
+                onChange={(e) => setForm({ ...form, customName: e.target.value })} />
+            </div>
+            <div>
+              <label style={labelStyle}>O'QITUVCHI</label>
+              <select className="inp" style={{ width: "100%" }} value={form.teacherId}
+                onChange={(e) => setForm({ ...form, teacherId: e.target.value })}>
+                <option value="">O'qituvchisiz</option>
+                {teachers.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
+              </select>
+            </div>
+          </>
         )}
 
         {/* Day & time */}
@@ -434,6 +465,10 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
         </div>
       </div>
 
+      {error && (
+        <div style={{ color: "#ef4444", fontSize: 13, fontWeight: 600, marginTop: 14 }}>{error}</div>
+      )}
+
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
         <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
         <button className="btn primary" style={{ flex: 2 }}
@@ -441,6 +476,7 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
           onClick={() => onCreate({
             lessonType,
             groupId: isGroupMode ? form.groupId : undefined,
+            teacherId: isGroupMode ? undefined : (form.teacherId || undefined),
             customName: isGroupMode ? undefined : form.customName.trim(),
             dayOfWeek: Number(form.day),
             startTime: form.time,
@@ -456,14 +492,16 @@ function AddModal({ day, hour, groups, onClose, onCreate, isPending }: {
 }
 
 /* ─── Edit modal ─── */
-function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
-  slot: ScheduleSlot; allSlots: ScheduleSlot[]; onClose: () => void;
+function EditModal({ slot, allSlots, teachers, onClose, onSave, isPending, error }: {
+  slot: ScheduleSlot; allSlots: ScheduleSlot[]; teachers: Teacher[]; onClose: () => void;
   onSave: (id: string, patch: Partial<CreateSlotPayload>) => void;
   isPending: boolean;
+  error?: string | null;
 }) {
   const [form, setForm] = useState({
     lessonType: (slot.lessonType ?? "guruh") as "guruh" | "individual" | "diagnostika",
     customName: slot.customName ?? "",
+    teacherId: slot.teacherId ?? "",
     day: String(slot.dayOfWeek),
     time: String(slot.startTime).slice(0, 5),
     meetingPlatform: (slot.meetingPlatform ?? "zoom") as "zoom" | "meet",
@@ -512,13 +550,23 @@ function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
 
         {/* Custom name for non-group */}
         {form.lessonType !== "guruh" && (
-          <div>
-            <label style={labelStyle}>DARS NOMI</label>
-            <input className="inp" style={{ width: "100%" }}
-              placeholder="Dars nomini kiriting..."
-              value={form.customName}
-              onChange={(e) => setForm({ ...form, customName: e.target.value })} />
-          </div>
+          <>
+            <div>
+              <label style={labelStyle}>DARS NOMI</label>
+              <input className="inp" style={{ width: "100%" }}
+                placeholder="Dars nomini kiriting..."
+                value={form.customName}
+                onChange={(e) => setForm({ ...form, customName: e.target.value })} />
+            </div>
+            <div>
+              <label style={labelStyle}>O'QITUVCHI</label>
+              <select className="inp" style={{ width: "100%" }} value={form.teacherId}
+                onChange={(e) => setForm({ ...form, teacherId: e.target.value })}>
+                <option value="">O'qituvchisiz</option>
+                {teachers.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
+              </select>
+            </div>
+          </>
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -566,12 +614,17 @@ function EditModal({ slot, allSlots, onClose, onSave, isPending }: {
         </div>
       </div>
 
+      {error && (
+        <div style={{ color: "#ef4444", fontSize: 13, fontWeight: 600, marginTop: 14 }}>{error}</div>
+      )}
+
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
         <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
         <button className="btn primary" style={{ flex: 2 }} disabled={isPending}
           onClick={() => onSave(slot.id, {
             lessonType: form.lessonType,
             customName: form.lessonType !== "guruh" ? form.customName.trim() : undefined,
+            teacherId: form.lessonType !== "guruh" ? (form.teacherId || undefined) : undefined,
             dayOfWeek: Number(form.day),
             startTime: form.time,
             isOnline: true,

@@ -47,7 +47,8 @@ export default function NewStudentPage() {
 
   const selectedPkg = packages.find((p: Package) => p.id === pay.packageId);
   const isPending = createStudent.isPending || assignPackage.isPending;
-  const canSubmit = info.fullName.trim().length > 0 &&
+  const isValidPhone = /^\+998\d{9}$/.test(info.phone.trim());
+  const canSubmit = info.fullName.trim().length > 0 && isValidPhone &&
     (!withPayment || (!!pay.packageId));
 
   async function handleSubmit() {
@@ -232,8 +233,13 @@ export default function NewStudentPage() {
           {/* TELEFON */}
           <Field label="TELEFON">
             <input className="inp" style={{ width: "100%" }}
-              placeholder="+998 90 000 00 00" value={info.phone}
+              placeholder="+998901234567" value={info.phone}
               onChange={(e) => setInfo({ ...info, phone: e.target.value })} />
+            {info.phone.trim().length > 4 && !isValidPhone && (
+              <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                Telefon formati: +998901234567 (13 belgi)
+              </div>
+            )}
           </Field>
 
           {/* DARAJASI + GURUH */}

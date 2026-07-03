@@ -51,7 +51,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
               lesson_type AS "lessonType", tier, lessons_per_month AS "lessonsPerMonth",
               lessons_per_week AS "lessonsPerWeek", duration_minutes AS "durationMinutes",
               max_students AS "maxStudents", delivery
-       FROM packages WHERE tenant_id = $1 ORDER BY price`,
+       FROM packages WHERE tenant_id = $1 AND active = true ORDER BY price`,
       [tenantId]
     );
     return rows;
@@ -103,7 +103,16 @@ export async function paymentsRoutes(app: FastifyInstance) {
   app.delete("/packages/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
-    await pool.query(`UPDATE packages SET active = false WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    try {
+      await pool.query(`DELETE FROM packages WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    } catch (err) {
+      if ((err as { code?: string }).code === "23503") {
+        // Package has purchase history — can't hard-delete, hide it instead
+        await pool.query(`UPDATE packages SET active = false WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+      } else {
+        throw err;
+      }
+    }
     return { ok: true };
   });
 

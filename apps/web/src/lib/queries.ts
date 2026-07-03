@@ -51,6 +51,7 @@ export interface ScheduleSlot {
   startTime: string;
   roomId: string | null;
   roomName: string | null;
+  teacherId: string | null;
   teacherName: string | null;
   isOnline: boolean;
   meetingUrl: string | null;
@@ -72,7 +73,7 @@ export interface TeacherRanking {
   spec: string | null;
   groupsCount: number;
   studentsCount: number;
-  avgRating: number;
+  avgRating: number | null;
   reviewCount: number;
 }
 
@@ -203,6 +204,7 @@ export function useSchedule() {
 
 export interface CreateSlotPayload {
   groupId?: string;
+  teacherId?: string;
   lessonType: "guruh" | "individual" | "diagnostika";
   customName?: string;
   dayOfWeek: number;

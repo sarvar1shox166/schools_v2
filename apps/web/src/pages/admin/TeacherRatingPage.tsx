@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Avatar, Card, CardHead, Icon, StatCard } from "@chess-school/ui";
 import { useTeacherRankings, useTeacherReviews, useAddTeacherReview, useTeachers } from "../../lib/queries.js";
 
@@ -88,8 +88,8 @@ export default function TeacherRatingPage() {
   const totalReviews = rankings.reduce((s, t) => s + t.reviewCount, 0);
   const ratedTeachers = rankings.filter((t) => t.reviewCount > 0).length;
   const avgRating = totalReviews > 0
-    ? rankings.reduce((s, t) => s + t.avgRating * t.reviewCount, 0) / totalReviews
-    : (rankings.length > 0 ? rankings.reduce((s, t) => s + t.avgRating, 0) / rankings.length : 0);
+    ? rankings.reduce((s, t) => s + (t.avgRating ?? 0) * t.reviewCount, 0) / totalReviews
+    : (rankings.length > 0 ? rankings.reduce((s, t) => s + (t.avgRating ?? 0), 0) / rankings.length : 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -148,8 +148,8 @@ export default function TeacherRatingPage() {
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <Stars rating={t.avgRating} />
-                  <span style={{ fontWeight: 800, fontSize: 18, minWidth: 36 }}>{t.avgRating.toFixed(1)}</span>
+                  <Stars rating={t.avgRating ?? 0} />
+                  <span style={{ fontWeight: 800, fontSize: 18, minWidth: 36 }}>{(t.avgRating ?? 0).toFixed(1)}</span>
                 </div>
               </div>
             ))}
@@ -204,7 +204,7 @@ export default function TeacherRatingPage() {
   );
 }
 
-const labelStyle: React.CSSProperties = {
+const labelStyle: CSSProperties = {
   display: "block", fontSize: 11, fontWeight: 700,
   letterSpacing: "0.06em", color: "var(--text-faint)",
   marginBottom: 6, textTransform: "uppercase",

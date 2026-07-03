@@ -238,7 +238,6 @@ export default function PackagesPage() {
   const [editPkg, setEditPkg] = useState<Package | null>(null);
 
   const active = packages.filter((p) => p.active);
-  const inactive = packages.filter((p) => !p.active);
 
   const totalMonthlyRevenue = active.reduce((s, p) => s + p.price, 0);
 
@@ -292,26 +291,11 @@ export default function PackagesPage() {
           </div>
         </Card>
       ) : (
-        <>
-          <div className="grid cols-2">
-            {active.map((p) => (
-              <PackageCard key={p.id} pkg={p} onEdit={() => { setEditPkg(p); setShowModal(true); }} />
-            ))}
-          </div>
-
-          {inactive.length > 0 && (
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-faint)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Noaktiv paketlar ({inactive.length})
-              </div>
-              <div className="grid cols-2">
-                {inactive.map((p) => (
-                  <PackageCard key={p.id} pkg={p} onEdit={() => { setEditPkg(p); setShowModal(true); }} />
-                ))}
-              </div>
-            </div>
-          )}
-        </>
+        <div className="grid cols-2">
+          {active.map((p) => (
+            <PackageCard key={p.id} pkg={p} onEdit={() => { setEditPkg(p); setShowModal(true); }} />
+          ))}
+        </div>
       )}
 
       {showModal && (
