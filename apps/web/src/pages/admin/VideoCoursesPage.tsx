@@ -3,6 +3,7 @@ import { Card, Icon, StatCard } from "@chess-school/ui";
 import {
   useVideos, useCreateVideo, useUpdateVideo, useDeleteVideo,
   useUploadVideo, useUploadImage,
+  useVideoQuiz, useAddQuizQuestion, useDeleteQuizQuestion,
   type VideoLesson,
 } from "../../lib/queries.js";
 
@@ -64,6 +65,59 @@ function FileUploadZone({ accept, label, value, onChange, uploading }: {
         if (f) onChange(URL.createObjectURL(f));
         e.target.value = "";
       }} />
+    </div>
+  );
+}
+
+// ---- Quiz section (edit mode only) ----
+function QuizSection({ videoId }: { videoId: string }) {
+  const { data: questions = [] } = useVideoQuiz(videoId);
+  const addQuestion = useAddQuizQuestion();
+  const deleteQuestion = useDeleteQuizQuestion();
+
+  const [q, setQ] = useState("");
+  const [opts, setOpts] = useState(["", "", "", ""]);
+  const [correctIndex, setCorrectIndex] = useState(0);
+
+  async function handleAdd() {
+    const cleanOpts = opts.map((o) => o.trim()).filter(Boolean);
+    if (!q.trim() || cleanOpts.length < 2) return;
+    await addQuestion.mutateAsync({ videoId, question: q.trim(), options: cleanOpts, correctIndex: Math.min(correctIndex, cleanOpts.length - 1) });
+    setQ(""); setOpts(["", "", "", ""]); setCorrectIndex(0);
+  }
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <label style={labelSt}>TEST SAVOLLARI ({questions.length})</label>
+
+      {questions.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+          {questions.map((qq, i) => (
+            <div key={qq.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: "var(--surface-2)" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{i + 1}. {qq.question}</span>
+              <button onClick={() => deleteQuestion.mutate({ questionId: qq.id, videoId })}
+                style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center" }}>
+                <Icon name="x" size={12} style={{ color: "#ef4444" }} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ border: "1px dashed var(--border)", borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        <input className="inp" style={{ width: "100%" }} placeholder="Savol matni"
+          value={q} onChange={(e) => setQ(e.target.value)} />
+        {opts.map((o, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="radio" checked={correctIndex === i} onChange={() => setCorrectIndex(i)} title="To'g'ri javob" />
+            <input className="inp" style={{ width: "100%" }} placeholder={`Variant ${i + 1}${i < 2 ? "" : " (ixtiyoriy)"}`}
+              value={o} onChange={(e) => setOpts(opts.map((v, idx) => idx === i ? e.target.value : v))} />
+          </div>
+        ))}
+        <button type="button" className="btn sm" onClick={handleAdd} disabled={addQuestion.isPending}>
+          <Icon name="plus" size={12} /> Savol qo'shish
+        </button>
+      </div>
     </div>
   );
 }
@@ -198,6 +252,8 @@ function AddVideoModal({ video, onClose }: { video?: VideoLesson; onClose: () =>
             </select>
           </div>
         </div>
+
+        {isEdit && <QuizSection videoId={video!.id} />}
 
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
           <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>

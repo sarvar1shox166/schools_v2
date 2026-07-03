@@ -116,6 +116,47 @@ export function useAddTeacherReview() {
   });
 }
 
+export interface PendingLessonReview {
+  lessonId: string;
+  topic: string | null;
+  conductedAt: string;
+  teacherName: string;
+}
+
+export function usePendingLessonReviews() {
+  return useQuery({
+    queryKey: ["pendingLessonReviews"],
+    queryFn: async () => (await api.get<PendingLessonReview[]>("/me/lessons/pending-reviews")).data,
+  });
+}
+
+export function useSubmitLessonReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ lessonId, ...payload }: { lessonId: string; rating: number; comment?: string }) =>
+      (await api.post(`/lessons/${lessonId}/review`, payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pendingLessonReviews"] }),
+  });
+}
+
+export interface StudentTeacherReview {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  studentName: string;
+  topic: string | null;
+  conductedAt: string;
+}
+
+export function useStudentReviewsForTeacher(teacherId: string | null) {
+  return useQuery({
+    queryKey: ["studentReviews", teacherId],
+    enabled: !!teacherId,
+    queryFn: async () => (await api.get<StudentTeacherReview[]>(`/teachers/${teacherId}/student-reviews`)).data,
+  });
+}
+
 export function useCreateTeacher() {
   const qc = useQueryClient();
   return useMutation({
@@ -1174,6 +1215,46 @@ export function useUpdateVideoProgress() {
     mutationFn: async ({ videoId, progressPct }: { videoId: string; progressPct: number }) =>
       (await api.post(`/videos/${videoId}/progress`, { progressPct })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
+  });
+}
+
+export interface VideoQuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctIndex?: number; // present for admin/teacher only
+}
+
+export function useVideoQuiz(videoId: string | undefined) {
+  return useQuery({
+    queryKey: ["videoQuiz", videoId],
+    enabled: !!videoId,
+    queryFn: async () => (await api.get<VideoQuizQuestion[]>(`/videos/${videoId}/quiz`)).data,
+  });
+}
+
+export function useAddQuizQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ videoId, ...body }: { videoId: string; question: string; options: string[]; correctIndex: number }) =>
+      (await api.post<{ id: string }>(`/videos/${videoId}/quiz`, body)).data,
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["videoQuiz", vars.videoId] }),
+  });
+}
+
+export function useDeleteQuizQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ questionId }: { questionId: string; videoId: string }) =>
+      (await api.delete(`/videos/quiz/${questionId}`)).data,
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["videoQuiz", vars.videoId] }),
+  });
+}
+
+export function useSubmitQuiz() {
+  return useMutation({
+    mutationFn: async ({ videoId, answers }: { videoId: string; answers: number[] }) =>
+      (await api.post<{ score: number; total: number; xpAwarded?: number }>(`/videos/${videoId}/quiz/submit`, { answers })).data,
   });
 }
 

@@ -22,7 +22,18 @@ const progressSchema = z.object({
   progressPct: z.number().int().min(0).max(100),
 });
 
+const quizQuestionSchema = z.object({
+  question: z.string().min(1),
+  options: z.array(z.string().min(1)).min(2),
+  correctIndex: z.number().int().min(0),
+});
+
+const quizSubmitSchema = z.object({
+  answers: z.array(z.number().int().min(0)),
+});
+
 const VIDEO_XP_REWARD = 20;
+const QUIZ_XP_REWARD = 15;
 
 async function getStudentIdForUser(userId: string): Promise<string | null> {
   const { rows } = await pool.query(`SELECT id FROM students WHERE user_id = $1`, [userId]);
@@ -185,5 +196,87 @@ export async function videosRoutes(app: FastifyInstance) {
     }
 
     return { progressPct: body.progressPct };
+  });
+
+  // ── Video quiz ──────────────────────────────────────────────────────────────
+
+  app.get("/videos/:id/quiz", async (request) => {
+    const { id } = request.params as { id: string };
+    const { role } = request.user;
+    const { rows } = await pool.query(
+      `SELECT id, question, options, correct_index AS "correctIndex"
+       FROM video_quiz_questions WHERE video_id = $1 ORDER BY sort_order, created_at`,
+      [id]
+    );
+    // Students shouldn't see the correct answer ahead of submitting
+    if (role === "student") {
+      return rows.map(({ id: qid, question, options }) => ({ id: qid, question, options }));
+    }
+    return rows;
+  });
+
+  app.post("/videos/:id/quiz", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = quizQuestionSchema.parse(request.body);
+    const { rows } = await pool.query(
+      `INSERT INTO video_quiz_questions (video_id, question, options, correct_index)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [id, body.question, JSON.stringify(body.options), body.correctIndex]
+    );
+    return reply.code(201).send({ id: rows[0].id });
+  });
+
+  app.delete("/videos/quiz/:questionId", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+    const { questionId } = request.params as { questionId: string };
+    const { rowCount } = await pool.query(`DELETE FROM video_quiz_questions WHERE id = $1`, [questionId]);
+    if (!rowCount) return reply.code(404).send({ error: "Not found" });
+    return { ok: true };
+  });
+
+  app.post("/videos/:id/quiz/submit", { onRequest: [app.requireRole("student")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = quizSubmitSchema.parse(request.body);
+    const studentId = await getStudentIdForUser(request.user.sub);
+    if (!studentId) return reply.code(404).send({ error: "Student not found" });
+
+    const { rows: questions } = await pool.query(
+      `SELECT id, correct_index AS "correctIndex" FROM video_quiz_questions
+       WHERE video_id = $1 ORDER BY sort_order, created_at`,
+      [id]
+    );
+    if (questions.length === 0) return reply.code(400).send({ error: "Bu videoda test yo'q" });
+
+    let score = 0;
+    for (let i = 0; i < questions.length; i++) {
+      if (body.answers[i] === questions[i].correctIndex) score++;
+    }
+
+    const already = await pool.query(
+      `SELECT 1 FROM video_quiz_attempts WHERE student_id = $1 AND video_id = $2`,
+      [studentId, id]
+    );
+    await pool.query(
+      `INSERT INTO video_quiz_attempts (student_id, video_id, score, total)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (student_id, video_id) DO UPDATE SET score = $3, total = $4, created_at = now()`,
+      [studentId, id, score, questions.length]
+    );
+
+    if (already.rows.length === 0 && score === questions.length) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const xpResult = await awardXp(client, studentId, QUIZ_XP_REWARD);
+        await client.query("COMMIT");
+        return { score, total: questions.length, ...xpResult, xpAwarded: QUIZ_XP_REWARD };
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+    }
+
+    return { score, total: questions.length };
   });
 }

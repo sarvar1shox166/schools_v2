@@ -1,6 +1,9 @@
 import { useState, type CSSProperties } from "react";
 import { Avatar, Card, CardHead, Icon, StatCard } from "@chess-school/ui";
-import { useTeacherRankings, useTeacherReviews, useAddTeacherReview, useTeachers } from "../../lib/queries.js";
+import {
+  useTeacherRankings, useTeacherReviews, useAddTeacherReview, useTeachers,
+  useStudentReviewsForTeacher, type TeacherRanking,
+} from "../../lib/queries.js";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
@@ -77,6 +80,58 @@ function AddReviewModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function StudentReviewsCard({ rankings }: { rankings: TeacherRanking[] }) {
+  const [teacherId, setTeacherId] = useState(rankings[0]?.id ?? "");
+  const { data: reviews = [], isLoading } = useStudentReviewsForTeacher(teacherId || null);
+
+  if (rankings.length === 0) return null;
+
+  return (
+    <Card style={{ padding: 0 }}>
+      <div style={{ padding: "18px 22px 14px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)" }}>
+        <span style={{ fontSize: 18 }}>🎓</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800, fontSize: 15.5 }}>O'quvchi izohlari</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: 2 }}>Faqat admin ko'radi</div>
+        </div>
+        <select className="inp" style={{ minWidth: 160 }} value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
+          {rankings.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
+        </select>
+      </div>
+
+      <div style={{ padding: "12px 22px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {isLoading ? (
+          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-faint)" }}>Yuklanmoqda...</div>
+        ) : reviews.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-faint)" }}>
+            Bu ustoz uchun hali o'quvchi izohi yo'q.
+          </div>
+        ) : reviews.map((r) => (
+          <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", background: "var(--surface-2)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <Avatar name={r.studentName} size="sm" />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 750, fontSize: 14 }}>{r.studentName}</span>
+                  <Stars rating={r.rating} size={14} />
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 3 }}>
+                  {r.topic ?? "Dars"} · {r.conductedAt}
+                </div>
+              </div>
+            </div>
+            {r.comment && (
+              <div style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13.5, color: "var(--text-faint)" }}>
+                «{r.comment}»
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -197,6 +252,8 @@ export default function TeacherRatingPage() {
             ))}
           </div>
         </Card>
+
+        <StudentReviewsCard rankings={rankings} />
       </div>
 
       {showAddModal && <AddReviewModal onClose={() => setShowAddModal(false)} />}

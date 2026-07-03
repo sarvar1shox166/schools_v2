@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Card, showXp } from "@chess-school/ui";
+import { useVideoQuiz, useSubmitQuiz } from "../../lib/queries.js";
 
 export interface VideoWatchState {
   title: string;
@@ -11,21 +12,9 @@ export interface VideoWatchState {
   watched?: boolean;
 }
 
-interface Question {
-  q: string;
-  opts: string[];
-  ans: number;
-}
-
-const DEMO_QUESTIONS: Question[] = [
-  { q:"Shaxmat taxtasida nechta katakcha bor?", opts:["32","48","64","81"], ans:2 },
-  { q:"Malika bir hamlada necha yo'nalishda yura oladi?", opts:["4","6","8","Cheksiz yo'nalishlarda"], ans:3 },
-  { q:"O'yinni kim boshlaydi?", opts:["Qora","Oq","Tanga tashlash bilan belgilanadi","Kattaroq o'yinchi"], ans:1 },
-  { q:"Rok nima deb ataladi?", opts:["Fil","Ot","Piyoda","Qal'a"], ans:3 },
-];
-
 export default function VideoWatchPage() {
   const navigate = useNavigate();
+  const { videoId } = useParams<{ videoId: string }>();
   const { state } = useLocation() as { state: VideoWatchState | null };
 
   const title       = state?.title       ?? "Video dars";
@@ -33,9 +22,19 @@ export default function VideoWatchPage() {
   const gradient    = state?.gradient    ?? "linear-gradient(135deg,#1e3a5f,#1565c0)";
   const videoUrl    = state?.videoUrl;
 
+  const { data: questions = [], isLoading: quizLoading } = useVideoQuiz(videoId);
+  const submitQuiz = useSubmitQuiz();
+
   const [phase, setPhase]   = useState<"idle"|"test"|"done">("idle");
-  const [answers, setAnswers] = useState<(number|null)[]>(DEMO_QUESTIONS.map(()=>null));
+  const [answers, setAnswers] = useState<(number|null)[]>([]);
   const [current, setCurrent] = useState(0);
+  const [result, setResult] = useState<{ score: number; total: number; xpAwarded?: number } | null>(null);
+
+  function startTest() {
+    setAnswers(questions.map(() => null));
+    setCurrent(0);
+    setPhase("test");
+  }
 
   function selectAnswer(idx: number) {
     const next = [...answers];
@@ -43,16 +42,16 @@ export default function VideoWatchPage() {
     setAnswers(next);
   }
 
-  function finish() {
+  async function finish() {
+    if (!videoId) return;
+    const res = await submitQuiz.mutateAsync({ videoId, answers: answers.map(a => a ?? -1) });
+    setResult(res);
     setPhase("done");
-    const correct = answers.filter((a,i)=>a===DEMO_QUESTIONS[i].ans).length;
-    const xp = correct * 25;
-    if (xp > 0) showXp(xp, `Test tugadi! ${correct}/${DEMO_QUESTIONS.length} to'g'ri`);
+    if (res.xpAwarded) showXp(res.xpAwarded, `Test tugadi! ${res.score}/${res.total} to'g'ri`);
   }
 
-  const correct = answers.filter((a,i)=>a===DEMO_QUESTIONS[i].ans).length;
-  const q = DEMO_QUESTIONS[current];
-  const allAnswered = answers.every(a=>a!==null);
+  const q = questions[current];
+  const allAnswered = answers.length > 0 && answers.every(a => a !== null);
 
   return (
     <div style={{ maxWidth:860, margin:"0 auto" }}>
@@ -87,6 +86,7 @@ export default function VideoWatchPage() {
       <h2 style={{ margin:"0 0 20px",fontSize:20,fontWeight:900 }}>{title}</h2>
 
       {/* Test section */}
+      {!quizLoading && questions.length === 0 ? null : (
       <Card>
         {phase === "idle" && (
           <div style={{ padding:"24px 24px" }}>
@@ -97,39 +97,39 @@ export default function VideoWatchPage() {
               <div>
                 <div style={{ fontWeight:800,fontSize:16 }}>Dars testi</div>
                 <div style={{ fontSize:13,color:"var(--text-faint)",marginTop:3 }}>
-                  {DEMO_QUESTIONS.length} ta savol · To'g'ri javob uchun +25 XP
+                  {questions.length} ta savol · Hammasiga to'g'ri javob berilsa +15 XP
                 </div>
               </div>
             </div>
             <p style={{ margin:"0 0 20px",fontSize:13.5,color:"var(--text-faint)",lineHeight:1.65 }}>
-              Darsni ko'rgach bilimingizni tekshiring. Har bir to'g'ri javob uchun XP yutasiz!
+              Darsni ko'rgach bilimingizni tekshiring. Hammasini to'g'ri topsangiz XP yutasiz!
             </p>
             <button className="btn" style={{ background:"var(--kacc,#3F8CFF)",color:"#fff",border:"none" }}
-              onClick={()=>setPhase("test")}>
+              onClick={startTest} disabled={quizLoading}>
               Testni boshlash →
             </button>
           </div>
         )}
 
-        {phase === "test" && (
+        {phase === "test" && q && (
           <div style={{ padding:"24px" }}>
             {/* Progress */}
             <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
               <div style={{ flex:1,height:5,borderRadius:99,background:"rgba(255,255,255,.1)",overflow:"hidden" }}>
                 <div style={{ height:"100%",borderRadius:99,background:"var(--kacc,#3F8CFF)",
-                  width:`${((current+1)/DEMO_QUESTIONS.length)*100}%`,transition:"width .3s" }}/>
+                  width:`${((current+1)/questions.length)*100}%`,transition:"width .3s" }}/>
               </div>
               <span style={{ fontSize:12,fontWeight:700,color:"var(--text-faint)",flexShrink:0 }}>
-                {current+1}/{DEMO_QUESTIONS.length}
+                {current+1}/{questions.length}
               </span>
             </div>
 
             {/* Question */}
-            <div style={{ fontWeight:800,fontSize:16,marginBottom:16,lineHeight:1.5 }}>{q.q}</div>
+            <div style={{ fontWeight:800,fontSize:16,marginBottom:16,lineHeight:1.5 }}>{q.question}</div>
 
             {/* Options */}
             <div style={{ display:"flex",flexDirection:"column",gap:10,marginBottom:24 }}>
-              {q.opts.map((opt,i)=>{
+              {q.options.map((opt,i)=>{
                 const picked = answers[current]===i;
                 return (
                   <button key={i} onClick={()=>selectAnswer(i)}
@@ -156,7 +156,7 @@ export default function VideoWatchPage() {
                   ← Oldingi
                 </button>
               )}
-              {current < DEMO_QUESTIONS.length-1 ? (
+              {current < questions.length-1 ? (
                 <button className="btn" style={{ background:"var(--kacc,#3F8CFF)",color:"#fff",border:"none",opacity:answers[current]===null?.5:1 }}
                   disabled={answers[current]===null}
                   onClick={()=>setCurrent(c=>c+1)}>
@@ -164,41 +164,33 @@ export default function VideoWatchPage() {
                 </button>
               ) : (
                 <button className="btn" style={{ background:"#22c55e",color:"#fff",border:"none",opacity:!allAnswered?.5:1 }}
-                  disabled={!allAnswered}
+                  disabled={!allAnswered || submitQuiz.isPending}
                   onClick={finish}>
-                  Tugatish ✓
+                  {submitQuiz.isPending ? "Yuborilmoqda..." : "Tugatish ✓"}
                 </button>
               )}
             </div>
           </div>
         )}
 
-        {phase === "done" && (
+        {phase === "done" && result && (
           <div style={{ padding:"32px 24px",textAlign:"center" }}>
-            <div style={{ fontSize:56,marginBottom:16 }}>{correct===DEMO_QUESTIONS.length?"🏆":correct>=DEMO_QUESTIONS.length/2?"🎯":"📚"}</div>
+            <div style={{ fontSize:56,marginBottom:16 }}>{result.score===result.total?"🏆":result.score>=result.total/2?"🎯":"📚"}</div>
             <div style={{ fontWeight:900,fontSize:22,marginBottom:8 }}>
-              {correct===DEMO_QUESTIONS.length ? "Ajoyib!" : correct>=DEMO_QUESTIONS.length/2 ? "Yaxshi natija!" : "Ko'proq mashq qiling!"}
+              {result.score===result.total ? "Ajoyib!" : result.score>=result.total/2 ? "Yaxshi natija!" : "Ko'proq mashq qiling!"}
             </div>
             <div style={{ fontSize:15,color:"var(--text-faint)",marginBottom:20 }}>
-              {correct}/{DEMO_QUESTIONS.length} ta savol to'g'ri · <span style={{ color:"#f59e0b",fontWeight:700 }}>+{correct*25} XP</span>
+              {result.score}/{result.total} ta savol to'g'ri
+              {result.xpAwarded ? <> · <span style={{ color:"#f59e0b",fontWeight:700 }}>+{result.xpAwarded} XP</span></> : null}
             </div>
-            <div style={{ display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap" }}>
-              {DEMO_QUESTIONS.map((_,i)=>(
-                <div key={i} style={{ width:36,height:36,borderRadius:10,display:"grid",placeItems:"center",fontSize:16,fontWeight:800,
-                  background: answers[i]===DEMO_QUESTIONS[i].ans ? "rgba(34,197,94,.2)" : "rgba(239,68,68,.15)",
-                  color:       answers[i]===DEMO_QUESTIONS[i].ans ? "#22c55e" : "#ef4444",
-                  border:      `1.5px solid ${answers[i]===DEMO_QUESTIONS[i].ans?"#22c55e":"#ef4444"}` }}>
-                  {answers[i]===DEMO_QUESTIONS[i].ans?"✓":"✕"}
-                </div>
-              ))}
-            </div>
-            <button className="btn" style={{ marginTop:24,background:"var(--kacc,#3F8CFF)",color:"#fff",border:"none" }}
-              onClick={()=>{ setPhase("idle"); setAnswers(DEMO_QUESTIONS.map(()=>null)); setCurrent(0); }}>
-              Qayta ishlash
+            <button className="btn" style={{ marginTop:8,background:"var(--kacc,#3F8CFF)",color:"#fff",border:"none" }}
+              onClick={()=>{ setPhase("idle"); setResult(null); }}>
+              Yopish
             </button>
           </div>
         )}
       </Card>
+      )}
     </div>
   );
 }

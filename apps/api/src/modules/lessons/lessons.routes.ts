@@ -18,6 +18,11 @@ const updateSchema = z.object({
   status: z.enum(["conducted", "cancelled"]).optional(),
 });
 
+const reviewSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().optional(),
+});
+
 export async function lessonsRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
@@ -162,4 +167,77 @@ export async function lessonsRoutes(app: FastifyInstance) {
       return { ok: true };
     }
   );
+
+  // ── Student → teacher post-lesson reviews ─────────────────────────────────────
+
+  // Lessons the student attended and hasn't reviewed yet (most recent first)
+  app.get("/me/lessons/pending-reviews", { onRequest: [app.requireRole("student")] }, async (request) => {
+    const { sub } = request.user;
+    const studentRes = await pool.query(`SELECT id FROM students WHERE user_id = $1`, [sub]);
+    const studentId = studentRes.rows[0]?.id;
+    if (!studentId) return [];
+
+    const { rows } = await pool.query(
+      `SELECT l.id AS "lessonId", l.topic, l.conducted_at AS "conductedAt",
+              tu.full_name AS "teacherName"
+       FROM attendance_records ar
+       JOIN lessons l ON l.id = ar.lesson_id
+       JOIN teachers t ON t.id = l.teacher_id
+       JOIN users tu ON tu.id = t.user_id
+       WHERE ar.student_id = $1 AND ar.status IN ('p','l')
+         AND NOT EXISTS (
+           SELECT 1 FROM lesson_student_reviews r WHERE r.lesson_id = l.id AND r.student_id = $1
+         )
+       ORDER BY l.conducted_at DESC
+       LIMIT 10`,
+      [studentId]
+    );
+    return rows;
+  });
+
+  app.post("/lessons/:id/review", { onRequest: [app.requireRole("student")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = reviewSchema.parse(request.body);
+    const { sub } = request.user;
+
+    const studentRes = await pool.query(`SELECT id FROM students WHERE user_id = $1`, [sub]);
+    const studentId = studentRes.rows[0]?.id;
+    if (!studentId) return reply.code(404).send({ error: "Student not found" });
+
+    const attended = await pool.query(
+      `SELECT 1 FROM attendance_records WHERE lesson_id = $1 AND student_id = $2 AND status IN ('p','l')`,
+      [id, studentId]
+    );
+    if (attended.rows.length === 0) return reply.code(403).send({ error: "Bu darsda qatnashmagansiz" });
+
+    const lessonRes = await pool.query(`SELECT teacher_id AS "teacherId" FROM lessons WHERE id = $1`, [id]);
+    const teacherId = lessonRes.rows[0]?.teacherId;
+    if (!teacherId) return reply.code(404).send({ error: "Lesson not found" });
+
+    await pool.query(
+      `INSERT INTO lesson_student_reviews (lesson_id, student_id, teacher_id, rating, comment)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (lesson_id, student_id) DO UPDATE SET rating = EXCLUDED.rating, comment = EXCLUDED.comment`,
+      [id, studentId, teacherId, body.rating, body.comment ?? null]
+    );
+    return reply.code(201).send({ ok: true });
+  });
+
+  // Admin-only: student reviews for a given teacher
+  app.get("/teachers/:id/student-reviews", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+    const { id } = request.params as { id: string };
+    const { rows } = await pool.query(
+      `SELECT r.id, r.rating, r.comment, r.created_at AS "createdAt",
+              su.full_name AS "studentName", l.topic, l.conducted_at AS "conductedAt"
+       FROM lesson_student_reviews r
+       JOIN students s ON s.id = r.student_id
+       JOIN users su ON su.id = s.user_id
+       JOIN lessons l ON l.id = r.lesson_id
+       WHERE r.teacher_id = $1
+       ORDER BY r.created_at DESC
+       LIMIT 100`,
+      [id]
+    );
+    return rows;
+  });
 }
