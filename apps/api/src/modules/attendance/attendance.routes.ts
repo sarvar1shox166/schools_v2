@@ -22,6 +22,21 @@ const markSchema = z.object({
   ),
 });
 
+const teacherMarkSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  records: z.array(
+    z.object({
+      scheduleSlotId: z.string().uuid(),
+      teacherId: z.string().uuid(),
+      status: z.enum(["p", "a", "l"]),
+    })
+  ),
+});
+
+function dowFromDate(date: string): number {
+  return (new Date(date + "T00:00:00").getDay() + 6) % 7;
+}
+
 // 'ae' = sababli yo'qlik. Dars hisoblanmaydi.
 // 'p', 'a', 'l' = dars hisoblanadi (paketdan ayiriladi).
 const isCounted = (s: string) => s !== "ae";
@@ -215,6 +230,166 @@ export async function attendanceRoutes(app: FastifyInstance) {
           }
         }
         await recordLessonSession(client, body.scheduleSlotId, body.date);
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+
+      return { ok: true };
+    }
+  );
+
+  // ── O'qituvchi davomati (faqat statistika/hisobot — payrollga ta'sir qilmaydi) ──
+
+  app.get(
+    "/attendance/teacher/stats",
+    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    async (request) => {
+      const { tenantId } = request.user;
+      const { date } = request.query as { date?: string };
+      const targetDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date().toISOString().slice(0, 10);
+
+      const { rows } = await pool.query(
+        `SELECT status, COUNT(*)::int AS count
+         FROM teacher_attendance
+         WHERE tenant_id = $1 AND date = $2
+         GROUP BY status`,
+        [tenantId, targetDate]
+      );
+
+      const counts = { p: 0, a: 0, l: 0 };
+      for (const r of rows) counts[r.status as keyof typeof counts] = Number(r.count);
+      const total = counts.p + counts.a + counts.l;
+      const avgPercent = total > 0 ? Math.round((counts.p / total) * 100) : 0;
+
+      return {
+        date: targetDate,
+        avgPercent,
+        present: counts.p,
+        late: counts.l,
+        absent: counts.a,
+        total,
+      };
+    }
+  );
+
+  app.get(
+    "/attendance/teacher/history",
+    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    async (request) => {
+      const { tenantId } = request.user;
+      const { days } = request.query as { days?: string };
+      const numDays = Math.min(Math.max(Number(days) || 8, 1), 31);
+
+      const teachersRes = await pool.query(
+        `SELECT t.id, u.full_name AS "fullName", t.title, t.spec
+         FROM teachers t
+         JOIN users u ON u.id = t.user_id
+         WHERE t.tenant_id = $1
+         ORDER BY u.full_name`,
+        [tenantId]
+      );
+
+      const dates: string[] = [];
+      for (let i = numDays - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().slice(0, 10));
+      }
+
+      const recordsRes = await pool.query(
+        `SELECT teacher_id AS "teacherId", date, status
+         FROM teacher_attendance
+         WHERE tenant_id = $1 AND date >= $2 AND date <= $3`,
+        [tenantId, dates[0], dates[dates.length - 1]]
+      );
+
+      const recordMap = new Map<string, Map<string, "p" | "a" | "l">>();
+      for (const r of recordsRes.rows) {
+        const dateKey = new Date(r.date).toISOString().slice(0, 10);
+        if (!recordMap.has(r.teacherId)) recordMap.set(r.teacherId, new Map());
+        recordMap.get(r.teacherId)!.set(dateKey, r.status);
+      }
+
+      const teachers = teachersRes.rows.map((t) => {
+        const teacherRecords = recordMap.get(t.id) ?? new Map();
+        const days = dates.map((d) => teacherRecords.get(d) ?? null);
+        let present = 0;
+        let counted = 0;
+        for (const status of teacherRecords.values()) {
+          counted++;
+          if (status === "p") present++;
+        }
+        const percent = counted > 0 ? Math.round((present / counted) * 100) : 0;
+        return { teacherId: t.id, fullName: t.fullName, title: t.title, spec: t.spec, days, percent };
+      });
+
+      return { dates, teachers };
+    }
+  );
+
+  app.get(
+    "/attendance/teacher/day-slots",
+    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    async (request, reply) => {
+      const { tenantId } = request.user;
+      const { date } = request.query as { date?: string };
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return reply.code(400).send({ error: "date is required" });
+      const dayOfWeek = dowFromDate(date);
+
+      const { rows } = await pool.query(
+        `SELECT sl.id AS "scheduleSlotId",
+                COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId",
+                COALESCE(tu2.full_name, tu.full_name) AS "teacherName",
+                COALESCE(t2.title, t.title) AS "teacherTitle",
+                COALESCE(t2.spec, t.spec) AS "teacherSpec",
+                sl.group_id AS "groupId", g.name AS "groupName",
+                sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
+                sl.start_time AS "startTime",
+                COALESCE(gm.cnt, 0)::int AS "studentsCount",
+                ta.status
+         FROM schedule_slots sl
+         LEFT JOIN groups g ON g.id = sl.group_id
+         LEFT JOIN teachers t ON t.id = g.teacher_id
+         LEFT JOIN users tu ON tu.id = t.user_id
+         LEFT JOIN teachers t2 ON t2.id = sl.teacher_id
+         LEFT JOIN users tu2 ON tu2.id = t2.user_id
+         LEFT JOIN (SELECT group_id, count(*) AS cnt FROM group_members GROUP BY group_id) gm ON gm.group_id = sl.group_id
+         LEFT JOIN teacher_attendance ta ON ta.schedule_slot_id = sl.id AND ta.date = $2
+           AND ta.teacher_id = COALESCE(sl.teacher_id, g.teacher_id)
+         WHERE sl.tenant_id = $1 AND sl.day_of_week = $3
+         ORDER BY sl.start_time`,
+        [tenantId, date, dayOfWeek]
+      );
+
+      const slots = rows.filter((r) => r.teacherId != null);
+      return { date, dayOfWeek, slots };
+    }
+  );
+
+  app.post(
+    "/attendance/teacher",
+    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    async (request) => {
+      const body = teacherMarkSchema.parse(request.body);
+      const { tenantId } = request.user;
+      const userId = request.user.sub;
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        for (const r of body.records) {
+          await client.query(
+            `INSERT INTO teacher_attendance (tenant_id, teacher_id, schedule_slot_id, date, status, marked_by)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (teacher_id, schedule_slot_id, date)
+             DO UPDATE SET status = EXCLUDED.status, marked_by = EXCLUDED.marked_by`,
+            [tenantId, r.teacherId, r.scheduleSlotId, body.date, r.status, userId]
+          );
+        }
         await client.query("COMMIT");
       } catch (err) {
         await client.query("ROLLBACK");

@@ -453,6 +453,74 @@ export function useAttendanceHistoryMatrix(groupId: string | null, days = 8) {
   });
 }
 
+export interface TeacherAttendanceStats {
+  date: string;
+  avgPercent: number;
+  present: number;
+  late: number;
+  absent: number;
+  total: number;
+}
+
+export function useTeacherAttendanceStats(date?: string) {
+  return useQuery({
+    queryKey: ["teacherAttendanceStats", date],
+    queryFn: async () => (await api.get<TeacherAttendanceStats>("/attendance/teacher/stats", { params: date ? { date } : {} })).data,
+  });
+}
+
+export interface TeacherAttendanceHistoryMatrix {
+  dates: string[];
+  teachers: { teacherId: string; fullName: string; title: string | null; spec: string | null; days: ("p" | "a" | "l" | null)[]; percent: number }[];
+}
+
+export function useTeacherAttendanceHistoryMatrix(days = 8) {
+  return useQuery({
+    queryKey: ["teacherAttendanceHistoryMatrix", days],
+    queryFn: async () =>
+      (await api.get<TeacherAttendanceHistoryMatrix>("/attendance/teacher/history", { params: { days } })).data,
+  });
+}
+
+export interface DaySlot {
+  scheduleSlotId: string;
+  teacherId: string | null;
+  teacherName: string | null;
+  teacherTitle: string | null;
+  teacherSpec: string | null;
+  groupId: string | null;
+  groupName: string | null;
+  lessonType: "guruh" | "individual" | "diagnostika";
+  customName: string | null;
+  startTime: string;
+  studentsCount: number;
+  status: "p" | "a" | "l" | null;
+}
+
+export function useDaySlots(date: string) {
+  return useQuery({
+    queryKey: ["daySlots", date],
+    queryFn: async () =>
+      (await api.get<{ date: string; dayOfWeek: number; slots: DaySlot[] }>("/attendance/teacher/day-slots", { params: { date } })).data,
+    enabled: !!date,
+  });
+}
+
+export function useMarkTeacherAttendance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      date: string;
+      records: { scheduleSlotId: string; teacherId: string; status: "p" | "a" | "l" }[];
+    }) => (await api.post("/attendance/teacher", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["teacherAttendanceStats"] });
+      qc.invalidateQueries({ queryKey: ["teacherAttendanceHistoryMatrix"] });
+      qc.invalidateQueries({ queryKey: ["daySlots"] });
+    },
+  });
+}
+
 export function useAssignPackage() {
   const qc = useQueryClient();
   return useMutation({
