@@ -33,6 +33,14 @@ const teacherMarkSchema = z.object({
   ),
 });
 
+const joinSchema = z.object({
+  scheduleSlotId: z.string().uuid(),
+});
+
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function dowFromDate(date: string): number {
   return (new Date(date + "T00:00:00").getDay() + 6) % 7;
 }
@@ -401,4 +409,81 @@ export async function attendanceRoutes(app: FastifyInstance) {
       return { ok: true };
     }
   );
+
+  // ── Darsni boshlash (link ochish) — avtomatik davomat belgilash ──────────────
+  // Mavjud (qo'lda belgilangan) yozuvni ustidan yozmaydi — faqat bo'sh joyni to'ldiradi.
+
+  app.post("/me/attendance/join", { onRequest: [app.requireRole("student")] }, async (request) => {
+    const body = joinSchema.parse(request.body);
+    const { sub, tenantId } = request.user;
+    const date = todayStr();
+
+    const studentRes = await pool.query(`SELECT id FROM students WHERE user_id = $1`, [sub]);
+    const studentId = studentRes.rows[0]?.id;
+    if (!studentId) return { ok: false };
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const inserted = await client.query(
+        `INSERT INTO attendance_records (student_id, schedule_slot_id, date, status, lesson_counted, marked_by)
+         VALUES ($1, $2, $3, 'p', true, NULL)
+         ON CONFLICT (student_id, schedule_slot_id, date) DO NOTHING
+         RETURNING id`,
+        [studentId, body.scheduleSlotId, date]
+      );
+      if (inserted.rows.length > 0) {
+        const consumed = await consumeLesson(client, studentId);
+        if (!consumed && tenantId) {
+          const studentNameRes = await client.query(
+            `SELECT u.full_name FROM students s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
+            [studentId]
+          );
+          const studentName = studentNameRes.rows[0]?.full_name ?? "O'quvchi";
+          const adminRes = await client.query(
+            `SELECT id FROM users WHERE tenant_id = $1 AND role IN ('admin','super_admin')`,
+            [tenantId]
+          );
+          for (const admin of adminRes.rows) {
+            await createNotification(client, {
+              tenantId,
+              userId: admin.id,
+              type: "no_package",
+              icon: "alert",
+              title: "To'lov talab qilinadi",
+              body: `${studentName} darsga kirdi, lekin faol paketi yo'q. To'lovni rasmiylashtiring.`,
+            });
+          }
+        }
+        await recordLessonSession(client, body.scheduleSlotId, date);
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    return { ok: true };
+  });
+
+  app.post("/me/teacher-attendance/join", { onRequest: [app.requireRole("teacher")] }, async (request) => {
+    const body = joinSchema.parse(request.body);
+    const { sub, tenantId } = request.user;
+    const date = todayStr();
+
+    const teacherRes = await pool.query(`SELECT id FROM teachers WHERE user_id = $1`, [sub]);
+    const teacherId = teacherRes.rows[0]?.id;
+    if (!teacherId) return { ok: false };
+
+    await pool.query(
+      `INSERT INTO teacher_attendance (tenant_id, teacher_id, schedule_slot_id, date, status, marked_by)
+       VALUES ($1, $2, $3, $4, 'p', NULL)
+       ON CONFLICT (teacher_id, schedule_slot_id, date) DO NOTHING`,
+      [tenantId, teacherId, body.scheduleSlotId, date]
+    );
+
+    return { ok: true };
+  });
 }

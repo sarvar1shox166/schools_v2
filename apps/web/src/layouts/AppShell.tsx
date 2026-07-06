@@ -3,8 +3,17 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { Icon, XpToastHost } from "@chess-school/ui";
 import { useAuthStore } from "../lib/auth-store.js";
-import { useMyXp, useUnreadNotifications } from "../lib/queries.js";
+import { useMyXp, usePendingLessonReviews, useUnreadNotifications } from "../lib/queries.js";
 import { Sidebar, type NavSection } from "./Sidebar.js";
+import { LessonReviewModal } from "../components/LessonReviewModal.js";
+
+function AutoLessonReviewPrompt() {
+  const { data: pending = [] } = usePendingLessonReviews();
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const lesson = pending.find((l) => l.lessonId !== dismissed);
+  if (!lesson) return null;
+  return <LessonReviewModal review={lesson} onClose={() => setDismissed(lesson.lessonId)} />;
+}
 
 const STUDENT_PAGE_META: Record<string, { title: string; sub: string }> = {
   "/student": { title: "Bosh sahifa", sub: "Xush kelibsiz!" },
@@ -120,6 +129,7 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   return (
     <div className={"app" + (isStudent ? " kid-theme" : "") + (!isStudent && collapsed ? " collapsed" : "") + (isStudent && mobOpen ? " mob-open" : "")}>
       <XpToastHost />
+      {isStudent && <AutoLessonReviewPrompt />}
       {/* Mobile backdrop — clicks close the sidebar */}
       <div className="mob-backdrop" onClick={() => isStudent ? setMobOpen(false) : setCollapsed(true)} />
       {nav && (

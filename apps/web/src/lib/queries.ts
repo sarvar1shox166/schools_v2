@@ -862,6 +862,23 @@ export function useMarkAttendance() {
   });
 }
 
+export function useJoinLesson() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (scheduleSlotId: string) => (await api.post("/me/attendance/join", { scheduleSlotId })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["myPackages"] });
+      qc.invalidateQueries({ queryKey: ["attendanceStats"] });
+    },
+  });
+}
+
+export function useJoinTeacherLesson() {
+  return useMutation({
+    mutationFn: async (scheduleSlotId: string) => (await api.post("/me/teacher-attendance/join", { scheduleSlotId })).data,
+  });
+}
+
 export function useLinkTelegram() {
   return useMutation({
     mutationFn: async (initData: string) => (await api.post("/me/telegram-link", { initData })).data,

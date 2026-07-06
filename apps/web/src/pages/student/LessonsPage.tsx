@@ -1,13 +1,18 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Avatar, Card, showXp } from "@chess-school/ui";
+import { LessonReviewModal } from "../../components/LessonReviewModal.js";
 import {
   useAttendanceHistory,
   useCompleteHomework,
   useHomework,
+  useJoinLesson,
   useMyPackages,
   useNextLesson,
+  usePendingLessonReviews,
   useSchedule,
+  useSubmitLessonReview,
   type Homework,
+  type PendingLessonReview,
   type ScheduleSlot,
 } from "../../lib/queries.js";
 
@@ -102,6 +107,9 @@ export default function LessonsPage() {
   const { data: homeworkRaw }   = useHomework();
   const { data: packages = [] } = useMyPackages();
   const completeHW              = useCompleteHomework();
+  const joinLesson              = useJoinLesson();
+  const { data: pendingReviews = [] } = usePendingLessonReviews();
+  const [reviewTarget, setReviewTarget] = useState<PendingLessonReview | null>(null);
 
   const activePkg = packages.find((p) => p.status === "active");
   const remainingLessons = activePkg ? activePkg.totalLessons - activePkg.usedLessons : null;
@@ -189,10 +197,14 @@ export default function LessonsPage() {
             {/* Buttons */}
             <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
               {next.meetingUrl && next.meetingUrl!=="null" ? (
-                <a href={next.meetingUrl} target="_blank" rel="noreferrer" className="btn"
-                  style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }}>
+                <button className="btn"
+                  style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }}
+                  onClick={() => {
+                    if (isToday) joinLesson.mutate(next.id);
+                    window.open(next.meetingUrl!, "_blank", "noreferrer");
+                  }}>
                   📹 Zoom ga kirish
-                </a>
+                </button>
               ) : (
                 <button className="btn" style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }} disabled>
                   📹 Zoom ga kirish
@@ -245,12 +257,14 @@ export default function LessonsPage() {
               {sortedSched.map(slot=>{
                 const st = slotStatus(slot);
                 const sd = getDateForDay(slot.dayOfWeek);
+                const sdISO = sd.toISOString().slice(0,10);
+                const pendingReview = st==="done" ? pendingReviews.find(r=>r.conductedAt.slice(0,10)===sdISO) : undefined;
                 const dotClr = st==="live"?"#ef4444":st==="done"?"#6b7280":"var(--kacc,#3F8CFF)";
                 const teacherShort = slot.teacherName
                   ? `${slot.teacherName.split(" ")[0]} ${(slot.teacherName.split(" ")[1]??"").charAt(0)}.`
                   : "";
                 return (
-                  <div key={slot.id} style={{ display:"flex",alignItems:"center",gap:13,padding:"11px 16px",borderBottom:"1px solid var(--border)",opacity:st==="done"?.55:1 }}>
+                  <div key={slot.id} style={{ display:"flex",alignItems:"center",gap:13,padding:"11px 16px",borderBottom:"1px solid var(--border)",opacity:st==="done"&&!pendingReview?.55:1 }}>
                     <div style={{ width:9,height:9,borderRadius:"50%",background:dotClr,flexShrink:0 }} />
                     <div style={{ flex:1,minWidth:0 }}>
                       <div style={{ fontWeight:700,fontSize:13.5 }}>{slot.groupName}</div>
@@ -259,7 +273,13 @@ export default function LessonsPage() {
                       </div>
                     </div>
                     {st==="live"     && <span className="badge dang" style={{ fontSize:11,display:"flex",alignItems:"center",gap:4 }}><span style={{ width:7,height:7,borderRadius:"50%",background:"#ef4444",display:"inline-block" }}/> LIVE</span>}
-                    {st==="done"     && <span className="badge ok"   style={{ fontSize:11 }}>✓ Bo'ldi</span>}
+                    {st==="done" && pendingReview && (
+                      <button className="badge" onClick={()=>setReviewTarget(pendingReview)}
+                        style={{ fontSize:11,fontWeight:700,cursor:"pointer",border:"1px solid #f59e0b",background:"rgba(245,158,11,.12)",color:"#f59e0b" }}>
+                        ★ Baholash
+                      </button>
+                    )}
+                    {st==="done" && !pendingReview && <span className="badge ok" style={{ fontSize:11 }}>✓ Bo'ldi</span>}
                     {st==="upcoming" && <span className="badge" style={{ fontSize:11,background:"rgba(255,255,255,.06)",color:"var(--text-faint)",border:"1px solid var(--border)" }}>Kutilmoqda</span>}
                   </div>
                 );
@@ -418,6 +438,8 @@ export default function LessonsPage() {
 
         </div>
       </div>
+
+      {reviewTarget && <LessonReviewModal review={reviewTarget} onClose={() => setReviewTarget(null)} />}
     </div>
   );
 }

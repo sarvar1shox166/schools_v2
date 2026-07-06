@@ -1,10 +1,15 @@
-import { useTeacherSchedule } from "../../lib/queries.js";
+import { useJoinTeacherLesson, useTeacherSchedule } from "../../lib/queries.js";
 
 const DAY_NAMES = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
 const DAY_SHORT = ["Du", "Se", "Cho", "Pay", "Ju", "Sha", "Yak"];
 
+function todayDow() {
+  return (new Date().getDay() + 6) % 7;
+}
+
 export default function TSchedulePage() {
   const { data, isLoading } = useTeacherSchedule();
+  const joinLesson = useJoinTeacherLesson();
   const slots = data?.slots ?? [];
   const groups = data?.groups ?? [];
 
@@ -75,11 +80,15 @@ export default function TSchedulePage() {
                           {slot.studentsCount} o'q
                         </span>
                         {slot.isOnline && slot.meetingUrl && (
-                          <a href={slot.meetingUrl} target="_blank" rel="noreferrer"
+                          <button
+                            onClick={() => {
+                              if (slot.dayOfWeek === todayDow()) joinLesson.mutate(slot.id);
+                              window.open(slot.meetingUrl!, "_blank", "noreferrer");
+                            }}
                             style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", textDecoration: "none",
-                              background: "#dbeafe", padding: "3px 9px", borderRadius: 20 }}>
+                              background: "#dbeafe", padding: "3px 9px", borderRadius: 20, border: "none", cursor: "pointer" }}>
                             Zoom
-                          </a>
+                          </button>
                         )}
                       </div>
                     </div>

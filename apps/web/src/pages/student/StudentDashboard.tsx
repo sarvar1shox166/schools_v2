@@ -1,59 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createPortal } from "react-dom";
-import { Card, CardHead, Icon } from "@chess-school/ui";
+import { Card, CardHead } from "@chess-school/ui";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { useAuthStore } from "../../lib/auth-store.js";
 import {
-  type ScheduleSlot, useAttendanceHistory, useDailyPuzzle, useMyPackages, useMyXp, useNextLesson, useSchedule,
-  usePendingLessonReviews, useSubmitLessonReview,
+  type ScheduleSlot, useAttendanceHistory, useDailyPuzzle, useJoinLesson, useMyPackages, useMyXp, useNextLesson, useSchedule,
 } from "../../lib/queries.js";
-
-function LessonReviewPrompt() {
-  const { data: pending = [] } = usePendingLessonReviews();
-  const submitReview = useSubmitLessonReview();
-  const [dismissed, setDismissed] = useState<string | null>(null);
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
-
-  const lesson = pending.find((l) => l.lessonId !== dismissed);
-  if (!lesson) return null;
-
-  async function handleSubmit() {
-    await submitReview.mutateAsync({ lessonId: lesson!.lessonId, rating, comment: comment || undefined });
-    setDismissed(lesson!.lessonId);
-    setRating(5);
-    setComment("");
-  }
-
-  return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "var(--ksurface, var(--surface))", borderRadius: 18, width: 400, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", padding: "24px 22px" }}>
-        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>Darsni baholang</div>
-        <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 16 }}>
-          {lesson.teacherName} · {lesson.topic ?? "Dars"}
-        </div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16 }}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button key={n} onClick={() => setRating(n)}
-              style={{ fontSize: 30, background: "none", border: "none", cursor: "pointer", opacity: n <= rating ? 1 : 0.3 }}>
-              ★
-            </button>
-          ))}
-        </div>
-        <textarea className="inp" style={{ width: "100%", minHeight: 70, resize: "vertical", marginBottom: 16 }}
-          placeholder="Izoh (ixtiyoriy)..." value={comment} onChange={(e) => setComment(e.target.value)} />
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" style={{ flex: 1 }} onClick={() => setDismissed(lesson.lessonId)}>O'tkazib yuborish</button>
-          <button className="btn primary" style={{ flex: 2 }} onClick={handleSubmit} disabled={submitReview.isPending}>
-            <Icon name="check" size={14} /> {submitReview.isPending ? "Yuborilmoqda..." : "Yuborish"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
 
 const LEVEL_NAMES = ["Yangi boshlovchi", "Boshlang'ich", "O'rta", "Ilg'or", "Usta"];
 const DAY_SHORT = ["Du", "Se", "Chor", "Pay", "Ju", "Sha", "Yak"]; // 0=Mon (matches DB convention)
@@ -144,6 +96,7 @@ export default function StudentDashboard() {
   const { data: attendance } = useAttendanceHistory();
   const { data: schedule } = useSchedule();
   const { data: packages = [] } = useMyPackages();
+  const joinLesson = useJoinLesson();
 
   const activePkg = packages.find((p) => p.status === "active");
   const remainingLessons = activePkg ? activePkg.totalLessons - activePkg.usedLessons : null;
@@ -175,8 +128,6 @@ export default function StudentDashboard() {
 
   return (
     <div>
-      <LessonReviewPrompt />
-
       {/* HERO */}
       <div className="kids-hero" style={{ marginBottom: "var(--gap)" }}>
         <div className="kids-hero-content">
@@ -234,7 +185,10 @@ export default function StudentDashboard() {
                   {nextLesson.teacherName && <div style={{ color: "var(--text-faint)", fontSize: 13, marginTop: 3 }}>{nextLesson.teacherName}</div>}
                 </div>
                 {nextLesson.meetingUrl && (
-                  <a className="btn primary" href={nextLesson.meetingUrl} target="_blank" rel="noreferrer">Kirish →</a>
+                  <button className="btn primary" onClick={() => {
+                    joinLesson.mutate(nextLesson.id);
+                    window.open(nextLesson.meetingUrl!, "_blank", "noreferrer");
+                  }}>Kirish →</button>
                 )}
               </div>
             </Card>
