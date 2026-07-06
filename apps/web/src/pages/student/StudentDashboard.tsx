@@ -140,7 +140,7 @@ export default function StudentDashboard() {
   const user = useAuthStore((s) => s.user);
   const { data: xpData } = useMyXp();
   const { data: dailyPuzzle } = useDailyPuzzle();
-  const { data: nextLesson } = useNextLesson();
+  const { data: nextLesson, isLoading: nextLessonLoading } = useNextLesson();
   const { data: attendance } = useAttendanceHistory();
   const { data: schedule } = useSchedule();
   const { data: packages = [] } = useMyPackages();
@@ -165,6 +165,8 @@ export default function StudentDashboard() {
   const attendancePercent = attendance?.percent ?? 0;
   const earnedAchievements = (xpData?.achievements ?? []).filter((a) => a.earned);
   const liveNow = nextLesson && isLessonLiveNow(nextLesson.startTime);
+  const isNextLessonToday = nextLesson ? new Date(nextLesson.nextAt).toDateString() === new Date().toDateString() : false;
+  const noLessonToday = !nextLessonLoading && !liveNow && !isNextLessonToday;
 
   const today = (new Date().getDay() + 6) % 7; // 0=Mon
   const weekSchedule = [...(schedule ?? [])]
@@ -234,6 +236,26 @@ export default function StudentDashboard() {
                 {nextLesson.meetingUrl && (
                   <a className="btn primary" href={nextLesson.meetingUrl} target="_blank" rel="noreferrer">Kirish →</a>
                 )}
+              </div>
+            </Card>
+          )}
+
+          {/* No lesson today */}
+          {noLessonToday && (
+            <Card>
+              <div style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+                  background: "rgba(63,140,255,.1)", display: "grid", placeItems: "center", fontSize: 18,
+                }}>
+                  📅
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 15 }}>Bugun dars yo'q</div>
+                  <div style={{ color: "var(--text-faint)", fontSize: 13, marginTop: 3 }}>
+                    Guruhingiz uchun bugunga rejalashtirilgan dars mavjud emas
+                  </div>
+                </div>
               </div>
             </Card>
           )}

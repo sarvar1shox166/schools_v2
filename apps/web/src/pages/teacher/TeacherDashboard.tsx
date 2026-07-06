@@ -70,17 +70,16 @@ export default function TeacherDashboard() {
     return m;
   }, [todayLessons]);
 
-  /* next / current lesson from today's schedule */
+  /* next / current lesson from today's schedule (only truly upcoming slots) */
   const nm = nowMins();
   const nextLesson = useMemo(() => {
     if (!todaySchedule) return undefined;
-    return (
-      todaySchedule.find(s => {
-        const [h, mi] = s.startTime.split(":").map(Number);
-        return h * 60 + mi > nm;
-      }) ?? todaySchedule[todaySchedule.length - 1]
-    );
-  }, [todaySchedule]);
+    return todaySchedule.find(s => {
+      const [h, mi] = s.startTime.split(":").map(Number);
+      return h * 60 + mi > nm;
+    });
+  }, [todaySchedule, nm]);
+  const noLessonToday = todaySchedule !== undefined && !nextLesson;
 
   /* attendance for first slot */
   const firstSlot = todaySchedule?.[0];
@@ -188,6 +187,21 @@ export default function TeacherDashboard() {
       </div>
 
       {/* ── Next lesson countdown ── */}
+      {noLessonToday && (
+        <div style={{
+          borderRadius:18, padding:"22px 28px",
+          background:"var(--surface-2)", border:"1px solid var(--border)",
+          display:"flex", alignItems:"center", gap:14,
+        }}>
+          <div style={{ width:44, height:44, borderRadius:12, background:"var(--surface-3)", display:"grid", placeItems:"center", flexShrink:0, fontSize:20 }}>
+            📅
+          </div>
+          <div>
+            <div style={{ fontWeight:800, fontSize:15 }}>Bugun dars yo'q</div>
+            <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:2 }}>Guruhlaringiz uchun bugunga rejalashtirilgan dars mavjud emas</div>
+          </div>
+        </div>
+      )}
       {nextLesson && (
         <div style={{
           borderRadius:18, padding:"22px 28px",
