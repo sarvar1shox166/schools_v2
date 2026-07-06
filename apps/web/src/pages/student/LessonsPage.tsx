@@ -203,11 +203,11 @@ export default function LessonsPage() {
                     if (isToday) joinLesson.mutate(next.id);
                     window.open(next.meetingUrl!, "_blank", "noreferrer");
                   }}>
-                  📹 Zoom ga kirish
+                  {next.meetingPlatform==="meet" ? "🟢 Google Meet ga kirish" : "📹 Zoom ga kirish"}
                 </button>
               ) : (
                 <button className="btn" style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }} disabled>
-                  📹 Zoom ga kirish
+                  {next.meetingPlatform==="meet" ? "🟢 Google Meet ga kirish" : "📹 Zoom ga kirish"}
                 </button>
               )}
             </div>

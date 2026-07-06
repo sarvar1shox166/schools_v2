@@ -50,6 +50,7 @@ export interface ScheduleSlot {
   color: string | null;
   dayOfWeek: number;
   startTime: string;
+  durationMinutes: number;
   roomId: string | null;
   roomName: string | null;
   teacherId: string | null;
@@ -59,6 +60,9 @@ export interface ScheduleSlot {
   meetingPlatform: "zoom" | "meet";
   lessonType: "guruh" | "individual" | "diagnostika";
   customName: string | null;
+  lessonId?: string | null;
+  isEnded?: boolean;
+  isStarted?: boolean;
 }
 
 export function useTeachers() {
@@ -251,6 +255,7 @@ export interface CreateSlotPayload {
   customName?: string;
   dayOfWeek: number;
   startTime: string;
+  durationMinutes?: number;
   roomId?: string;
   isOnline?: boolean;
   meetingUrl?: string;
@@ -879,6 +884,21 @@ export function useJoinTeacherLesson() {
   });
 }
 
+export function useEndLesson() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      scheduleSlotId: string;
+      topic?: string;
+      homework?: { title: string; description?: string; dueDate?: string; xpReward?: number };
+    }) => (await api.post<{ lessonId: string | null; homeworkId: string | null }>("/lessons/end", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+      qc.invalidateQueries({ queryKey: ["homework"] });
+    },
+  });
+}
+
 export function useLinkTelegram() {
   return useMutation({
     mutationFn: async (initData: string) => (await api.post("/me/telegram-link", { initData })).data,
@@ -1350,11 +1370,15 @@ export interface NextLesson {
   color: string | null;
   dayOfWeek: number;
   startTime: string;
+  durationMinutes: number;
   isOnline: boolean;
   meetingUrl: string | null;
+  meetingPlatform: "zoom" | "meet";
   teacherName: string | null;
   teacherPhone: string | null;
   nextAt: string;
+  endsAt: string;
+  isLive: boolean;
 }
 
 export function useNextLesson() {

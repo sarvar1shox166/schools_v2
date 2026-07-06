@@ -23,6 +23,17 @@ const reviewSchema = z.object({
   comment: z.string().optional(),
 });
 
+const endLessonSchema = z.object({
+  scheduleSlotId: z.string().uuid(),
+  topic: z.string().optional(),
+  homework: z.object({
+    title: z.string().min(1),
+    description: z.string().optional(),
+    dueDate: z.string().optional(),
+    xpReward: z.number().int().nonnegative().default(30),
+  }).optional(),
+});
+
 export async function lessonsRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
@@ -239,5 +250,57 @@ export async function lessonsRoutes(app: FastifyInstance) {
       [id]
     );
     return rows;
+  });
+
+  // ── Darsni tugatish — teacher_attendance orqali boshlangan darsni yakunlaydi ──
+  // Ixtiyoriy ravishda uyga vazifa ham beriladi (faqat "guruh" turidagi darslarda)
+  app.post("/lessons/end", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {
+    const { sub, tenantId } = request.user;
+    const body = endLessonSchema.parse(request.body);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const teacherRes = await pool.query(`SELECT id FROM teachers WHERE user_id = $1`, [sub]);
+    const teacherId = teacherRes.rows[0]?.id;
+    if (!teacherId) return reply.code(403).send({ error: "Forbidden" });
+
+    const slotRes = await pool.query(
+      `SELECT sl.id, sl.group_id AS "groupId", sl.lesson_type AS "lessonType",
+              sl.meeting_url AS "zoomLink", COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId"
+       FROM schedule_slots sl LEFT JOIN groups g ON g.id = sl.group_id
+       WHERE sl.id = $1 AND sl.tenant_id = $2`,
+      [body.scheduleSlotId, tenantId]
+    );
+    const slot = slotRes.rows[0];
+    if (!slot || slot.teacherId !== teacherId) return reply.code(403).send({ error: "Forbidden" });
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const lessonRes = await client.query(
+        `INSERT INTO lessons (tenant_id, schedule_slot_id, group_id, teacher_id, conducted_at, topic, zoom_link, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'conducted')
+         ON CONFLICT (schedule_slot_id, conducted_at) DO NOTHING
+         RETURNING id`,
+        [tenantId, slot.id, slot.groupId, teacherId, today, body.topic ?? null, slot.zoomLink]
+      );
+
+      let homeworkId: string | null = null;
+      if (body.homework && slot.lessonType === "guruh" && slot.groupId) {
+        const hwRes = await client.query(
+          `INSERT INTO homework (tenant_id, group_id, title, description, due_date, xp_reward)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+          [tenantId, slot.groupId, body.homework.title, body.homework.description ?? null,
+           body.homework.dueDate ?? null, body.homework.xpReward]
+        );
+        homeworkId = hwRes.rows[0].id;
+      }
+      await client.query("COMMIT");
+      return reply.code(201).send({ lessonId: lessonRes.rows[0]?.id ?? null, homeworkId });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   });
 }

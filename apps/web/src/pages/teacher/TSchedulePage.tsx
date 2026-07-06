@@ -87,7 +87,7 @@ export default function TSchedulePage() {
                             }}
                             style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", textDecoration: "none",
                               background: "#dbeafe", padding: "3px 9px", borderRadius: 20, border: "none", cursor: "pointer" }}>
-                            Zoom
+                            {slot.meetingPlatform === "meet" ? "Meet" : "Zoom"}
                           </button>
                         )}
                       </div>

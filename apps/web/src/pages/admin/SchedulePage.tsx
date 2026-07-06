@@ -355,6 +355,7 @@ function AddModal({ day, hour, groups, teachers, onClose, onCreate, isPending, e
     customName: "",
     day: String(day),
     time: hour,
+    duration: 90,
     meetingPlatform: "zoom" as "zoom" | "meet",
     meetingUrl: "",
   });
@@ -435,6 +436,14 @@ function AddModal({ day, hour, groups, teachers, onClose, onCreate, isPending, e
           </div>
         </div>
 
+        {/* Duration */}
+        <div>
+          <label style={labelStyle}>DAVOMIYLIK (daqiqa)</label>
+          <input className="inp" type="number" min={15} max={480} step={15} style={{ width: "100%" }}
+            value={form.duration}
+            onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })} />
+        </div>
+
         {/* Platform */}
         <div>
           <label style={labelStyle}>PLATFORMA</label>
@@ -482,6 +491,7 @@ function AddModal({ day, hour, groups, teachers, onClose, onCreate, isPending, e
             customName: isGroupMode ? undefined : form.customName.trim(),
             dayOfWeek: Number(form.day),
             startTime: form.time,
+            durationMinutes: form.duration,
             isOnline: true,
             meetingPlatform: form.meetingPlatform,
             meetingUrl: form.meetingUrl || undefined,
@@ -506,6 +516,7 @@ function EditModal({ slot, allSlots, teachers, onClose, onSave, isPending, error
     teacherId: slot.teacherId ?? "",
     day: String(slot.dayOfWeek),
     time: String(slot.startTime).slice(0, 5),
+    duration: slot.durationMinutes ?? 90,
     meetingPlatform: (slot.meetingPlatform ?? "zoom") as "zoom" | "meet",
     meetingUrl: slot.meetingUrl ?? "",
   });
@@ -587,6 +598,13 @@ function EditModal({ slot, allSlots, teachers, onClose, onSave, isPending, error
         </div>
 
         <div>
+          <label style={labelStyle}>DAVOMIYLIK (daqiqa)</label>
+          <input className="inp" type="number" min={15} max={480} step={15} style={{ width: "100%" }}
+            value={form.duration}
+            onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })} />
+        </div>
+
+        <div>
           <label style={labelStyle}>PLATFORMA</label>
           <div style={{ display: "flex", gap: 8 }}>
             {(["zoom", "meet"] as const).map((p) => (
@@ -629,6 +647,7 @@ function EditModal({ slot, allSlots, teachers, onClose, onSave, isPending, error
             teacherId: form.lessonType !== "guruh" ? (form.teacherId || undefined) : undefined,
             dayOfWeek: Number(form.day),
             startTime: form.time,
+            durationMinutes: form.duration,
             isOnline: true,
             meetingPlatform: form.meetingPlatform,
             meetingUrl: form.meetingUrl || undefined,

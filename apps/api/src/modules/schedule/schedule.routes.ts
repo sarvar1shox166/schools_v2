@@ -9,6 +9,7 @@ const createSchema = z.object({
   customName: z.string().min(1).optional(),
   dayOfWeek: z.number().int().min(0).max(6),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  durationMinutes: z.number().int().min(1).max(480).default(90),
   roomId: z.string().uuid().optional(),
   isOnline: z.boolean().optional(),
   meetingUrl: z.string().url().optional().or(z.literal("")),
@@ -37,6 +38,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { rows } = await pool.query(
       `SELECT sl.id, sl.group_id AS "groupId", g.name AS "groupName", g.color,
               sl.day_of_week AS "dayOfWeek", sl.start_time AS "startTime",
+              sl.duration_minutes AS "durationMinutes",
               sl.room_id AS "roomId", r.name AS "roomName",
               COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId",
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
@@ -64,9 +66,16 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
     const params: unknown[] = [tenantId, dayOfWeek];
     let filter = "";
+    let extraSelect = `NULL::uuid AS "lessonId", false AS "isEnded", false AS "isStarted"`;
+    let extraJoin = "";
     if (role === "teacher") {
       filter = `AND (g.teacher_id = (SELECT id FROM teachers WHERE user_id = $3) OR sl.teacher_id = (SELECT id FROM teachers WHERE user_id = $3))`;
       params.push(sub);
+      extraSelect = `l.id AS "lessonId", (l.id IS NOT NULL) AS "isEnded", (ta.id IS NOT NULL) AS "isStarted"`;
+      extraJoin = `
+        LEFT JOIN lessons l ON l.schedule_slot_id = sl.id AND l.conducted_at = CURRENT_DATE AND l.status = 'conducted'
+        LEFT JOIN teacher_attendance ta ON ta.schedule_slot_id = sl.id AND ta.date = CURRENT_DATE
+          AND ta.teacher_id = (SELECT id FROM teachers WHERE user_id = $3)`;
     } else if (role === "student") {
       filter = `AND g.id IN (
         SELECT gm.group_id FROM group_members gm
@@ -79,12 +88,14 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { rows } = await pool.query(
       `SELECT sl.id, sl.group_id AS "groupId", g.name AS "groupName", g.color,
               sl.day_of_week AS "dayOfWeek", sl.start_time AS "startTime",
+              sl.duration_minutes AS "durationMinutes",
               sl.room_id AS "roomId", r.name AS "roomName",
               COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId",
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
               sl.meeting_platform AS "meetingPlatform",
               sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
-              COALESCE(tu2.full_name, tu.full_name) AS "teacherName"
+              COALESCE(tu2.full_name, tu.full_name) AS "teacherName",
+              ${extraSelect}
        FROM schedule_slots sl
        LEFT JOIN groups g ON g.id = sl.group_id
        LEFT JOIN rooms r ON r.id = sl.room_id
@@ -92,6 +103,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
        LEFT JOIN users tu ON tu.id = t.user_id
        LEFT JOIN teachers t2 ON t2.id = sl.teacher_id
        LEFT JOIN users tu2 ON tu2.id = t2.user_id
+       ${extraJoin}
        WHERE sl.tenant_id = $1 AND sl.day_of_week = $2 ${filter}
        ORDER BY sl.start_time`,
       params
@@ -104,7 +116,9 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { rows } = await pool.query(
       `SELECT sl.id, sl.group_id AS "groupId", g.name AS "groupName", g.color,
               sl.day_of_week AS "dayOfWeek", sl.start_time AS "startTime",
+              sl.duration_minutes AS "durationMinutes",
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
+              sl.meeting_platform AS "meetingPlatform",
               tu.full_name AS "teacherName", tu.phone AS "teacherPhone"
        FROM schedule_slots sl
        JOIN groups g ON g.id = sl.group_id
@@ -119,7 +133,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     );
 
     const now = new Date();
-    let best: { row: (typeof rows)[number]; at: Date } | null = null;
+    let best: { row: (typeof rows)[number]; at: Date; endsAt: Date } | null = null;
     for (const row of rows) {
       const [h, m] = String(row.startTime).split(":").map(Number);
       // DB: 0=Mon..6=Sun; JS getDay: 0=Sun..6=Sat
@@ -128,14 +142,25 @@ export async function scheduleRoutes(app: FastifyInstance) {
       const candidate = new Date(now);
       candidate.setDate(now.getDate() + dayDiff);
       candidate.setHours(h, m, 0, 0);
-      if (candidate < now) {
+      const durationMin = row.durationMinutes ?? 90;
+      let candidateEnd = new Date(candidate.getTime() + durationMin * 60000);
+      if (candidateEnd < now) {
+        // Dars TO'LIQ tugagan (davomiyligi bilan) — haftaga suriladi
         candidate.setDate(candidate.getDate() + 7);
+        candidateEnd = new Date(candidate.getTime() + durationMin * 60000);
       }
-      if (!best || candidate < best.at) best = { row, at: candidate };
+      // Live dars (candidate < now <= candidateEnd) reyting solishtirishda "hozir" sifatida ko'rilishi kerak,
+      // aks holda boshqa kunning kelayotgan darsi undan oldin tanlanib qolishi mumkin
+      const effectiveAt = candidate < now ? now : candidate;
+      const bestEffectiveAt = best ? (best.at < now ? now : best.at) : null;
+      if (!best || effectiveAt < bestEffectiveAt!) {
+        best = { row, at: candidate, endsAt: candidateEnd };
+      }
     }
 
     if (!best) return null;
-    return { ...best.row, nextAt: best.at.toISOString() };
+    const isLive = best.at <= now && now < best.endsAt;
+    return { ...best.row, nextAt: best.at.toISOString(), endsAt: best.endsAt.toISOString(), isLive };
   });
 
   app.get("/me/teacher-schedule", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {
@@ -148,8 +173,10 @@ export async function scheduleRoutes(app: FastifyInstance) {
       `SELECT sl.id, sl.group_id AS "groupId", g.name AS "groupName", g.color,
               sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
               sl.day_of_week AS "dayOfWeek", sl.start_time AS "startTime",
+              sl.duration_minutes AS "durationMinutes",
               sl.room_id AS "roomId", r.name AS "roomName",
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
+              sl.meeting_platform AS "meetingPlatform",
               COALESCE(gm.cnt, 0)::int AS "studentsCount"
        FROM schedule_slots sl
        LEFT JOIN groups g ON g.id = sl.group_id
@@ -169,7 +196,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     for (const row of rows) {
       if (!row.groupId) continue; // individual/diagnostika slots have no group to summarize
       const existing = groupMap.get(row.groupId);
-      const hours = 1.5; // default lesson duration (90 min)
+      const hours = (row.durationMinutes ?? 90) / 60;
       if (existing) {
         existing.weeklyHours += hours;
         existing.slotsCount += 1;
@@ -198,8 +225,8 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const meetingUrl = body.meetingUrl || null;
     const { rows } = await pool.query(
       `INSERT INTO schedule_slots
-         (tenant_id, group_id, teacher_id, lesson_type, custom_name, day_of_week, start_time, room_id, is_online, meeting_url, meeting_platform)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+         (tenant_id, group_id, teacher_id, lesson_type, custom_name, day_of_week, start_time, duration_minutes, room_id, is_online, meeting_url, meeting_platform)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
       [
         tenantId,
         body.groupId ?? null,
@@ -208,6 +235,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
         body.customName ?? null,
         body.dayOfWeek,
         body.startTime,
+        body.durationMinutes ?? 90,
         body.roomId ?? null,
         isOnline,
         meetingUrl,
@@ -252,13 +280,15 @@ export async function scheduleRoutes(app: FastifyInstance) {
          lesson_type      = COALESCE($6, lesson_type),
          custom_name      = COALESCE($7, custom_name),
          meeting_platform = COALESCE($8, meeting_platform),
-         teacher_id       = COALESCE($9, teacher_id)
-       WHERE id = $10`,
+         teacher_id       = COALESCE($9, teacher_id),
+         duration_minutes = COALESCE($10, duration_minutes)
+       WHERE id = $11`,
       [
         body.dayOfWeek ?? null, body.startTime ?? null, body.roomId ?? null,
         body.isOnline ?? null, meetingUrl,
         body.lessonType ?? null, body.customName ?? null,
-        body.meetingPlatform ?? null, body.teacherId ?? null, id,
+        body.meetingPlatform ?? null, body.teacherId ?? null,
+        body.durationMinutes ?? null, id,
       ]
     );
     return { ok: true };

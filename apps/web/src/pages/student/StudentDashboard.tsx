@@ -188,7 +188,7 @@ export default function StudentDashboard() {
                   <button className="btn primary" onClick={() => {
                     joinLesson.mutate(nextLesson.id);
                     window.open(nextLesson.meetingUrl!, "_blank", "noreferrer");
-                  }}>Kirish →</button>
+                  }}>{nextLesson.meetingPlatform === "meet" ? "🟢 Meet ga kirish →" : "📹 Zoom ga kirish →"}</button>
                 )}
               </div>
             </Card>
