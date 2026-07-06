@@ -26,7 +26,8 @@ RUN npm run build -w apps/api
 FROM node:20-alpine
 WORKDIR /app
 
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init tzdata
+ENV TZ=Asia/Tashkent
 
 # Install only production deps
 COPY package*.json ./
