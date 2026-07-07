@@ -8,6 +8,7 @@ import {
   useUpdateApplication,
   useConvertApplication,
   useDeleteApplication,
+  useTeachers,
   Application,
 } from "../../lib/queries.js";
 
@@ -17,37 +18,43 @@ const SOURCE_STYLE: Record<string, { bg: string; color: string }> = {
   website:   { bg: "#ede9fe", color: "#7c3aed" },
   phone:     { bg: "#d1fae5", color: "#059669" },
   referral:  { bg: "#d1fae5", color: "#059669" },
+  instagram: { bg: "#fce7f3", color: "#db2777" },
   other:     { bg: "var(--surface-3)", color: "var(--text-faint)" },
 };
 
 const SOURCE_LABEL: Record<string, string> = {
-  telegram: "Telegram", website: "Veb-sayt", phone: "Telefon", referral: "Tavsiya", other: "Boshqa",
+  telegram: "Telegram", website: "Veb-sayt", phone: "Telefon", referral: "Tavsiya",
+  instagram: "Instagram", other: "Boshqa",
 };
+
+const LEVELS = ["Boshlang'ich", "O'rta", "Yuqori", "Professional"];
+const DAY_NAMES = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
+const HOURS = [
+  "09:00","10:00","11:00","12:00","13:00",
+  "14:00","15:00","16:00","17:00","18:00","19:00","20:00",
+];
 
 type AppStatus = Application["status"];
 
 const STATUS_STYLE: Record<AppStatus, { label: string; bg: string; color: string; border: string }> = {
-  yangi:   { label: "Yangi",    bg: "#eff6ff", color: "#2563eb", border: "#bfdbfe" },
-  korildi: { label: "Ko'rildi", bg: "#fef9c3", color: "#ca8a04", border: "#fde68a" },
-  qabul:   { label: "Qabul",   bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0" },
-  rad:     { label: "Rad",     bg: "var(--surface-3)", color: "var(--text-faint)", border: "var(--border)" },
+  diagnostika:    { label: "Diagnostika",      bg: "#eff6ff", color: "#2563eb", border: "#bfdbfe" },
+  royxatdan_otdi: { label: "Ro'yxatdan o'tdi", bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0" },
+  rad:            { label: "Rad etildi",       bg: "var(--surface-3)", color: "var(--text-faint)", border: "var(--border)" },
 };
 
 const FUNNEL_BARS: { key: AppStatus; label: string; color: string }[] = [
-  { key: "yangi",   label: "Yangi",    color: "#3F8CFF" },
-  { key: "korildi", label: "Ko'rildi", color: "#f59e0b" },
-  { key: "qabul",   label: "Qabul",   color: "#22c55e" },
-  { key: "rad",     label: "Rad",     color: "#94a3b8" },
+  { key: "diagnostika",    label: "Diagnostika",      color: "#3F8CFF" },
+  { key: "royxatdan_otdi", label: "Ro'yxatdan o'tdi", color: "#22c55e" },
+  { key: "rad",            label: "Rad etildi",       color: "#94a3b8" },
 ];
 
 type FilterTab = AppStatus | "hammasi";
 
 const FILTER_TABS: { v: FilterTab; label: string }[] = [
-  { v: "hammasi", label: "Hammasi" },
-  { v: "yangi",   label: "Yangi" },
-  { v: "korildi", label: "Ko'rildi" },
-  { v: "qabul",   label: "Qabul" },
-  { v: "rad",     label: "Rad" },
+  { v: "hammasi",        label: "Hammasi" },
+  { v: "diagnostika",    label: "Diagnostika" },
+  { v: "royxatdan_otdi", label: "Ro'yxatdan o'tdi" },
+  { v: "rad",            label: "Rad etildi" },
 ];
 
 function relTime(iso: string) {
@@ -65,6 +72,7 @@ function relTime(iso: string) {
 export default function ApplicationsPage() {
   const [tab, setTab]           = useState<FilterTab>("hammasi");
   const [showCreate, setShowCreate] = useState(false);
+  const [editApp, setEditApp]   = useState<Application | null>(null);
   const [convertResult, setConvertResult] = useState<{ studentId: string; tempPassword: string } | null>(null);
 
   const { data: apps = [], isLoading } = useApplications();
@@ -73,33 +81,34 @@ export default function ApplicationsPage() {
   const updateApp   = useUpdateApplication();
   const convertApp  = useConvertApplication();
 
-  const total    = apps.length;
-  const yangi    = appStats?.yangi ?? 0;
-  const korildi  = appStats?.korildi ?? 0;
-  const qabul    = appStats?.qabul ?? 0;
-  const conversion = total > 0 ? Math.round((qabul / total) * 100) : 0;
+  const total          = apps.length;
+  const diagnostika    = appStats?.diagnostika ?? 0;
+  const royxatdanOtdi  = appStats?.royxatdan_otdi ?? 0;
+  const conversion     = total > 0 ? Math.round((royxatdanOtdi / total) * 100) : 0;
 
-  /* Assigned-to stats derived from app list */
-  const assignedStats = useMemo(() => {
-    const map = new Map<string, { jami: number; yangi: number; qabul: number; rad: number }>();
+  /* Diagnostic-teacher stats derived from app list */
+  const teacherStats = useMemo(() => {
+    const map = new Map<string, { jami: number; diagnostika: number; qoldi: number; ketdi: number }>();
     for (const a of apps) {
-      const name = a.assignedToName ?? "Tayinlanmagan";
-      if (!map.has(name)) map.set(name, { jami: 0, yangi: 0, qabul: 0, rad: 0 });
+      if (!a.diagnosticTeacherId) continue;
+      const name = a.diagnosticTeacherName ?? "Noma'lum";
+      if (!map.has(name)) map.set(name, { jami: 0, diagnostika: 0, qoldi: 0, ketdi: 0 });
       const s = map.get(name)!;
       s.jami++;
-      if (a.status === "yangi" || a.status === "korildi") s.yangi++;
-      if (a.status === "qabul") s.qabul++;
-      if (a.status === "rad")   s.rad++;
+      if (a.status === "diagnostika")    s.diagnostika++;
+      if (a.status === "royxatdan_otdi") s.qoldi++;
+      if (a.status === "rad")            s.ketdi++;
     }
     return [...map.entries()].map(([name, s]) => ({
       name, ...s,
-      conv: s.jami > 0 ? Math.round((s.qabul / s.jami) * 100) : 0,
+      conv: s.jami > 0 ? Math.round((s.qoldi / s.jami) * 100) : 0,
     }));
   }, [apps]);
 
   const filtered = tab === "hammasi" ? apps : apps.filter(a => a.status === tab);
 
   async function handleDelete(id: string) {
+    if (!confirm("Bu arizani o'chirishni tasdiqlaysizmi?")) return;
     try { await deleteApp.mutateAsync(id); } catch { /* ignore */ }
   }
 
@@ -129,21 +138,20 @@ export default function ApplicationsPage() {
 
       {/* KPI Cards */}
       <div className="grid cols-4">
-        <StatCard icon="filter"     tone="i" value={String(total)}    label="Jami arizalar" />
-        <StatCard icon="calendar"   tone="w" value={String(yangi + korildi)} label="Kutilmoqda"
-          delta={<span style={ds("bad")}>⚠ bog'laning</span>} />
-        <StatCard icon="check"      tone="s" value={String(qabul)}    label="Qabul qilingan" />
-        <StatCard icon="trendingUp" tone="s" value={`${conversion}%`} label="Konversiya"
+        <StatCard icon="filter"     tone="i" value={String(total)}         label="Jami arizalar" />
+        <StatCard icon="calendar"   tone="w" value={String(diagnostika)}   label="Diagnostikada" />
+        <StatCard icon="check"      tone="s" value={String(royxatdanOtdi)} label="Ro'yxatdan o'tdi" />
+        <StatCard icon="trendingUp" tone="s" value={`${conversion}%`}      label="Konversiya"
           delta={<span style={ds("up")}>↗ o'tish foizi</span>} />
       </div>
 
-      {/* Funnel + Assigned stats row */}
+      {/* Funnel + Teacher stats row */}
       <div className="grid l-2-1">
 
         {/* Voronka */}
         <Card>
           <div style={{ padding: "18px 22px 8px", fontWeight: 800, fontSize: 15.5 }}>
-            Ariza voronkasi
+            Diagnostika voronkasi
           </div>
           <div style={{ padding: "8px 22px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
             {FUNNEL_BARS.map(bar => {
@@ -151,7 +159,7 @@ export default function ApplicationsPage() {
               const pct = total > 0 ? Math.round((count / total) * 100) : 0;
               return (
                 <div key={bar.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, width: 140, flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, width: 150, flexShrink: 0 }}>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: bar.color, flexShrink: 0 }} />
                     <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-dim)" }}>{bar.label}</span>
                   </div>
@@ -175,22 +183,22 @@ export default function ApplicationsPage() {
           </div>
         </Card>
 
-        {/* Assigned-to stats */}
+        {/* Diagnostic teacher stats */}
         <Card>
-          <CardHead icon="teacher" title="Mas'ul bo'yicha" sub="Qabul, rad, kutilmoqda" />
+          <CardHead icon="teacher" title="O'qituvchi statistikasi" sub="Diagnostika bo'yicha" />
           <table className="tbl">
             <thead>
               <tr>
-                <th>MAS'UL</th>
+                <th>O'QITUVCHI</th>
                 <th style={{ textAlign: "center" }}>JAMI</th>
-                <th style={{ textAlign: "center", color: "var(--info)" }}>KUTISH</th>
-                <th style={{ textAlign: "center", color: "var(--success)" }}>QABUL ✓</th>
-                <th style={{ textAlign: "center", color: "var(--danger)" }}>RAD ✗</th>
+                <th style={{ textAlign: "center", color: "var(--info)" }}>DIAGNOSTIKA</th>
+                <th style={{ textAlign: "center", color: "var(--success)" }}>QOLDI ✓</th>
+                <th style={{ textAlign: "center", color: "var(--danger)" }}>KETDI ✗</th>
                 <th>KONVERSIYA</th>
               </tr>
             </thead>
             <tbody>
-              {assignedStats.map(t => (
+              {teacherStats.map(t => (
                 <tr key={t.name}>
                   <td>
                     <div className="with-av">
@@ -199,13 +207,13 @@ export default function ApplicationsPage() {
                     </div>
                   </td>
                   <td style={{ textAlign: "center" }}><CountBubble n={t.jami} /></td>
-                  <td style={{ textAlign: "center" }}><CountBubble n={t.yangi} color="var(--info)" /></td>
-                  <td style={{ textAlign: "center" }}><CountBubble n={t.qabul} color="var(--success)" /></td>
-                  <td style={{ textAlign: "center", fontSize: 13.5, fontWeight: 700 }}>{t.rad}</td>
+                  <td style={{ textAlign: "center" }}><CountBubble n={t.diagnostika} color="var(--info)" /></td>
+                  <td style={{ textAlign: "center" }}><CountBubble n={t.qoldi} color="var(--success)" /></td>
+                  <td style={{ textAlign: "center", fontSize: 13.5, fontWeight: 700 }}>{t.ketdi}</td>
                   <td><MiniBar pct={t.conv} /></td>
                 </tr>
               ))}
-              {assignedStats.length === 0 && (
+              {teacherStats.length === 0 && (
                 <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>–</td></tr>
               )}
             </tbody>
@@ -247,8 +255,8 @@ export default function ApplicationsPage() {
                   <th>TELEFON</th>
                   <th>MANBA</th>
                   <th>DARAJA</th>
-                  <th>MAS'UL</th>
-                  <th>STATUS</th>
+                  <th>O'QITUVCHI</th>
+                  <th>BOSQICH</th>
                   <th>VAQT</th>
                   <th />
                 </tr>
@@ -280,7 +288,7 @@ export default function ApplicationsPage() {
                         </span>
                       </td>
                       <td style={{ fontSize: 13.5, color: "var(--text-dim)", fontWeight: 600 }}>{a.level ?? "–"}</td>
-                      <td style={{ fontSize: 13.5 }}>{a.assignedToName ?? "–"}</td>
+                      <td style={{ fontSize: 13.5 }}>{a.diagnosticTeacherName ?? "–"}</td>
                       <td>
                         <select
                           value={a.status}
@@ -294,7 +302,7 @@ export default function ApplicationsPage() {
                             cursor: "pointer", appearance: "none",
                           }}
                         >
-                          {(["yangi", "korildi", "qabul", "rad"] as AppStatus[]).map(s => (
+                          {(["diagnostika", "royxatdan_otdi", "rad"] as AppStatus[]).map(s => (
                             <option key={s} value={s}>{STATUS_STYLE[s].label}</option>
                           ))}
                         </select>
@@ -302,7 +310,7 @@ export default function ApplicationsPage() {
                       <td className="cell-sub">{relTime(a.createdAt)}</td>
                       <td>
                         <div style={{ display: "flex", gap: 4 }}>
-                          {a.status === "qabul" && !a.convertedStudentId && (
+                          {a.status === "royxatdan_otdi" && !a.convertedStudentId && (
                             <button
                               className="iconbtn"
                               style={{ width: 30, height: 30, color: "var(--success)" }}
@@ -312,6 +320,14 @@ export default function ApplicationsPage() {
                               <Icon name="userPlus" size={13} />
                             </button>
                           )}
+                          <button
+                            className="iconbtn"
+                            style={{ width: 30, height: 30 }}
+                            title="Tahrirlash"
+                            onClick={() => setEditApp(a)}
+                          >
+                            <Icon name="edit" size={13} />
+                          </button>
                           <button
                             className="iconbtn"
                             style={{ width: 30, height: 30, color: "var(--danger)" }}
@@ -339,6 +355,7 @@ export default function ApplicationsPage() {
       </Card>
 
       {showCreate && <CreateAppModal onClose={() => setShowCreate(false)} />}
+      {editApp && <EditAppModal app={editApp} onClose={() => setEditApp(null)} />}
       {convertResult && (
         <ConvertResultModal
           result={convertResult}
@@ -349,6 +366,98 @@ export default function ApplicationsPage() {
   );
 }
 
+/* ─── Shared form fields for Create/Edit ─── */
+function DiagnosticFields({
+  level, setLevel,
+  diagnosticTeacherId, setDiagnosticTeacherId,
+  diagnosticDay, setDiagnosticDay,
+  diagnosticTime, setDiagnosticTime,
+  meetingPlatform, setMeetingPlatform,
+  meetingUrl, setMeetingUrl,
+}: {
+  level: string; setLevel: (v: string) => void;
+  diagnosticTeacherId: string; setDiagnosticTeacherId: (v: string) => void;
+  diagnosticDay: string; setDiagnosticDay: (v: string) => void;
+  diagnosticTime: string; setDiagnosticTime: (v: string) => void;
+  meetingPlatform: "zoom" | "meet"; setMeetingPlatform: (v: "zoom" | "meet") => void;
+  meetingUrl: string; setMeetingUrl: (v: string) => void;
+}) {
+  const { data: teachers = [] } = useTeachers();
+
+  return (
+    <>
+      <FieldRow label="Bosqich">
+        <div style={{
+          display: "inline-flex", alignItems: "center", height: 28,
+          padding: "0 12px", borderRadius: 999,
+          background: "#eff6ff", color: "#2563eb", fontSize: 12.5, fontWeight: 700,
+        }}>
+          Diagnostika
+        </div>
+      </FieldRow>
+
+      <FieldRow label="Daraja">
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {LEVELS.map(l => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => setLevel(l === level ? "" : l)}
+              style={{
+                padding: "6px 12px", borderRadius: 8, cursor: "pointer",
+                fontSize: 12.5, fontWeight: 700,
+                border: l === level ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
+                background: l === level ? "var(--accent)" : "var(--surface)",
+                color: l === level ? "#fff" : "var(--text-dim)",
+              }}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </FieldRow>
+
+      <FieldRow label="Diagnostika o'qituvchisi">
+        <select className="inp" value={diagnosticTeacherId} onChange={e => setDiagnosticTeacherId(e.target.value)} style={{ width: "100%" }}>
+          <option value="">Tanlanmagan</option>
+          {teachers.map(t => (
+            <option key={t.id} value={t.id}>{t.fullName}</option>
+          ))}
+        </select>
+      </FieldRow>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <FieldRow label="Diagnostika kuni">
+          <select className="inp" value={diagnosticDay} onChange={e => setDiagnosticDay(e.target.value)} style={{ width: "100%" }}>
+            {DAY_NAMES.map((d, i) => (
+              <option key={d} value={i}>{d}</option>
+            ))}
+          </select>
+        </FieldRow>
+        <FieldRow label="Soati">
+          <select className="inp" value={diagnosticTime} onChange={e => setDiagnosticTime(e.target.value)} style={{ width: "100%" }}>
+            {HOURS.map(h => (
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </select>
+        </FieldRow>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12 }}>
+        <FieldRow label="Platforma">
+          <select className="inp" value={meetingPlatform} onChange={e => setMeetingPlatform(e.target.value as "zoom" | "meet")} style={{ width: "100%" }}>
+            <option value="zoom">Zoom</option>
+            <option value="meet">Google Meet</option>
+          </select>
+        </FieldRow>
+        <FieldRow label="📎 Havola">
+          <input className="inp" value={meetingUrl} onChange={e => setMeetingUrl(e.target.value)} style={{ width: "100%" }} placeholder="https://..." />
+        </FieldRow>
+      </div>
+    </>
+  );
+}
+
 /* ─── Create Application Modal ─── */
 function CreateAppModal({ onClose }: { onClose: () => void }) {
   const createApp = useCreateApplication();
@@ -356,9 +465,13 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone]       = useState("");
   const [age, setAge]           = useState("");
-  const [level, setLevel]       = useState("");
   const [source, setSource]     = useState("other");
-  const [note, setNote]         = useState("");
+  const [level, setLevel]       = useState("");
+  const [diagnosticTeacherId, setDiagnosticTeacherId] = useState("");
+  const [diagnosticDay, setDiagnosticDay]             = useState("0");
+  const [diagnosticTime, setDiagnosticTime]           = useState("15:00");
+  const [meetingPlatform, setMeetingPlatform]         = useState<"zoom" | "meet">("zoom");
+  const [meetingUrl, setMeetingUrl]                   = useState("");
   const [err, setErr]           = useState("");
 
   async function handleSubmit() {
@@ -372,7 +485,11 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
         age: age ? Number(age) : undefined,
         level: level || undefined,
         source: source || undefined,
-        note: note || undefined,
+        diagnosticTeacherId: diagnosticTeacherId || undefined,
+        diagnosticDayOfWeek: diagnosticTeacherId ? Number(diagnosticDay) : undefined,
+        diagnosticTime: diagnosticTeacherId ? diagnosticTime : undefined,
+        meetingPlatform,
+        meetingUrl: meetingUrl || undefined,
       });
       onClose();
     } catch (e: unknown) {
@@ -391,7 +508,7 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
     >
       <div style={{
         background: "var(--surface)", borderRadius: 18,
-        width: 500, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto",
+        width: 520, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto",
         boxShadow: "0 24px 64px rgba(0,0,0,.22)",
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 24px 18px" }}>
@@ -402,7 +519,7 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-          <FieldRow label="Ism *">
+          <FieldRow label="Ism familya *">
             <input className="inp" value={fullName} onChange={e => setFullName(e.target.value)} style={{ width: "100%" }} placeholder="To'liq ismi" />
           </FieldRow>
           <FieldRow label="Telefon *">
@@ -412,29 +529,26 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
             <FieldRow label="Yoshi">
               <input className="inp" type="number" value={age} onChange={e => setAge(e.target.value)} style={{ width: "100%" }} min={4} max={99} placeholder="10" />
             </FieldRow>
-            <FieldRow label="Daraja">
-              <input className="inp" value={level} onChange={e => setLevel(e.target.value)} style={{ width: "100%" }} placeholder="Boshlang'ich" />
+            <FieldRow label="Manba">
+              <select className="inp" value={source} onChange={e => setSource(e.target.value)} style={{ width: "100%" }}>
+                <option value="telegram">Telegram</option>
+                <option value="website">Veb-sayt</option>
+                <option value="phone">Telefon</option>
+                <option value="referral">Tavsiya</option>
+                <option value="instagram">Instagram</option>
+                <option value="other">Boshqa</option>
+              </select>
             </FieldRow>
           </div>
-          <FieldRow label="Manba">
-            <select className="inp" value={source} onChange={e => setSource(e.target.value)} style={{ width: "100%" }}>
-              <option value="telegram">Telegram</option>
-              <option value="website">Veb-sayt</option>
-              <option value="phone">Telefon</option>
-              <option value="referral">Tavsiya</option>
-              <option value="other">Boshqa</option>
-            </select>
-          </FieldRow>
-          <FieldRow label="Izoh">
-            <textarea
-              className="inp"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              rows={3}
-              style={{ width: "100%", resize: "vertical" }}
-              placeholder="Qo'shimcha ma'lumot..."
-            />
-          </FieldRow>
+
+          <DiagnosticFields
+            level={level} setLevel={setLevel}
+            diagnosticTeacherId={diagnosticTeacherId} setDiagnosticTeacherId={setDiagnosticTeacherId}
+            diagnosticDay={diagnosticDay} setDiagnosticDay={setDiagnosticDay}
+            diagnosticTime={diagnosticTime} setDiagnosticTime={setDiagnosticTime}
+            meetingPlatform={meetingPlatform} setMeetingPlatform={setMeetingPlatform}
+            meetingUrl={meetingUrl} setMeetingUrl={setMeetingUrl}
+          />
 
           {err && <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>{err}</div>}
 
@@ -448,6 +562,119 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
             >
               <Icon name="check" size={15} />
               {createApp.isPending ? "Saqlanmoqda..." : "Saqlash"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ─── Edit Application Modal ─── */
+function EditAppModal({ app, onClose }: { app: Application; onClose: () => void }) {
+  const updateApp = useUpdateApplication();
+
+  const [fullName, setFullName] = useState(app.fullName);
+  const [phone, setPhone]       = useState(app.phone);
+  const [age, setAge]           = useState(app.age ? String(app.age) : "");
+  const [source, setSource]     = useState(app.source);
+  const [level, setLevel]       = useState(app.level ?? "");
+  const [diagnosticTeacherId, setDiagnosticTeacherId] = useState(app.diagnosticTeacherId ?? "");
+  const [diagnosticDay, setDiagnosticDay]             = useState(String(app.diagnosticDayOfWeek ?? 0));
+  const [diagnosticTime, setDiagnosticTime]           = useState(app.diagnosticTime?.slice(0, 5) ?? "15:00");
+  const [meetingPlatform, setMeetingPlatform]         = useState<"zoom" | "meet">(app.meetingPlatform ?? "zoom");
+  const [meetingUrl, setMeetingUrl]                   = useState(app.meetingUrl ?? "");
+  const [err, setErr]           = useState("");
+
+  async function handleSubmit() {
+    if (!fullName.trim()) { setErr("Ism kiritilishi shart"); return; }
+    if (!phone.trim())    { setErr("Telefon kiritilishi shart"); return; }
+    setErr("");
+    try {
+      await updateApp.mutateAsync({
+        id: app.id,
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        age: age ? Number(age) : undefined,
+        level: level || undefined,
+        diagnosticTeacherId: diagnosticTeacherId || null,
+        diagnosticDayOfWeek: diagnosticTeacherId ? Number(diagnosticDay) : null,
+        diagnosticTime: diagnosticTeacherId ? diagnosticTime : null,
+        meetingPlatform,
+        meetingUrl: meetingUrl || null,
+      });
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    }
+  }
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        background: "rgba(0,0,0,.45)", backdropFilter: "blur(3px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+      }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: "var(--surface)", borderRadius: 18,
+        width: 520, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto",
+        boxShadow: "0 24px 64px rgba(0,0,0,.22)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 24px 18px" }}>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>Arizani tahrirlash</div>
+          <button className="iconbtn" style={{ width: 32, height: 32 }} onClick={onClose}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+          <FieldRow label="Ism familya *">
+            <input className="inp" value={fullName} onChange={e => setFullName(e.target.value)} style={{ width: "100%" }} />
+          </FieldRow>
+          <FieldRow label="Telefon *">
+            <input className="inp" value={phone} onChange={e => setPhone(e.target.value)} style={{ width: "100%" }} />
+          </FieldRow>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FieldRow label="Yoshi">
+              <input className="inp" type="number" value={age} onChange={e => setAge(e.target.value)} style={{ width: "100%" }} min={4} max={99} />
+            </FieldRow>
+            <FieldRow label="Manba">
+              <select className="inp" value={source} onChange={e => setSource(e.target.value as Application["source"])} style={{ width: "100%" }}>
+                <option value="telegram">Telegram</option>
+                <option value="website">Veb-sayt</option>
+                <option value="phone">Telefon</option>
+                <option value="referral">Tavsiya</option>
+                <option value="instagram">Instagram</option>
+                <option value="other">Boshqa</option>
+              </select>
+            </FieldRow>
+          </div>
+
+          <DiagnosticFields
+            level={level} setLevel={setLevel}
+            diagnosticTeacherId={diagnosticTeacherId} setDiagnosticTeacherId={setDiagnosticTeacherId}
+            diagnosticDay={diagnosticDay} setDiagnosticDay={setDiagnosticDay}
+            diagnosticTime={diagnosticTime} setDiagnosticTime={setDiagnosticTime}
+            meetingPlatform={meetingPlatform} setMeetingPlatform={setMeetingPlatform}
+            meetingUrl={meetingUrl} setMeetingUrl={setMeetingUrl}
+          />
+
+          {err && <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>{err}</div>}
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Bekor</button>
+            <button
+              className="btn primary"
+              style={{ flex: 2, justifyContent: "center" }}
+              onClick={handleSubmit}
+              disabled={updateApp.isPending}
+            >
+              <Icon name="check" size={15} />
+              {updateApp.isPending ? "Saqlanmoqda..." : "Saqlash"}
             </button>
           </div>
         </div>

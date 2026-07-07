@@ -63,7 +63,9 @@ export default function SchedulePage() {
   }, [filteredSlots]);
 
   const totalLessons = slots.length;
-  const totalHours = Number((totalLessons * 1.5).toFixed(1));
+  const totalHours = Number(
+    (slots.reduce((sum, s) => sum + (s.durationMinutes ?? 90), 0) / 60).toFixed(1)
+  );
   const activeGroups = new Set(slots.map((s) => s.groupId)).size;
   const emptySlots = HOURS.length * 7 - totalLessons;
 
@@ -155,17 +157,20 @@ export default function SchedulePage() {
                     const cellSlots = grid.get(`${hour}-${di}`) ?? [];
                     return (
                       <td key={di} style={tdCell}>
-                        {cellSlots.length > 0 ? (
-                          cellSlots.map((s) => (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          {cellSlots.map((s) => (
                             <LessonCard
                               key={s.id}
                               slot={s}
                               onClick={() => setModal({ mode: "view", slot: s })}
                             />
-                          ))
-                        ) : (
-                          <EmptyCell onClick={() => setModal({ mode: "add", day: di, hour })} />
-                        )}
+                          ))}
+                          {cellSlots.length === 0 ? (
+                            <EmptyCell onClick={() => setModal({ mode: "add", day: di, hour })} />
+                          ) : (
+                            <AddMoreButton onClick={() => setModal({ mode: "add", day: di, hour })} />
+                          )}
+                        </div>
                       </td>
                     );
                   })}
@@ -719,6 +724,24 @@ function EmptyCell({ onClick }: { onClick: () => void }) {
   );
 }
 
+/* ─── Add another lesson into an occupied cell ─── */
+function AddMoreButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title="Yana dars qo'shish"
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        height: 20, borderRadius: 6, border: "1px dashed var(--border)",
+        background: "transparent", color: "var(--text-faint)",
+        fontSize: 13, cursor: "pointer", fontWeight: 700, padding: 0,
+      }}
+    >
+      +
+    </button>
+  );
+}
+
 /* ─── Shared styles ─── */
 const labelStyle: React.CSSProperties = {
   display: "block", fontSize: 11, fontWeight: 700,
@@ -746,7 +769,7 @@ const tdTime: React.CSSProperties = {
   fontVariantNumeric: "tabular-nums",
 };
 const tdCell: React.CSSProperties = {
-  padding: 4, height: 60,
+  padding: 4, minHeight: 60,
   borderBottom: "1px solid var(--border)",
   borderLeft: "1px solid var(--border)",
   verticalAlign: "top",
