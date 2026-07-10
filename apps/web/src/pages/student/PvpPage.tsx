@@ -587,10 +587,12 @@ export default function PvpPage() {
     if (wsRef.current && wsRef.current.readyState <= 1) return; // already connecting/open
     setStatus("connecting");
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${window.location.host}/api/v1/ws/pvp?token=${encodeURIComponent(accessToken ?? "")}`);
+    const ws = new WebSocket(`${proto}://${window.location.host}/api/v1/ws/pvp`);
     wsRef.current = ws;
 
-    ws.onopen    = () => {};
+    // Token travels as the first WS message, not a URL query param, so it never
+    // ends up in proxy access logs or browser history.
+    ws.onopen    = () => { ws.send(JSON.stringify({ type: "auth", token: accessToken })); };
     ws.onerror   = () => { setError("Ulanishda xatolik"); setStatus("disconnected"); };
     ws.onclose   = () => {
       setOnlinePlayers([]);

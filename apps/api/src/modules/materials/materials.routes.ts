@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
-import { uploadFile, deleteFile, getSignedDownloadUrl, localReadStream, USE_S3 } from "../../lib/storage.js";
+import {
+  uploadFile, deleteFile, getSignedDownloadUrl, localReadStream, USE_S3,
+  assertAllowedMimeType, UploadValidationError, UPLOAD_LIMITS,
+} from "../../lib/storage.js";
 
 async function getTeacherIdForUser(userId: string): Promise<string | null> {
   const { rows } = await pool.query(`SELECT id FROM teachers WHERE user_id = $1`, [userId]);
@@ -94,8 +97,15 @@ export async function materialsRoutes(app: FastifyInstance) {
     const teacherId = await getTeacherIdForUser(request.user.sub);
     if (!teacherId) return reply.code(404).send({ error: "Teacher not found" });
 
-    const data = await request.file();
+    const data = await request.file({ limits: { fileSize: UPLOAD_LIMITS.material.maxBytes } });
     if (!data) return reply.code(400).send({ error: "Fayl topilmadi" });
+
+    try {
+      assertAllowedMimeType(data.mimetype, "material");
+    } catch (err) {
+      if (err instanceof UploadValidationError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
 
     const fields = data.fields as Record<string, { value?: string } | undefined>;
     const title = fields.title?.value ?? data.filename;
@@ -114,7 +124,12 @@ export async function materialsRoutes(app: FastifyInstance) {
 
     const ext = path.extname(data.filename) || "";
     const key = `materials/${tenantId}/${randomUUID()}${ext}`;
-    const buffer = await data.toBuffer();
+    let buffer: Buffer;
+    try {
+      buffer = await data.toBuffer();
+    } catch {
+      return reply.code(413).send({ error: "Fayl hajmi juda katta (max 200 MB)" });
+    }
     await uploadFile(buffer, key, data.mimetype);
 
     const { rows } = await pool.query(
@@ -129,7 +144,8 @@ export async function materialsRoutes(app: FastifyInstance) {
   app.get("/materials/:id/download", async (request, reply) => {
     const { id } = request.params as { id: string };
     const { rows } = await pool.query(
-      `SELECT file_path AS "key", file_name AS "fileName", mime_type AS "mimeType", tenant_id AS "tenantId", group_id AS "groupId"
+      `SELECT file_path AS "key", file_name AS "fileName", mime_type AS "mimeType",
+              tenant_id AS "tenantId", group_id AS "groupId", teacher_id AS "teacherId"
        FROM lesson_materials WHERE id = $1`,
       [id]
     );
@@ -144,6 +160,11 @@ export async function materialsRoutes(app: FastifyInstance) {
         [material.groupId, studentId]
       );
       if (access.rows.length === 0) return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    if (request.user.role === "teacher") {
+      const teacherId = await getTeacherIdForUser(request.user.sub);
+      if (material.teacherId !== teacherId) return reply.code(403).send({ error: "Forbidden" });
     }
 
     if (USE_S3) {

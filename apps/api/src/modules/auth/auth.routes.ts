@@ -3,6 +3,7 @@ import { z } from "zod";
 import { env } from "../../env.js";
 import { findUserByLogin, findUserByTelegramId, linkTelegramId, verifyPassword } from "./auth.service.js";
 import { verifyTelegramInitData } from "./telegram.js";
+import { getRefreshJwt } from "../../plugins/auth.js";
 
 const loginSchema = z.object({
   login: z.string().min(1),
@@ -25,7 +26,7 @@ function issueSession(app: FastifyInstance, user: {
   };
 
   const accessToken = app.jwt.sign(payload, { expiresIn: "15m" });
-  const refreshToken = app.jwt.sign(payload, { expiresIn: "30d" });
+  const refreshToken = getRefreshJwt(app).sign(payload, { expiresIn: "30d" });
 
   return {
     accessToken,
@@ -42,14 +43,21 @@ function issueSession(app: FastifyInstance, user: {
   };
 }
 
+// Brute-force himoyasi: login/parol taxmin qilishga urinishlarni IP bo'yicha cheklaydi.
+const loginRateLimit = {
+  config: {
+    rateLimit: { max: 10, timeWindow: "1 minute" },
+  },
+};
+
 export async function authRoutes(app: FastifyInstance) {
-  app.post("/auth/login", async (request, reply) => {
+  app.post("/auth/login", loginRateLimit, async (request, reply) => {
     const { login, password } = loginSchema.parse(request.body);
 
     const user = await findUserByLogin(login);
 
     if (!user || !user.isActive) {
-      return reply.code(401).send({ error: "Invalid credentials", user });
+      return reply.code(401).send({ error: "Invalid credentials" });
     }
 
     const valid = await verifyPassword(password, user.passwordHash);
@@ -112,7 +120,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     let payload: { sub: string; tenantId: string | null; branchId: string | null; role: "super_admin"|"admin"|"teacher"|"student" };
     try {
-      payload = app.jwt.verify<typeof payload>(refreshToken);
+      payload = getRefreshJwt(app).verify<typeof payload>(refreshToken);
     } catch {
       return reply.code(401).send({ error: "Invalid or expired refresh token" });
     }
@@ -125,7 +133,7 @@ export async function authRoutes(app: FastifyInstance) {
     };
 
     const accessToken = app.jwt.sign(newPayload, { expiresIn: "15m" });
-    const newRefreshToken = app.jwt.sign(newPayload, { expiresIn: "30d" });
+    const newRefreshToken = getRefreshJwt(app).sign(newPayload, { expiresIn: "30d" });
 
     return reply.send({ accessToken, refreshToken: newRefreshToken });
   });

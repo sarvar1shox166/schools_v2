@@ -1,8 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
-import { hashPassword } from "../auth/auth.service.js";
+import { hashPassword, generateTempPassword } from "../auth/auth.service.js";
 
 const createSchema = z.object({
   fullName: z.string().min(2),
@@ -37,7 +36,7 @@ export async function teachersRoutes(app: FastifyInstance) {
   app.post("/teachers", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
     const { tenantId } = request.user;
-    const tempPassword = randomBytes(4).toString("hex");
+    const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
 
     const client = await pool.connect();
@@ -101,7 +100,7 @@ export async function teachersRoutes(app: FastifyInstance) {
   app.post("/teachers/:id/reset-password", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
-    const newPassword = randomBytes(4).toString("hex");
+    const newPassword = generateTempPassword();
     const passwordHash = await hashPassword(newPassword);
     const { rowCount } = await pool.query(
       `UPDATE users SET password_hash = $1

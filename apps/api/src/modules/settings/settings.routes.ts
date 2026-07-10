@@ -187,7 +187,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       `INSERT INTO teacher_rates
          (teacher_id, salary_type, monthly_amount, income_percent,
           group_rate, individual_rate, diagnostic_rate, retention_coef)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       VALUES ($1, $2, $3, $4, COALESCE($5, 0), COALESCE($6, 0), COALESCE($7, 0), COALESCE($8, 1))
        ON CONFLICT (teacher_id) DO UPDATE SET
          salary_type = $2, monthly_amount = $3, income_percent = $4,
          group_rate = COALESCE($5, teacher_rates.group_rate),

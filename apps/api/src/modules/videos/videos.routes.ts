@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { awardXp } from "../gamification/xp.js";
-import { uploadFile } from "../../lib/storage.js";
+import { uploadFile, assertAllowedMimeType, UploadValidationError, UPLOAD_LIMITS } from "../../lib/storage.js";
 
 const createVideoSchema = z.object({
   title: z.string().min(1),
@@ -102,12 +102,24 @@ export async function videosRoutes(app: FastifyInstance) {
   app.post("/videos/upload", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
     const { tenantId } = request.user;
     if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
-    const data = await request.file();
+    const data = await request.file({ limits: { fileSize: UPLOAD_LIMITS.video.maxBytes } });
     if (!data) return reply.code(400).send({ error: "Fayl topilmadi" });
+
+    try {
+      assertAllowedMimeType(data.mimetype, "video");
+    } catch (err) {
+      if (err instanceof UploadValidationError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
 
     const ext = path.extname(data.filename) || ".mp4";
     const key = `videos/${tenantId}/${randomUUID()}${ext}`;
-    const buffer = await data.toBuffer();
+    let buffer: Buffer;
+    try {
+      buffer = await data.toBuffer();
+    } catch {
+      return reply.code(413).send({ error: "Fayl hajmi juda katta (max 1 GB)" });
+    }
     const url = await uploadFile(buffer, key, data.mimetype);
     return { url };
   });
@@ -116,12 +128,24 @@ export async function videosRoutes(app: FastifyInstance) {
   app.post("/upload/image", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
     const { tenantId } = request.user;
     if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
-    const data = await request.file();
+    const data = await request.file({ limits: { fileSize: UPLOAD_LIMITS.image.maxBytes } });
     if (!data) return reply.code(400).send({ error: "Fayl topilmadi" });
+
+    try {
+      assertAllowedMimeType(data.mimetype, "image");
+    } catch (err) {
+      if (err instanceof UploadValidationError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
 
     const ext = path.extname(data.filename) || ".jpg";
     const key = `images/${tenantId}/${randomUUID()}${ext}`;
-    const buffer = await data.toBuffer();
+    let buffer: Buffer;
+    try {
+      buffer = await data.toBuffer();
+    } catch {
+      return reply.code(413).send({ error: "Fayl hajmi juda katta (max 10 MB)" });
+    }
     const url = await uploadFile(buffer, key, data.mimetype);
     return { url };
   });

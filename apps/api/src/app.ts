@@ -5,7 +5,9 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import staticFiles from "@fastify/static";
+import rateLimit from "@fastify/rate-limit";
 import authPlugin from "./plugins/auth.js";
+import { env } from "./env.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { teachersRoutes } from "./modules/teachers/teachers.routes.js";
 import { studentsRoutes } from "./modules/students/students.routes.js";
@@ -36,8 +38,13 @@ export async function buildApp() {
 
   const app = Fastify({ logger: true });
 
-  app.register(cors, { origin: true });
-  app.register(multipart, { limits: { fileSize: 2 * 1024 * 1024 * 1024 } }); // 2 GB
+  // The web app is served same-origin via nginx, so no cross-origin allowance is needed by default.
+  // Set CORS_ORIGINS (comma-separated) to allow specific external origins (e.g. a future mobile app).
+  const allowedOrigins = env.CORS_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) ?? [];
+  app.register(cors, { origin: allowedOrigins.length > 0 ? allowedOrigins : false });
+  app.register(rateLimit, { global: true, max: 300, timeWindow: "1 minute" });
+  // Outer safety net — actual per-endpoint caps are tighter (see lib/storage.ts UPLOAD_LIMITS).
+  app.register(multipart, { limits: { fileSize: 1024 * 1024 * 1024 } }); // 1 GB
   app.register(websocket);
   app.register(staticFiles, { root: UPLOADS_ROOT, prefix: "/uploads/" });
   app.register(authPlugin);

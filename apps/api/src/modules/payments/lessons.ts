@@ -1,14 +1,15 @@
 import type { PoolClient } from "pg";
 import { notifyStudent } from "../notifications/notify.js";
 
-export async function consumeLesson(client: PoolClient, studentId: string): Promise<boolean> {
+/** Returns the id of the package the credit was consumed from, or null if the student has no active package. */
+export async function consumeLesson(client: PoolClient, studentId: string): Promise<string | null> {
   const { rows } = await client.query(
     `SELECT id, used_lessons, total_lessons FROM student_packages
      WHERE student_id = $1 AND status = 'active' AND used_lessons < total_lessons
      ORDER BY purchased_at ASC LIMIT 1 FOR UPDATE`,
     [studentId]
   );
-  if (rows.length === 0) return false;
+  if (rows.length === 0) return null;
 
   const pkg = rows[0];
   const used = pkg.used_lessons + 1;
@@ -19,12 +20,37 @@ export async function consumeLesson(client: PoolClient, studentId: string): Prom
   );
 
   if (status === "finished") {
-    await notifyStudent(client, studentId, "Sizning dars paketingiz tugadi. Davom etish uchun yangi paket sotib oling.");
+    await notifyStudent(
+      client, studentId,
+      "Sizning dars paketingiz tugadi. Davom etish uchun yangi paket sotib oling.",
+      { title: "Paket tugadi", type: "payment", icon: "wallet" }
+    );
   }
-  return true;
+  return pkg.id;
 }
 
-export async function refundLesson(client: PoolClient, studentId: string) {
+/**
+ * Refunds a credit back to the package it was originally consumed from (tracked via
+ * attendance_records.student_package_id). Falls back to the most-recently-used package
+ * when the original package is unknown (legacy rows predating this tracking) or can no
+ * longer accept a refund — this heuristic can misattribute the credit if the student has
+ * multiple packages, which is exactly the bug the exact-package path avoids.
+ */
+export async function refundLesson(client: PoolClient, studentId: string, studentPackageId?: string | null) {
+  if (studentPackageId) {
+    const { rows } = await client.query(
+      `SELECT id, used_lessons FROM student_packages WHERE id = $1 AND used_lessons > 0 FOR UPDATE`,
+      [studentPackageId]
+    );
+    if (rows.length > 0) {
+      await client.query(
+        `UPDATE student_packages SET used_lessons = $1, status = 'active' WHERE id = $2`,
+        [rows[0].used_lessons - 1, rows[0].id]
+      );
+      return;
+    }
+  }
+
   const { rows } = await client.query(
     `SELECT id, used_lessons, total_lessons, status FROM student_packages
      WHERE student_id = $1 AND status IN ('active', 'finished') AND used_lessons > 0

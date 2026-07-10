@@ -1,8 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
-import { hashPassword } from "../auth/auth.service.js";
+import { hashPassword, generateTempPassword } from "../auth/auth.service.js";
 
 const createSchema = z.object({
   fullName: z.string().min(2),
@@ -76,7 +75,7 @@ export async function studentsRoutes(app: FastifyInstance) {
   app.post("/students", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
     const { tenantId } = request.user;
-    const tempPassword = randomBytes(4).toString("hex");
+    const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
 
     const client = await pool.connect();
@@ -147,7 +146,7 @@ export async function studentsRoutes(app: FastifyInstance) {
   app.post("/students/:id/reset-password", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
-    const newPassword = randomBytes(4).toString("hex");
+    const newPassword = generateTempPassword();
     const passwordHash = await hashPassword(newPassword);
     const { rowCount } = await pool.query(
       `UPDATE users SET password_hash = $1
@@ -191,8 +190,27 @@ export async function studentsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post("/students/:id/groups/:groupId", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.post("/students/:id/groups/:groupId", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
     const { id, groupId } = request.params as { id: string; groupId: string };
+    const { tenantId } = request.user;
+
+    const check = await pool.query(
+      `SELECT
+         (SELECT id FROM students WHERE id = $1 AND tenant_id = $3) AS "studentId",
+         g.capacity,
+         (SELECT count(*)::int FROM group_members gm WHERE gm.group_id = g.id) AS "memberCount",
+         EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id = g.id AND gm.student_id = $1) AS "alreadyMember"
+       FROM groups g WHERE g.id = $2 AND g.tenant_id = $3`,
+      [id, groupId, tenantId]
+    );
+    const row = check.rows[0];
+    if (!row || !row.studentId) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+    if (!row.alreadyMember && row.capacity != null && row.memberCount >= row.capacity) {
+      return reply.code(409).send({ error: "Guruh to'lgan" });
+    }
+
     await pool.query(
       `INSERT INTO group_members (group_id, student_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
       [groupId, id]
@@ -200,8 +218,19 @@ export async function studentsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete("/students/:id/groups/:groupId", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.delete("/students/:id/groups/:groupId", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
     const { id, groupId } = request.params as { id: string; groupId: string };
+    const { tenantId } = request.user;
+
+    const check = await pool.query(
+      `SELECT (SELECT id FROM students WHERE id = $1 AND tenant_id = $3) AS "studentId",
+              (SELECT id FROM groups WHERE id = $2 AND tenant_id = $3) AS "groupId"`,
+      [id, groupId, tenantId]
+    );
+    if (!check.rows[0]?.studentId || !check.rows[0]?.groupId) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+
     await pool.query(`DELETE FROM group_members WHERE group_id = $1 AND student_id = $2`, [groupId, id]);
     return { ok: true };
   });

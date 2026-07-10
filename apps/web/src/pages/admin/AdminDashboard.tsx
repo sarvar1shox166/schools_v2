@@ -47,7 +47,7 @@ export default function AdminDashboard() {
   const { data: todaySchedule } = useTodaySchedule();
   const { data: growth } = useStudentGrowth();
   const { data: fillRate } = useGroupFillRate();
-  const { data: applications } = useApplications("yangi");
+  const { data: applications } = useApplications("diagnostika");
 
   const growthData = (growth && growth.length > 0) ? growth.map((g, i) => ({
     month: ["Yan","Fev","Mar","Apr","May","Iyu","Iyl","Avg","Sen","Okt","Noy","Dek"][Number(g.month.slice(5)) - 1] ?? g.month.slice(5),

@@ -28,7 +28,6 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 const LEVELS = ["Boshlang'ich", "O'rta", "Yuqori", "Professional"];
-const DAY_NAMES = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
 const HOURS = [
   "09:00","10:00","11:00","12:00","13:00",
   "14:00","15:00","16:00","17:00","18:00","19:00","20:00",
@@ -370,14 +369,14 @@ export default function ApplicationsPage() {
 function DiagnosticFields({
   level, setLevel,
   diagnosticTeacherId, setDiagnosticTeacherId,
-  diagnosticDay, setDiagnosticDay,
+  diagnosticDate, setDiagnosticDate,
   diagnosticTime, setDiagnosticTime,
   meetingPlatform, setMeetingPlatform,
   meetingUrl, setMeetingUrl,
 }: {
   level: string; setLevel: (v: string) => void;
   diagnosticTeacherId: string; setDiagnosticTeacherId: (v: string) => void;
-  diagnosticDay: string; setDiagnosticDay: (v: string) => void;
+  diagnosticDate: string; setDiagnosticDate: (v: string) => void;
   diagnosticTime: string; setDiagnosticTime: (v: string) => void;
   meetingPlatform: "zoom" | "meet"; setMeetingPlatform: (v: "zoom" | "meet") => void;
   meetingUrl: string; setMeetingUrl: (v: string) => void;
@@ -427,12 +426,9 @@ function DiagnosticFields({
       </FieldRow>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <FieldRow label="Diagnostika kuni">
-          <select className="inp" value={diagnosticDay} onChange={e => setDiagnosticDay(e.target.value)} style={{ width: "100%" }}>
-            {DAY_NAMES.map((d, i) => (
-              <option key={d} value={i}>{d}</option>
-            ))}
-          </select>
+        <FieldRow label="Diagnostika sanasi">
+          <input className="inp" type="date" value={diagnosticDate} min={new Date().toISOString().slice(0, 10)}
+            onChange={e => setDiagnosticDate(e.target.value)} style={{ width: "100%" }} />
         </FieldRow>
         <FieldRow label="Soati">
           <select className="inp" value={diagnosticTime} onChange={e => setDiagnosticTime(e.target.value)} style={{ width: "100%" }}>
@@ -468,7 +464,7 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
   const [source, setSource]     = useState("other");
   const [level, setLevel]       = useState("");
   const [diagnosticTeacherId, setDiagnosticTeacherId] = useState("");
-  const [diagnosticDay, setDiagnosticDay]             = useState("0");
+  const [diagnosticDate, setDiagnosticDate]           = useState("");
   const [diagnosticTime, setDiagnosticTime]           = useState("15:00");
   const [meetingPlatform, setMeetingPlatform]         = useState<"zoom" | "meet">("zoom");
   const [meetingUrl, setMeetingUrl]                   = useState("");
@@ -477,6 +473,7 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
   async function handleSubmit() {
     if (!fullName.trim()) { setErr("Ism kiritilishi shart"); return; }
     if (!phone.trim())    { setErr("Telefon kiritilishi shart"); return; }
+    if (diagnosticTeacherId && !diagnosticDate) { setErr("Diagnostika sanasi tanlanishi shart"); return; }
     setErr("");
     try {
       await createApp.mutateAsync({
@@ -486,7 +483,7 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
         level: level || undefined,
         source: source || undefined,
         diagnosticTeacherId: diagnosticTeacherId || undefined,
-        diagnosticDayOfWeek: diagnosticTeacherId ? Number(diagnosticDay) : undefined,
+        diagnosticDate: diagnosticTeacherId ? diagnosticDate : undefined,
         diagnosticTime: diagnosticTeacherId ? diagnosticTime : undefined,
         meetingPlatform,
         meetingUrl: meetingUrl || undefined,
@@ -544,7 +541,7 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
           <DiagnosticFields
             level={level} setLevel={setLevel}
             diagnosticTeacherId={diagnosticTeacherId} setDiagnosticTeacherId={setDiagnosticTeacherId}
-            diagnosticDay={diagnosticDay} setDiagnosticDay={setDiagnosticDay}
+            diagnosticDate={diagnosticDate} setDiagnosticDate={setDiagnosticDate}
             diagnosticTime={diagnosticTime} setDiagnosticTime={setDiagnosticTime}
             meetingPlatform={meetingPlatform} setMeetingPlatform={setMeetingPlatform}
             meetingUrl={meetingUrl} setMeetingUrl={setMeetingUrl}
@@ -581,7 +578,7 @@ function EditAppModal({ app, onClose }: { app: Application; onClose: () => void 
   const [source, setSource]     = useState(app.source);
   const [level, setLevel]       = useState(app.level ?? "");
   const [diagnosticTeacherId, setDiagnosticTeacherId] = useState(app.diagnosticTeacherId ?? "");
-  const [diagnosticDay, setDiagnosticDay]             = useState(String(app.diagnosticDayOfWeek ?? 0));
+  const [diagnosticDate, setDiagnosticDate]           = useState(app.diagnosticDate?.slice(0, 10) ?? "");
   const [diagnosticTime, setDiagnosticTime]           = useState(app.diagnosticTime?.slice(0, 5) ?? "15:00");
   const [meetingPlatform, setMeetingPlatform]         = useState<"zoom" | "meet">(app.meetingPlatform ?? "zoom");
   const [meetingUrl, setMeetingUrl]                   = useState(app.meetingUrl ?? "");
@@ -599,7 +596,7 @@ function EditAppModal({ app, onClose }: { app: Application; onClose: () => void 
         age: age ? Number(age) : undefined,
         level: level || undefined,
         diagnosticTeacherId: diagnosticTeacherId || null,
-        diagnosticDayOfWeek: diagnosticTeacherId ? Number(diagnosticDay) : null,
+        diagnosticDate: diagnosticTeacherId ? diagnosticDate : null,
         diagnosticTime: diagnosticTeacherId ? diagnosticTime : null,
         meetingPlatform,
         meetingUrl: meetingUrl || null,
@@ -657,7 +654,7 @@ function EditAppModal({ app, onClose }: { app: Application; onClose: () => void 
           <DiagnosticFields
             level={level} setLevel={setLevel}
             diagnosticTeacherId={diagnosticTeacherId} setDiagnosticTeacherId={setDiagnosticTeacherId}
-            diagnosticDay={diagnosticDay} setDiagnosticDay={setDiagnosticDay}
+            diagnosticDate={diagnosticDate} setDiagnosticDate={setDiagnosticDate}
             diagnosticTime={diagnosticTime} setDiagnosticTime={setDiagnosticTime}
             meetingPlatform={meetingPlatform} setMeetingPlatform={setMeetingPlatform}
             meetingUrl={meetingUrl} setMeetingUrl={setMeetingUrl}

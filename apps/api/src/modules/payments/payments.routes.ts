@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { env } from "../../env.js";
@@ -273,6 +273,13 @@ function md5(input: string) {
   return createHash("md5").update(input).digest("hex");
 }
 
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
 export async function paymentWebhookRoutes(app: FastifyInstance) {
   app.post("/payments/click/callback", async (request, reply) => {
     const body = request.body as Record<string, string | number>;
@@ -292,7 +299,7 @@ export async function paymentWebhookRoutes(app: FastifyInstance) {
     baseParts.push(amount, action, sign_time);
     const expectedSign = md5(baseParts.map(String).join(""));
 
-    if (expectedSign !== sign_string) {
+    if (!safeEqual(expectedSign, String(sign_string))) {
       return reply.send({ click_trans_id, merchant_trans_id, error: -1, error_note: "SIGN CHECK FAILED" });
     }
 
@@ -321,7 +328,11 @@ export async function paymentWebhookRoutes(app: FastifyInstance) {
       [String(click_trans_id), tx.id]
     );
 
-    await notifyStudent(pool, tx.studentId, `To'lovingiz qabul qilindi: ${Number(tx.amount).toLocaleString("uz-UZ")} so'm. Rahmat!`);
+    await notifyStudent(
+      pool, tx.studentId,
+      `To'lovingiz qabul qilindi: ${Number(tx.amount).toLocaleString("uz-UZ")} so'm. Rahmat!`,
+      { title: "To'lov qabul qilindi", type: "payment", icon: "wallet" }
+    );
 
     return reply.send({
       click_trans_id,
@@ -335,7 +346,7 @@ export async function paymentWebhookRoutes(app: FastifyInstance) {
   app.post("/payments/payme/callback", async (request, reply) => {
     const auth = request.headers.authorization ?? "";
     const expected = "Basic " + Buffer.from(`Paycom:${env.PAYME_SECRET_KEY}`).toString("base64");
-    if (auth !== expected) {
+    if (!safeEqual(auth, expected)) {
       return reply.code(200).send({ error: { code: -32504, message: "Insufficient privilege" } });
     }
 
@@ -383,7 +394,11 @@ export async function paymentWebhookRoutes(app: FastifyInstance) {
       }
       const tx = txRes.rows[0];
       await pool.query(`UPDATE transactions SET status = 'paid' WHERE id = $1`, [tx.id]);
-      await notifyStudent(pool, tx.studentId, `To'lovingiz qabul qilindi: ${Number(tx.amount).toLocaleString("uz-UZ")} so'm. Rahmat!`);
+      await notifyStudent(
+      pool, tx.studentId,
+      `To'lovingiz qabul qilindi: ${Number(tx.amount).toLocaleString("uz-UZ")} so'm. Rahmat!`,
+      { title: "To'lov qabul qilindi", type: "payment", icon: "wallet" }
+    );
       return reply.send({ result: { transaction: tx.id, state: 2, perform_time: Date.now() }, id: rpcId });
     }
 

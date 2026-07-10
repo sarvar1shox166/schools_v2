@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
+import { dayOfWeekOf } from "../../lib/schedule-dates.js";
 
 const createSchema = z.object({
   fullName: z.string().min(2),
@@ -10,7 +11,8 @@ const createSchema = z.object({
   source: z.enum(["telegram", "website", "phone", "referral", "instagram", "other"]).default("other"),
   note: z.string().optional(),
   diagnosticTeacherId: z.string().uuid().optional(),
-  diagnosticDayOfWeek: z.number().int().min(0).max(6).optional(),
+  // Diagnostika bir martalik voqea — aniq sana tanlanadi (hafta kuni emas).
+  diagnosticDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   diagnosticTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   meetingPlatform: z.enum(["zoom", "meet"]).default("zoom"),
   meetingUrl: z.string().url().optional().or(z.literal("")),
@@ -25,7 +27,7 @@ const updateSchema = z.object({
   age: z.number().int().positive().optional(),
   level: z.string().optional(),
   diagnosticTeacherId: z.string().uuid().optional().nullable(),
-  diagnosticDayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
+  diagnosticDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   diagnosticTime: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
   meetingPlatform: z.enum(["zoom", "meet"]).optional(),
   meetingUrl: z.string().optional().nullable(),
@@ -53,7 +55,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
               a.converted_student_id AS "convertedStudentId",
               a.diagnostic_teacher_id AS "diagnosticTeacherId",
               tu.full_name AS "diagnosticTeacherName",
-              a.diagnostic_day_of_week AS "diagnosticDayOfWeek",
+              a.diagnostic_date AS "diagnosticDate",
               a.diagnostic_time AS "diagnosticTime",
               a.meeting_platform AS "meetingPlatform",
               a.meeting_url AS "meetingUrl",
@@ -91,25 +93,29 @@ export async function applicationsRoutes(app: FastifyInstance) {
       let scheduleSlotId: string | null = null;
       const hasDiagnosticSlot =
         body.diagnosticTeacherId !== undefined &&
-        body.diagnosticDayOfWeek !== undefined &&
+        body.diagnosticDate !== undefined &&
         body.diagnosticTime !== undefined;
 
       if (hasDiagnosticSlot) {
+        // Diagnostika bir martalik voqea — aniq sanaga bog'lanadi (specific_date).
+        // schedule_slots.day_of_week NOT NULL bo'lgani uchun shu sanadan hisoblab olinadi.
+        const dayOfWeek = dayOfWeekOf(new Date(body.diagnosticDate! + "T00:00:00"));
         const slotRes = await client.query(
           `INSERT INTO schedule_slots
              (tenant_id, group_id, teacher_id, lesson_type, custom_name, day_of_week, start_time,
-              duration_minutes, is_online, meeting_url, meeting_platform)
-           VALUES ($1, NULL, $2, 'diagnostika', $3, $4, $5, $6, true, $7, $8)
+              duration_minutes, is_online, meeting_url, meeting_platform, specific_date)
+           VALUES ($1, NULL, $2, 'diagnostika', $3, $4, $5, $6, true, $7, $8, $9)
            RETURNING id`,
           [
             tenantId,
             body.diagnosticTeacherId,
             `Diagnostika — ${body.fullName}`,
-            body.diagnosticDayOfWeek,
+            dayOfWeek,
             body.diagnosticTime,
             DIAGNOSTIC_DURATION_MINUTES,
             body.meetingUrl || null,
             body.meetingPlatform,
+            body.diagnosticDate,
           ]
         );
         scheduleSlotId = slotRes.rows[0].id;
@@ -118,13 +124,13 @@ export async function applicationsRoutes(app: FastifyInstance) {
       const { rows } = await client.query(
         `INSERT INTO applications
            (tenant_id, full_name, phone, age, level, source, note,
-            diagnostic_teacher_id, diagnostic_day_of_week, diagnostic_time,
+            diagnostic_teacher_id, diagnostic_date, diagnostic_time,
             meeting_platform, meeting_url, schedule_slot_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING id`,
         [
           tenantId, body.fullName, body.phone, body.age ?? null, body.level ?? null, body.source, body.note ?? null,
-          body.diagnosticTeacherId ?? null, body.diagnosticDayOfWeek ?? null, body.diagnosticTime ?? null,
+          body.diagnosticTeacherId ?? null, body.diagnosticDate ?? null, body.diagnosticTime ?? null,
           body.meetingPlatform, body.meetingUrl || null, scheduleSlotId,
         ]
       );
@@ -160,7 +166,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
 
       const hasDiagnosticChange =
         body.diagnosticTeacherId !== undefined ||
-        body.diagnosticDayOfWeek !== undefined ||
+        body.diagnosticDate !== undefined ||
         body.diagnosticTime !== undefined;
 
       if (body.status === "rad" && scheduleSlotId) {
@@ -169,18 +175,19 @@ export async function applicationsRoutes(app: FastifyInstance) {
       } else if (
         hasDiagnosticChange &&
         body.diagnosticTeacherId &&
-        body.diagnosticDayOfWeek !== undefined && body.diagnosticDayOfWeek !== null &&
+        body.diagnosticDate !== undefined && body.diagnosticDate !== null &&
         body.diagnosticTime
       ) {
+        const dayOfWeek = dayOfWeekOf(new Date(body.diagnosticDate + "T00:00:00"));
         if (scheduleSlotId) {
           await client.query(
             `UPDATE schedule_slots SET
-               teacher_id = $1, day_of_week = $2, start_time = $3,
-               meeting_platform = COALESCE($4, meeting_platform),
-               meeting_url = COALESCE($5, meeting_url)
-             WHERE id = $6`,
+               teacher_id = $1, day_of_week = $2, start_time = $3, specific_date = $4,
+               meeting_platform = COALESCE($5, meeting_platform),
+               meeting_url = COALESCE($6, meeting_url)
+             WHERE id = $7`,
             [
-              body.diagnosticTeacherId, body.diagnosticDayOfWeek, body.diagnosticTime,
+              body.diagnosticTeacherId, dayOfWeek, body.diagnosticTime, body.diagnosticDate,
               body.meetingPlatform ?? null, body.meetingUrl ?? null, scheduleSlotId,
             ]
           );
@@ -188,12 +195,12 @@ export async function applicationsRoutes(app: FastifyInstance) {
           const slotRes = await client.query(
             `INSERT INTO schedule_slots
                (tenant_id, group_id, teacher_id, lesson_type, custom_name, day_of_week, start_time,
-                duration_minutes, is_online, meeting_url, meeting_platform)
-             VALUES ($1, NULL, $2, 'diagnostika', NULL, $3, $4, $5, true, $6, $7)
+                duration_minutes, is_online, meeting_url, meeting_platform, specific_date)
+             VALUES ($1, NULL, $2, 'diagnostika', NULL, $3, $4, $5, true, $6, $7, $8)
              RETURNING id`,
             [
-              tenantId, body.diagnosticTeacherId, body.diagnosticDayOfWeek, body.diagnosticTime,
-              DIAGNOSTIC_DURATION_MINUTES, body.meetingUrl ?? null, body.meetingPlatform ?? "zoom",
+              tenantId, body.diagnosticTeacherId, dayOfWeek, body.diagnosticTime,
+              DIAGNOSTIC_DURATION_MINUTES, body.meetingUrl ?? null, body.meetingPlatform ?? "zoom", body.diagnosticDate,
             ]
           );
           scheduleSlotId = slotRes.rows[0].id;
@@ -210,7 +217,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
            age = COALESCE($6, age),
            level = COALESCE($7, level),
            diagnostic_teacher_id = COALESCE($8, diagnostic_teacher_id),
-           diagnostic_day_of_week = COALESCE($9, diagnostic_day_of_week),
+           diagnostic_date = COALESCE($9, diagnostic_date),
            diagnostic_time = COALESCE($10, diagnostic_time),
            meeting_platform = COALESCE($11, meeting_platform),
            meeting_url = COALESCE($12, meeting_url),
@@ -220,7 +227,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
         [
           body.status ?? null, body.assignedTo ?? null, body.note ?? null,
           body.fullName ?? null, body.phone ?? null, body.age ?? null, body.level ?? null,
-          body.diagnosticTeacherId ?? null, body.diagnosticDayOfWeek ?? null, body.diagnosticTime ?? null,
+          body.diagnosticTeacherId ?? null, body.diagnosticDate ?? null, body.diagnosticTime ?? null,
           body.meetingPlatform ?? null, body.meetingUrl ?? null,
           scheduleSlotId, id, tenantId,
         ]
@@ -248,10 +255,9 @@ export async function applicationsRoutes(app: FastifyInstance) {
     if (appRes.rows.length === 0) return reply.code(404).send({ error: "Not found" });
     const app_ = appRes.rows[0];
 
-    // Import hashPassword inline to avoid circular dep
-    const { hashPassword } = await import("../auth/auth.service.js");
-    const { randomBytes } = await import("node:crypto");
-    const tempPassword = randomBytes(4).toString("hex");
+    // Import inline to avoid circular dep
+    const { hashPassword, generateTempPassword } = await import("../auth/auth.service.js");
+    const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
 
     const client = await pool.connect();

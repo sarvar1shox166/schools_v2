@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import { pool } from "../../db/pool.js";
 
 export interface AuthUser {
@@ -54,4 +55,9 @@ export async function verifyPassword(plain: string, hash: string) {
 
 export async function hashPassword(plain: string) {
   return bcrypt.hash(plain, 10);
+}
+
+/** 12 hex chars (48 bits) — brute-forcing this within a login rate limit is infeasible. */
+export function generateTempPassword() {
+  return randomBytes(6).toString("hex");
 }

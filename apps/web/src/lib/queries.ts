@@ -51,6 +51,8 @@ export interface ScheduleSlot {
   dayOfWeek: number;
   startTime: string;
   durationMinutes: number;
+  /** To'ldirilgan bo'lsa, bu slot faqat shu sanada bo'ladi (bir martalik — masalan diagnostika). */
+  specificDate: string | null;
   roomId: string | null;
   roomName: string | null;
   teacherId: string | null;
@@ -248,6 +250,25 @@ export function useSchedule() {
   });
 }
 
+export interface ScheduleOccurrenceSlot extends ScheduleSlot {
+  occurrenceDate: string;
+  exceptionKind?: "cancelled" | "rescheduled";
+}
+
+export interface ScheduleOccurrenceDay {
+  date: string;
+  slots: ScheduleOccurrenceSlot[];
+}
+
+/** Haftalik shablonni [from, to] oralig'idagi haqiqiy sanalarga yoyilgan holda qaytaradi. */
+export function useScheduleOccurrences(from: string, to: string) {
+  return useQuery({
+    queryKey: ["scheduleOccurrences", from, to],
+    queryFn: async () =>
+      (await api.get<ScheduleOccurrenceDay[]>("/schedule/occurrences", { params: { from, to } })).data,
+  });
+}
+
 export interface CreateSlotPayload {
   groupId?: string;
   teacherId?: string;
@@ -260,6 +281,7 @@ export interface CreateSlotPayload {
   isOnline?: boolean;
   meetingUrl?: string;
   meetingPlatform?: "zoom" | "meet";
+  specificDate?: string | null;
 }
 
 export function useCreateScheduleSlot() {
@@ -285,6 +307,74 @@ export function useDeleteScheduleSlot() {
   return useMutation({
     mutationFn: async (id: string) => (await api.delete(`/schedule/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule"] }),
+  });
+}
+
+// ── Dars istisnolari (bitta darsni bekor qilish/ko'chirish) va bayram kunlari ──
+
+export interface ScheduleException {
+  id: string;
+  scheduleSlotId: string | null;
+  date: string;
+  kind: "cancelled" | "rescheduled" | "holiday";
+  newDate: string | null;
+  newStartTime: string | null;
+  reason: string | null;
+}
+
+export function useScheduleExceptions(from?: string, to?: string) {
+  return useQuery({
+    queryKey: ["scheduleExceptions", from, to],
+    queryFn: async () =>
+      (await api.get<ScheduleException[]>("/schedule/exceptions", { params: from && to ? { from, to } : {} })).data,
+  });
+}
+
+export function useCreateScheduleException() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ scheduleSlotId, ...payload }: {
+      scheduleSlotId: string; date: string; kind: "cancelled" | "rescheduled";
+      newDate?: string; newStartTime?: string; reason?: string;
+    }) => (await api.post(`/schedule/${scheduleSlotId}/exceptions`, payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scheduleExceptions"] });
+      qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+    },
+  });
+}
+
+export function useDeleteScheduleException() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/schedule/exceptions/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scheduleExceptions"] });
+      qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+    },
+  });
+}
+
+export function useCreateHoliday() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { date: string; reason?: string }) =>
+      (await api.post("/schedule/holidays", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scheduleExceptions"] });
+      qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+    },
+  });
+}
+
+export function useDeleteHoliday() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/schedule/holidays/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scheduleExceptions"] });
+      qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+    },
   });
 }
 
@@ -1474,7 +1564,7 @@ export interface Application {
   convertedStudentId: string | null;
   diagnosticTeacherId: string | null;
   diagnosticTeacherName: string | null;
-  diagnosticDayOfWeek: number | null;
+  diagnosticDate: string | null;
   diagnosticTime: string | null;
   meetingPlatform: "zoom" | "meet";
   meetingUrl: string | null;
@@ -1504,7 +1594,7 @@ export function useApplicationStats() {
 
 export interface ApplicationCreatePayload {
   fullName: string; phone: string; age?: number; level?: string; source?: string; note?: string;
-  diagnosticTeacherId?: string; diagnosticDayOfWeek?: number; diagnosticTime?: string;
+  diagnosticTeacherId?: string; diagnosticDate?: string; diagnosticTime?: string;
   meetingPlatform?: "zoom" | "meet"; meetingUrl?: string;
 }
 
@@ -1523,7 +1613,7 @@ export function useCreateApplication() {
 export interface ApplicationUpdatePayload {
   id: string; status?: string; note?: string; assignedTo?: string;
   fullName?: string; phone?: string; age?: number; level?: string;
-  diagnosticTeacherId?: string | null; diagnosticDayOfWeek?: number | null; diagnosticTime?: string | null;
+  diagnosticTeacherId?: string | null; diagnosticDate?: string | null; diagnosticTime?: string | null;
   meetingPlatform?: "zoom" | "meet"; meetingUrl?: string | null;
 }
 

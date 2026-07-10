@@ -16,6 +16,9 @@ const envSchema = z.object({
   PAYME_SECRET_KEY: z.string().default("dev-payme-secret"),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   REDIS_URL: z.string().url().optional(),
+  // Comma-separated allowlist for cross-origin requests (e.g. a separate marketing site or mobile app).
+  // The web app itself is served same-origin via nginx and doesn't need this.
+  CORS_ORIGINS: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

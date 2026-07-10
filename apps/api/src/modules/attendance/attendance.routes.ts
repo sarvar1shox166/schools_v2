@@ -191,27 +191,20 @@ export async function attendanceRoutes(app: FastifyInstance) {
         await client.query("BEGIN");
         for (const r of body.records) {
           const existing = await client.query(
-            `SELECT status FROM attendance_records
+            `SELECT status, student_package_id AS "studentPackageId" FROM attendance_records
              WHERE student_id = $1 AND schedule_slot_id = $2 AND date = $3`,
             [r.studentId, body.scheduleSlotId, body.date]
           );
           const oldStatus = existing.rows[0]?.status as string | undefined;
+          const oldPackageId = existing.rows[0]?.studentPackageId as string | null | undefined;
           const oldCounted = oldStatus ? isCounted(oldStatus) : false;
           const newCounted = isCounted(r.status);
 
-          await client.query(
-            `INSERT INTO attendance_records
-               (student_id, schedule_slot_id, date, status, reason, lesson_counted, marked_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (student_id, schedule_slot_id, date)
-             DO UPDATE SET status = EXCLUDED.status, reason = EXCLUDED.reason,
-               lesson_counted = EXCLUDED.lesson_counted, marked_by = EXCLUDED.marked_by`,
-            [r.studentId, body.scheduleSlotId, body.date, r.status, r.reason ?? null, newCounted, userId]
-          );
+          let newPackageId: string | null = oldCounted ? (oldPackageId ?? null) : null;
 
           if (!oldCounted && newCounted) {
-            const consumed = await consumeLesson(client, r.studentId);
-            if (!consumed && tenantId) {
+            newPackageId = await consumeLesson(client, r.studentId);
+            if (!newPackageId && tenantId) {
               // Paket yo'q — adminlarga ogohlantirish
               const studentRes = await client.query(
                 `SELECT u.full_name FROM students s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
@@ -234,8 +227,20 @@ export async function attendanceRoutes(app: FastifyInstance) {
               }
             }
           } else if (oldCounted && !newCounted) {
-            await refundLesson(client, r.studentId);
+            await refundLesson(client, r.studentId, oldPackageId);
+            newPackageId = null;
           }
+
+          await client.query(
+            `INSERT INTO attendance_records
+               (student_id, schedule_slot_id, date, status, reason, lesson_counted, marked_by, student_package_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (student_id, schedule_slot_id, date)
+             DO UPDATE SET status = EXCLUDED.status, reason = EXCLUDED.reason,
+               lesson_counted = EXCLUDED.lesson_counted, marked_by = EXCLUDED.marked_by,
+               student_package_id = EXCLUDED.student_package_id`,
+            [r.studentId, body.scheduleSlotId, body.date, r.status, r.reason ?? null, newCounted, userId, newPackageId]
+          );
         }
         await recordLessonSession(client, body.scheduleSlotId, body.date);
         await client.query("COMMIT");
@@ -348,6 +353,12 @@ export async function attendanceRoutes(app: FastifyInstance) {
       if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return reply.code(400).send({ error: "date is required" });
       const dayOfWeek = dowFromDate(date);
 
+      const holidayRes = await pool.query(
+        `SELECT 1 FROM schedule_exceptions WHERE tenant_id = $1 AND date = $2 AND kind = 'holiday'`,
+        [tenantId, date]
+      );
+      if (holidayRes.rows.length > 0) return { date, dayOfWeek, slots: [] };
+
       const { rows } = await pool.query(
         `SELECT sl.id AS "scheduleSlotId",
                 COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId",
@@ -368,7 +379,15 @@ export async function attendanceRoutes(app: FastifyInstance) {
          LEFT JOIN (SELECT group_id, count(*) AS cnt FROM group_members GROUP BY group_id) gm ON gm.group_id = sl.group_id
          LEFT JOIN teacher_attendance ta ON ta.schedule_slot_id = sl.id AND ta.date = $2
            AND ta.teacher_id = COALESCE(sl.teacher_id, g.teacher_id)
-         WHERE sl.tenant_id = $1 AND sl.day_of_week = $3
+         WHERE sl.tenant_id = $1
+           AND (
+             (sl.specific_date IS NULL AND sl.day_of_week = $3)
+             OR sl.specific_date = $2
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM schedule_exceptions se
+             WHERE se.schedule_slot_id = sl.id AND se.date = $2 AND se.kind IN ('cancelled', 'rescheduled')
+           )
          ORDER BY sl.start_time`,
         [tenantId, date, dayOfWeek]
       );
@@ -426,14 +445,18 @@ export async function attendanceRoutes(app: FastifyInstance) {
     try {
       await client.query("BEGIN");
       const inserted = await client.query(
-        `INSERT INTO attendance_records (student_id, schedule_slot_id, date, status, lesson_counted, marked_by)
-         VALUES ($1, $2, $3, 'p', true, NULL)
+        `INSERT INTO attendance_records (student_id, schedule_slot_id, date, status, lesson_counted, marked_by, student_package_id)
+         VALUES ($1, $2, $3, 'p', true, NULL, $4)
          ON CONFLICT (student_id, schedule_slot_id, date) DO NOTHING
          RETURNING id`,
-        [studentId, body.scheduleSlotId, date]
+        [studentId, body.scheduleSlotId, date, null]
       );
       if (inserted.rows.length > 0) {
         const consumed = await consumeLesson(client, studentId);
+        await client.query(
+          `UPDATE attendance_records SET student_package_id = $1 WHERE id = $2`,
+          [consumed, inserted.rows[0].id]
+        );
         if (!consumed && tenantId) {
           const studentNameRes = await client.query(
             `SELECT u.full_name FROM students s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
@@ -477,12 +500,32 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const teacherId = teacherRes.rows[0]?.id;
     if (!teacherId) return { ok: false };
 
-    await pool.query(
-      `INSERT INTO teacher_attendance (tenant_id, teacher_id, schedule_slot_id, date, status, marked_by)
-       VALUES ($1, $2, $3, $4, 'p', NULL)
-       ON CONFLICT (teacher_id, schedule_slot_id, date) DO NOTHING`,
-      [tenantId, teacherId, body.scheduleSlotId, date]
-    );
+    const slotRes = await pool.query(`SELECT lesson_type FROM schedule_slots WHERE id = $1`, [body.scheduleSlotId]);
+    const lessonType = slotRes.rows[0]?.lesson_type as string | undefined;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO teacher_attendance (tenant_id, teacher_id, schedule_slot_id, date, status, marked_by)
+         VALUES ($1, $2, $3, $4, 'p', NULL)
+         ON CONFLICT (teacher_id, schedule_slot_id, date) DO NOTHING`,
+        [tenantId, teacherId, body.scheduleSlotId, date]
+      );
+      // Individual/diagnostika darslarda o'quvchi bo'yicha davomat yozilmaydi (hali
+      // o'quvchi emas yoki guruhga bog'lanmagan), shuning uchun payroll uchun dars
+      // sessiyasi shu yerda — o'qituvchi darsga kirganda — qayd etiladi. Guruh darslari
+      // esa /attendance orqali (o'quvchilar soniga qarab) hisoblanadi.
+      if (lessonType && lessonType !== "guruh") {
+        await recordLessonSession(client, body.scheduleSlotId, date);
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
 
     return { ok: true };
   });

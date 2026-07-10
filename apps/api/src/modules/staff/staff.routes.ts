@@ -1,8 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
-import { hashPassword } from "../auth/auth.service.js";
+import { hashPassword, generateTempPassword } from "../auth/auth.service.js";
 
 const createSchema = z.object({
   fullName: z.string().min(2),
@@ -36,7 +35,7 @@ export async function staffRoutes(app: FastifyInstance) {
   app.post("/staff", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
     const { tenantId } = request.user;
-    const tempPassword = randomBytes(4).toString("hex");
+    const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
 
     const { rows } = await pool.query(

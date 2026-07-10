@@ -98,3 +98,40 @@ export function localReadStream(key: string) {
 }
 
 export { USE_S3 };
+
+// ── Upload validation (MIME allowlist + per-kind size caps) ───────────────────
+// Defense-in-depth: the global multipart plugin only caps at 2 GB — these enforce
+// tighter, purpose-specific limits per endpoint and reject unexpected file types.
+export const UPLOAD_LIMITS = {
+  image: { maxBytes: 10 * 1024 * 1024, mimePrefixes: ["image/"] },       // 10 MB
+  video: { maxBytes: 1024 * 1024 * 1024, mimePrefixes: ["video/"] },      // 1 GB
+  material: {
+    maxBytes: 200 * 1024 * 1024, // 200 MB
+    mimePrefixes: ["image/", "video/", "audio/"],
+    mimeExact: [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/zip",
+      "text/plain",
+    ],
+  },
+} as const;
+
+export class UploadValidationError extends Error {}
+
+export function assertAllowedMimeType(
+  mimetype: string,
+  kind: keyof typeof UPLOAD_LIMITS
+): void {
+  const rule = UPLOAD_LIMITS[kind];
+  const prefixOk = rule.mimePrefixes.some((p) => mimetype.startsWith(p));
+  const exactOk = "mimeExact" in rule && (rule.mimeExact as readonly string[]).includes(mimetype);
+  if (!prefixOk && !exactOk) {
+    throw new UploadValidationError(`Fayl turi qo'llab-quvvatlanmaydi: ${mimetype}`);
+  }
+}

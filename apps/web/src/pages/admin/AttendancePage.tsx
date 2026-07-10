@@ -430,10 +430,11 @@ function MarkModal({
   const { data: students = [], isLoading: stuLoading } = useStudents();
   const markAtt = useMarkAttendance();
 
-  /* Get slot for the selected group, matching the selected date's day of week */
+  /* Get slot for the selected group, matching the selected date's day of week.
+     No fallback to "any slot for this group" — that would silently mark attendance
+     against the wrong day's slot if the chosen date doesn't actually have a lesson. */
   const selectedDow = (new Date(date + "T00:00:00").getDay() + 6) % 7; // 0=Mon (DB convention)
-  const slot = schedule.find(s => s.groupId === groupId && s.dayOfWeek === selectedDow)
-    ?? schedule.find(s => s.groupId === groupId);
+  const slot = schedule.find(s => s.groupId === groupId && s.dayOfWeek === selectedDow);
 
   /* Filter students to the selected group */
   const groupStudents = students.filter(s => s.groups.some(g => g.id === groupId));
@@ -443,7 +444,7 @@ function MarkModal({
   }
 
   async function handleSave() {
-    if (!slot) { setErr("Bu guruh uchun jadval topilmadi"); return; }
+    if (!slot) { setErr("Bu guruhda tanlangan sanada (hafta kunida) dars yo'q"); return; }
     setErr("");
     try {
       const records = groupStudents.map(s => ({
@@ -511,6 +512,16 @@ function MarkModal({
         </div>
 
         <div style={{ height: 1, background: "var(--border)" }} />
+
+        {!slot && (
+          <div style={{
+            margin: "12px 24px 0", padding: "10px 12px", borderRadius: 8,
+            background: "color-mix(in oklab, var(--danger) 10%, var(--surface))",
+            color: "var(--danger)", fontSize: 13, fontWeight: 600,
+          }}>
+            Bu guruhda tanlangan sanada (hafta kunida) dars yo'q — boshqa sana tanlang
+          </div>
+        )}
 
         {/* Students */}
         <div style={{ padding: "12px 24px", display: "flex", flexDirection: "column", gap: 8 }}>

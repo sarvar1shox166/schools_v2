@@ -41,9 +41,11 @@ export default function TAttendancePage() {
   // Slots for the active group
   const groupSlots = slots.filter((s) => s.groupId === effectiveGroupId);
 
-  // Pick slot matching the selected date's day-of-week (DB: 0=Monday...6=Sunday)
+  // Pick slot matching the selected date's day-of-week (DB: 0=Monday...6=Sunday).
+  // No fallback to "any slot for this group" — that would silently mark attendance
+  // against the wrong day's slot if the chosen date doesn't actually have a lesson.
   const selectedDow = (new Date(date + "T00:00:00").getDay() + 6) % 7;
-  const activeSlot = groupSlots.find((s) => s.dayOfWeek === selectedDow) ?? groupSlots[0] ?? null;
+  const activeSlot = groupSlots.find((s) => s.dayOfWeek === selectedDow) ?? null;
 
   const { data: students = [], isLoading: studLoading } = useGroupStudents(effectiveGroupId);
   const { data: existingAtt = [] } = useAttendance(activeSlot?.id ?? null, date);

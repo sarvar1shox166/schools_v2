@@ -242,13 +242,23 @@ export async function pvpRoutes(app: FastifyInstance) {
   });
 
   /* ── WebSocket PvP ────────────────────────────────────────────────────── */
-  app.get("/ws/pvp", { websocket: true }, async (socket, request) => {
-    const { token } = request.query as { token?: string };
-    if (!token) { socket.close(4001, "Unauthorized"); return; }
-
-    let payload: JwtPayload;
-    try { payload = app.jwt.verify<JwtPayload>(token); }
-    catch { socket.close(4001, "Unauthorized"); return; }
+  // Auth token travels as the first WS message (not a URL query param) so it never
+  // ends up in proxy access logs or browser history.
+  app.get("/ws/pvp", { websocket: true }, async (socket) => {
+    const payload = await new Promise<JwtPayload | null>((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 5000);
+      socket.once("message", (raw) => {
+        clearTimeout(timeout);
+        try {
+          const msg = JSON.parse(raw.toString());
+          if (msg.type !== "auth" || typeof msg.token !== "string") return resolve(null);
+          resolve(app.jwt.verify<JwtPayload>(msg.token));
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    if (!payload) { socket.close(4001, "Unauthorized"); return; }
 
     if (payload.role !== "student") { socket.close(4003, "Forbidden"); return; }
 
