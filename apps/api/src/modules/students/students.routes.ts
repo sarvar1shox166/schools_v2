@@ -72,7 +72,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     return { items: rows, total, page: pg, pageSize: size };
   });
 
-  app.post("/students", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/students", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
     const { tenantId } = request.user;
     const tempPassword = generateTempPassword();
@@ -143,7 +143,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     return rows[0];
   });
 
-  app.post("/students/:id/reset-password", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/students/:id/reset-password", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     const newPassword = generateTempPassword();
@@ -157,7 +157,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     return { tempPassword: newPassword };
   });
 
-  app.patch("/students/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.patch("/students/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const body = updateSchema.parse(request.body);
     const { tenantId } = request.user;
@@ -180,7 +180,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete("/students/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.delete("/students/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     await pool.query(
@@ -190,7 +190,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post("/students/:id/groups/:groupId", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/students/:id/groups/:groupId", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id, groupId } = request.params as { id: string; groupId: string };
     const { tenantId } = request.user;
 
@@ -218,7 +218,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete("/students/:id/groups/:groupId", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.delete("/students/:id/groups/:groupId", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id, groupId } = request.params as { id: string; groupId: string };
     const { tenantId } = request.user;
 

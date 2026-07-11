@@ -3,7 +3,9 @@ import jwt from "@fastify/jwt";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../env.js";
 
-export type Role = "super_admin" | "admin" | "teacher" | "student";
+export type Role =
+  | "super_admin" | "admin" | "teacher" | "student"
+  | "operator" | "accountant" | "moderator" | "assistant_admin";
 
 export interface JwtPayload {
   sub: string;

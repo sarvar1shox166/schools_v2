@@ -586,29 +586,27 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
   const { data, isLoading } = useDaySlots(date);
   const markTeacherAtt = useMarkTeacherAttendance();
   const [statuses, setStatuses] = useState<Record<string, AttStatus>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [err, setErr] = useState("");
 
   const slots = data?.slots ?? [];
   const dayLabel = DOW_LABEL[data?.dayOfWeek ?? todayDow()];
 
-  function setStatus(scheduleSlotId: string, s: AttStatus) {
-    setStatuses(prev => ({ ...prev, [scheduleSlotId]: s }));
-  }
-
-  async function handleSave() {
+  // Har bir ustoz mustaqil, bosilgan zahoti saqlanadi — boshqalarga ta'sir qilmaydi.
+  async function setStatus(s: DaySlot, status: AttStatus) {
+    if (!s.teacherId) return;
     setErr("");
+    setStatuses(prev => ({ ...prev, [s.scheduleSlotId]: status }));
+    setSavingId(s.scheduleSlotId);
     try {
-      const records = slots
-        .filter((s) => s.teacherId)
-        .map((s) => ({
-          scheduleSlotId: s.scheduleSlotId,
-          teacherId: s.teacherId!,
-          status: LOCAL_TO_API[statuses[s.scheduleSlotId] ?? (s.status ? API_TO_LOCAL[s.status] : "keldi")],
-        }));
-      await markTeacherAtt.mutateAsync({ date, records });
-      onClose();
+      await markTeacherAtt.mutateAsync({
+        date,
+        records: [{ scheduleSlotId: s.scheduleSlotId, teacherId: s.teacherId, status: LOCAL_TO_API[status] }],
+      });
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -648,13 +646,15 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
             <div style={{ fontSize: 13, color: "var(--text-faint)", padding: 12 }}>Bu kunga rejalashtirilgan dars topilmadi</div>
           )}
           {slots.map(s => {
-            const defaultLocal = s.status ? API_TO_LOCAL[s.status] : "keldi";
-            const cur = statuses[s.scheduleSlotId] ?? defaultLocal;
+            // Belgilanmagan bo'lsa — hech qaysi tugma aktiv ko'rinmaydi (majburiy tanlov yo'q).
+            const cur = statuses[s.scheduleSlotId] ?? (s.status ? API_TO_LOCAL[s.status] : undefined);
+            const isSaving = savingId === s.scheduleSlotId;
             return (
               <div key={s.scheduleSlotId} style={{
                 display: "flex", alignItems: "center", gap: 12,
                 padding: "12px 14px", borderRadius: 12,
                 border: "1px solid var(--border)", background: "var(--surface-2)",
+                opacity: isSaving ? 0.6 : 1,
               }}>
                 <div style={{ borderRadius: 10, flexShrink: 0, display: "inline-flex" }}>
                   <Avatar name={s.teacherName ?? "?"} size="sm" />
@@ -666,9 +666,9 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <AttBtn label="Keldi"   icon="check" status="keldi"   active={cur === "keldi"}   onClick={() => setStatus(s.scheduleSlotId, "keldi")}   />
-                  <AttBtn label="Kech"    icon="clock" status="kech"    active={cur === "kech"}    onClick={() => setStatus(s.scheduleSlotId, "kech")}    />
-                  <AttBtn label="Kelmadi" icon="x"     status="kelmadi" active={cur === "kelmadi"} onClick={() => setStatus(s.scheduleSlotId, "kelmadi")} />
+                  <AttBtn label="Keldi"   icon="check" status="keldi"   active={cur === "keldi"}   onClick={() => setStatus(s, "keldi")}   />
+                  <AttBtn label="Kech"    icon="clock" status="kech"    active={cur === "kech"}    onClick={() => setStatus(s, "kech")}    />
+                  <AttBtn label="Kelmadi" icon="x"     status="kelmadi" active={cur === "kelmadi"} onClick={() => setStatus(s, "kelmadi")} />
                 </div>
               </div>
             );
@@ -681,19 +681,14 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
           <div style={{ padding: "12px 24px 0", color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>{err}</div>
         )}
 
+        <div style={{ padding: "12px 24px", fontSize: 12, color: "var(--text-faint)" }}>
+          Har bir ustoz mustaqil — bosgan zahotingiz saqlanadi, boshqalariga ta'sir qilmaydi.
+        </div>
+
         {/* Buttons */}
-        <div style={{ display: "flex", gap: 12, padding: "18px 24px" }}>
-          <button className="btn" style={{ flex: 1, justifyContent: "center", fontWeight: 700 }} onClick={onClose}>
-            Bekor
-          </button>
-          <button
-            className="btn primary"
-            style={{ flex: 2, justifyContent: "center" }}
-            onClick={handleSave}
-            disabled={markTeacherAtt.isPending || slots.length === 0}
-          >
-            <Icon name="check" size={15} />
-            {markTeacherAtt.isPending ? "Saqlanmoqda..." : "Saqlash"}
+        <div style={{ display: "flex", gap: 12, padding: "0 24px 18px" }}>
+          <button className="btn primary" style={{ flex: 1, justifyContent: "center", fontWeight: 700 }} onClick={onClose}>
+            Yopish
           </button>
         </div>
       </div>

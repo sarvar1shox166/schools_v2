@@ -126,7 +126,7 @@ export async function gamificationRoutes(app: FastifyInstance) {
     return { ...statsRes.rows[0], attempts: recentRes.rows };
   });
 
-  app.post("/puzzles", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.post("/puzzles", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const body = createPuzzleSchema.parse(request.body);
 
     // Duplicate FEN check (compare first 4 FEN fields — position, turn, castling, ep)

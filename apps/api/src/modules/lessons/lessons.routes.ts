@@ -40,7 +40,7 @@ export async function lessonsRoutes(app: FastifyInstance) {
   // List lessons for a group (or all for admin)
   app.get(
     "/lessons",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] },
     async (request) => {
       const { tenantId, role, sub } = request.user;
       const { groupId, from, to } = request.query as { groupId?: string; from?: string; to?: string };
@@ -94,7 +94,7 @@ export async function lessonsRoutes(app: FastifyInstance) {
   // Create a lesson
   app.post(
     "/lessons",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] },
     async (request, reply) => {
       const { tenantId, role, sub } = request.user;
       const body = createSchema.parse(request.body);
@@ -125,7 +125,7 @@ export async function lessonsRoutes(app: FastifyInstance) {
   // Get lesson detail with attendance
   app.get(
     "/lessons/:id",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const { tenantId } = request.user;
@@ -162,7 +162,7 @@ export async function lessonsRoutes(app: FastifyInstance) {
   // Update lesson
   app.patch(
     "/lessons/:id",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] },
     async (request) => {
       const { id } = request.params as { id: string };
       const body = updateSchema.parse(request.body);
@@ -235,7 +235,7 @@ export async function lessonsRoutes(app: FastifyInstance) {
   });
 
   // Admin-only: student reviews for a given teacher
-  app.get("/teachers/:id/student-reviews", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.get("/teachers/:id/student-reviews", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const { rows } = await pool.query(
       `SELECT r.id, r.rating, r.comment, r.created_at AS "createdAt",

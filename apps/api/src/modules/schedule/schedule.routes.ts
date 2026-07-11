@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
-import { dayOfWeekOf, todayStr } from "../../lib/schedule-dates.js";
+import { dayOfWeekOf, todayStr, toDateStr } from "../../lib/schedule-dates.js";
 
 const createSchema = z.object({
   groupId: z.string().uuid().optional(),
@@ -178,10 +178,10 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const excepted = new Set(
       exceptionsRes.rows
         .filter((e) => e.kind === "holiday" || e.scheduleSlotId)
-        .map((e) => `${e.scheduleSlotId ?? "holiday"}:${new Date(e.date).toISOString().slice(0, 10)}`)
+        .map((e) => `${e.scheduleSlotId ?? "holiday"}:${toDateStr(new Date(e.date))}`)
     );
     const holidayDates = new Set(
-      exceptionsRes.rows.filter((e) => e.kind === "holiday").map((e) => new Date(e.date).toISOString().slice(0, 10))
+      exceptionsRes.rows.filter((e) => e.kind === "holiday").map((e) => toDateStr(new Date(e.date)))
     );
     function isExcepted(slotId: string, dateStr: string): boolean {
       return holidayDates.has(dateStr) || excepted.has(`${slotId}:${dateStr}`);
@@ -195,7 +195,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
       if (row.specificDate) {
         // Bir martalik dars — faqat shu sanada, hech qachon boshqa haftaga surilmaydi.
-        const dateStr = new Date(row.specificDate).toISOString().slice(0, 10);
+        const dateStr = toDateStr(new Date(row.specificDate));
         if (isExcepted(row.id, dateStr)) continue;
         const candidate = new Date(dateStr + "T00:00:00");
         candidate.setHours(h, m, 0, 0);
@@ -218,7 +218,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
       // Dars tugagan yoki shu kunga istisno (bekor/bayram) qo'yilgan bo'lsa — keyingi
       // haftaga (yoki undan keyingiga) suriladi, cheksiz aylanib qolmaslik uchun 8 hafta bilan cheklaymiz.
       let guard = 0;
-      while (guard < 8 && (candidateEnd < now || isExcepted(row.id, candidate.toISOString().slice(0, 10)))) {
+      while (guard < 8 && (candidateEnd < now || isExcepted(row.id, toDateStr(candidate)))) {
         candidate.setDate(candidate.getDate() + 7);
         candidateEnd = new Date(candidate.getTime() + durationMin * 60000);
         guard++;
@@ -293,7 +293,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/schedule", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/schedule", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
     const { tenantId } = request.user;
     const isOnline = body.isOnline ?? false;
@@ -328,7 +328,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     return reply.code(201).send({ id });
   });
 
-  app.patch("/schedule/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.patch("/schedule/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = updateSchema.parse(request.body);
     const { tenantId } = request.user;
@@ -373,7 +373,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete("/schedule/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.delete("/schedule/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     const { rowCount } = await pool.query(`DELETE FROM schedule_slots WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
@@ -383,7 +383,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   // ── Bitta darsni bekor qilish / ko'chirish (haftalik shablonni o'zgartirmasdan) ──
 
-  app.get("/schedule/exceptions", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request) => {
+  app.get("/schedule/exceptions", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request) => {
     const { tenantId } = request.user;
     const { from, to } = request.query as { from?: string; to?: string };
     const params: unknown[] = [tenantId];
@@ -403,7 +403,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     return rows;
   });
 
-  app.post("/schedule/:id/exceptions", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.post("/schedule/:id/exceptions", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = exceptionSchema.parse(request.body);
     const { tenantId, sub } = request.user;
@@ -432,7 +432,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     return reply.code(201).send({ id: rows[0].id });
   });
 
-  app.delete("/schedule/exceptions/:exceptionId", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.delete("/schedule/exceptions/:exceptionId", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { exceptionId } = request.params as { exceptionId: string };
     const { tenantId } = request.user;
     const { rowCount } = await pool.query(
@@ -445,7 +445,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   // ── Butun maktab uchun bayram/dam olish kuni ──
 
-  app.post("/schedule/holidays", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/schedule/holidays", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const body = holidaySchema.parse(request.body);
     const { tenantId, sub } = request.user;
     const { rows } = await pool.query(
@@ -458,7 +458,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     return reply.code(201).send({ id: rows[0].id });
   });
 
-  app.delete("/schedule/holidays/:holidayId", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.delete("/schedule/holidays/:holidayId", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { holidayId } = request.params as { holidayId: string };
     const { tenantId } = request.user;
     const { rowCount } = await pool.query(
@@ -542,7 +542,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
       }
       for (let cur = new Date(from + "T00:00:00"); cur <= new Date(to + "T00:00:00"); cur.setDate(cur.getDate() + 1)) {
         if (dayOfWeekOf(cur) !== slot.dayOfWeek) continue;
-        const dateStr = cur.toISOString().slice(0, 10);
+        const dateStr = toDateStr(cur);
         const exc = exceptionsBySlotDate.get(`${slot.id}:${dateStr}`);
         // Bekor qilingan bo'lsa ham ro'yxatda qoladi (chizib ko'rsatish uchun) — aks holda
         // admin uni bosib qayta tiklay olmay qoladi. Ko'chirilgan bo'lsa asl sanada

@@ -33,7 +33,7 @@ export async function teachersRoutes(app: FastifyInstance) {
     return rows.map((row) => ({ ...row, rating: row.rating ? Number(row.rating) : null }));
   });
 
-  app.post("/teachers", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/teachers", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
     const { tenantId } = request.user;
     const tempPassword = generateTempPassword();
@@ -65,7 +65,7 @@ export async function teachersRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch("/teachers/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.patch("/teachers/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const body = updateSchema.parse(request.body);
     const { tenantId } = request.user;
@@ -87,7 +87,7 @@ export async function teachersRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete("/teachers/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.delete("/teachers/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     await pool.query(
@@ -97,7 +97,7 @@ export async function teachersRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post("/teachers/:id/reset-password", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/teachers/:id/reset-password", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     const newPassword = generateTempPassword();
@@ -112,7 +112,7 @@ export async function teachersRoutes(app: FastifyInstance) {
   });
 
   // Teacher rankings: real attendance + review data
-  app.get("/teachers/rankings", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.get("/teachers/rankings", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT t.id, u.full_name AS "fullName", t.spec,
@@ -140,7 +140,7 @@ export async function teachersRoutes(app: FastifyInstance) {
   });
 
   // Get reviews for all teachers (admin view)
-  app.get("/teachers/reviews", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.get("/teachers/reviews", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT tr.id, tr.rating, tr.comment, tr.period, tr.created_at AS "createdAt",
@@ -161,7 +161,7 @@ export async function teachersRoutes(app: FastifyInstance) {
   });
 
   // Add a review (admin only)
-  app.post("/teachers/:id/reviews", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/teachers/:id/reviews", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId, sub } = request.user;
     const body = z.object({

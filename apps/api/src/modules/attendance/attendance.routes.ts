@@ -45,6 +45,15 @@ function dowFromDate(date: string): number {
   return (new Date(date + "T00:00:00").getDay() + 6) % 7;
 }
 
+/** Moderatorga biriktirilgan o'qituvchilar — moderator faqat shularning davomatini ko'radi/to'g'irlaydi. */
+async function assignedTeacherIds(tenantId: string, moderatorUserId: string): Promise<string[]> {
+  const { rows } = await pool.query(
+    `SELECT teacher_id AS "teacherId" FROM moderator_teachers WHERE tenant_id = $1 AND moderator_user_id = $2`,
+    [tenantId, moderatorUserId]
+  );
+  return rows.map((r) => r.teacherId as string);
+}
+
 // 'ae' = sababli yo'qlik. Dars hisoblanmaydi.
 // 'p', 'a', 'l' = dars hisoblanadi (paketdan ayiriladi).
 const isCounted = (s: string) => s !== "ae";
@@ -65,19 +74,30 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
   app.get(
     "/attendance/stats",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] },
     async (request) => {
-      const { tenantId } = request.user;
+      const { tenantId, role, sub } = request.user;
       const { date } = request.query as { date?: string };
       const targetDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date().toISOString().slice(0, 10);
+
+      const params: unknown[] = [tenantId, targetDate];
+      let moderatorFilter = "";
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        moderatorFilter = `AND COALESCE(sl.teacher_id, g.teacher_id) = ANY($3::uuid[])`;
+        params.push(ids);
+      }
 
       const { rows } = await pool.query(
         `SELECT ar.status, COUNT(*)::int AS count
          FROM attendance_records ar
          JOIN students s ON s.id = ar.student_id
+         JOIN schedule_slots sl ON sl.id = ar.schedule_slot_id
+         LEFT JOIN groups g ON g.id = sl.group_id
          WHERE s.tenant_id = $1 AND ar.date = $2
+         ${moderatorFilter}
          GROUP BY ar.status`,
-        [tenantId, targetDate]
+        params
       );
 
       const counts = { p: 0, a: 0, l: 0, ae: 0 };
@@ -99,15 +119,19 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
   app.get(
     "/attendance/history",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] },
     async (request, reply) => {
-      const { tenantId } = request.user;
+      const { tenantId, role, sub } = request.user;
       const { groupId, days } = request.query as { groupId?: string; days?: string };
       if (!groupId) return reply.code(400).send({ error: "groupId is required" });
       const numDays = Math.min(Math.max(Number(days) || 8, 1), 31);
 
-      const groupRes = await pool.query(`SELECT id FROM groups WHERE id = $1 AND tenant_id = $2`, [groupId, tenantId]);
+      const groupRes = await pool.query(`SELECT id, teacher_id AS "teacherId" FROM groups WHERE id = $1 AND tenant_id = $2`, [groupId, tenantId]);
       if (groupRes.rows.length === 0) return reply.code(404).send({ error: "Group not found" });
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        if (!ids.includes(groupRes.rows[0].teacherId)) return reply.code(403).send({ error: "Forbidden" });
+      }
 
       const studentsRes = await pool.query(
         `SELECT s.id, u.full_name AS "fullName"
@@ -180,11 +204,24 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
   app.post(
     "/attendance",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
-    async (request) => {
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] },
+    async (request, reply) => {
       const body = markSchema.parse(request.body);
       const userId = request.user.sub;
-      const { tenantId } = request.user;
+      const { tenantId, role } = request.user;
+
+      if (role === "moderator") {
+        const slotRes = await pool.query(
+          `SELECT COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId"
+           FROM schedule_slots sl LEFT JOIN groups g ON g.id = sl.group_id
+           WHERE sl.id = $1 AND sl.tenant_id = $2`,
+          [body.scheduleSlotId, tenantId]
+        );
+        const ids = await assignedTeacherIds(tenantId!, userId);
+        if (!slotRes.rows[0] || !ids.includes(slotRes.rows[0].teacherId)) {
+          return reply.code(403).send({ error: "Forbidden" });
+        }
+      }
 
       const client = await pool.connect();
       try {
@@ -259,18 +296,27 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
   app.get(
     "/attendance/teacher/stats",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] },
     async (request) => {
-      const { tenantId } = request.user;
+      const { tenantId, role, sub } = request.user;
       const { date } = request.query as { date?: string };
       const targetDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date().toISOString().slice(0, 10);
+
+      const params: unknown[] = [tenantId, targetDate];
+      let moderatorFilter = "";
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        moderatorFilter = `AND teacher_id = ANY($3::uuid[])`;
+        params.push(ids);
+      }
 
       const { rows } = await pool.query(
         `SELECT status, COUNT(*)::int AS count
          FROM teacher_attendance
          WHERE tenant_id = $1 AND date = $2
+         ${moderatorFilter}
          GROUP BY status`,
-        [tenantId, targetDate]
+        params
       );
 
       const counts = { p: 0, a: 0, l: 0 };
@@ -291,19 +337,27 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
   app.get(
     "/attendance/teacher/history",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] },
     async (request) => {
-      const { tenantId } = request.user;
+      const { tenantId, role, sub } = request.user;
       const { days } = request.query as { days?: string };
       const numDays = Math.min(Math.max(Number(days) || 8, 1), 31);
+
+      const teacherParams: unknown[] = [tenantId];
+      let teacherFilter = "";
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        teacherFilter = `AND t.id = ANY($2::uuid[])`;
+        teacherParams.push(ids);
+      }
 
       const teachersRes = await pool.query(
         `SELECT t.id, u.full_name AS "fullName", t.title, t.spec
          FROM teachers t
          JOIN users u ON u.id = t.user_id
-         WHERE t.tenant_id = $1
+         WHERE t.tenant_id = $1 ${teacherFilter}
          ORDER BY u.full_name`,
-        [tenantId]
+        teacherParams
       );
 
       const dates: string[] = [];
@@ -346,9 +400,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
   app.get(
     "/attendance/teacher/day-slots",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] },
     async (request, reply) => {
-      const { tenantId } = request.user;
+      const { tenantId, role, sub } = request.user;
       const { date } = request.query as { date?: string };
       if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return reply.code(400).send({ error: "date is required" });
       const dayOfWeek = dowFromDate(date);
@@ -392,18 +446,29 @@ export async function attendanceRoutes(app: FastifyInstance) {
         [tenantId, date, dayOfWeek]
       );
 
-      const slots = rows.filter((r) => r.teacherId != null);
+      let slots = rows.filter((r) => r.teacherId != null);
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        slots = slots.filter((r) => ids.includes(r.teacherId));
+      }
       return { date, dayOfWeek, slots };
     }
   );
 
   app.post(
     "/attendance/teacher",
-    { onRequest: [app.requireRole("super_admin", "admin", "teacher")] },
-    async (request) => {
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] },
+    async (request, reply) => {
       const body = teacherMarkSchema.parse(request.body);
-      const { tenantId } = request.user;
+      const { tenantId, role } = request.user;
       const userId = request.user.sub;
+
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, userId);
+        if (body.records.some((r) => !ids.includes(r.teacherId))) {
+          return reply.code(403).send({ error: "Forbidden" });
+        }
+      }
 
       const client = await pool.connect();
       try {

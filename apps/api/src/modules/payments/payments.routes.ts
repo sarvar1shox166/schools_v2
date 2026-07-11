@@ -57,7 +57,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return rows;
   });
 
-  app.post("/packages", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/packages", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const body = packageCreateSchema.parse(request.body);
     const { tenantId } = request.user;
     const { rows } = await pool.query(
@@ -73,7 +73,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return reply.code(201).send({ id: rows[0].id });
   });
 
-  app.patch("/packages/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.patch("/packages/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const body = packageUpdateSchema.parse(request.body);
     const { tenantId } = request.user;
@@ -100,7 +100,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete("/packages/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.delete("/packages/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     try {
@@ -152,7 +152,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return rows;
   });
 
-  app.post("/student-packages", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/student-packages", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const body = assignSchema.parse(request.body);
     const { tenantId } = request.user;
 
@@ -196,7 +196,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
   // ---- Stats ----
 
-  app.get("/payments/stats", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.get("/payments/stats", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { tenantId } = request.user;
 
     const receivedRes = await pool.query(
@@ -236,7 +236,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
   // ---- Transactions ----
 
-  app.get("/transactions", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.get("/transactions", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { tenantId } = request.user;
     const { studentId } = request.query as { studentId?: string };
     const params: unknown[] = [tenantId];

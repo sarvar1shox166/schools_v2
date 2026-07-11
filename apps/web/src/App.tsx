@@ -141,29 +141,42 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
-      <Route element={<RequireAuth roles={["super_admin", "admin"]} />}>
+      <Route element={<RequireAuth roles={["super_admin", "admin", "assistant_admin", "operator", "moderator"]} />}>
         <Route element={<AppShell title="Admin paneli" nav={ADMIN_NAV} />}>
+          {/* Dashboard, Jadval, Davomat — super_admin/admin/assistant_admin/operator/moderator */}
           <Route path="/admin"                element={<AdminDashboard />} />
-          <Route path="/admin/teachers"       element={<TeachersPage />} />
-          <Route path="/admin/students"         element={<StudentsPage />} />
-          <Route path="/admin/students/new"     element={<NewStudentPage />} />
-          <Route path="/admin/students/:id"   element={<StudentDetailPage />} />
-          <Route path="/admin/groups"         element={<GroupsPage />} />
           <Route path="/admin/schedule"       element={<SchedulePage />} />
           <Route path="/admin/attendance"     element={<AttendancePage />} />
-          <Route path="/admin/packages"       element={<PackagesPage />} />
-          <Route path="/admin/payments"       element={<PaymentsPage />} />
-          <Route path="/admin/income"         element={<IncomeReportPage />} />
-          <Route path="/admin/applications"   element={<ApplicationsPage />} />
-          <Route path="/admin/teacher-rating"           element={<TeacherRatingPage />} />
-          <Route path="/admin/video-courses"           element={<VideoCoursesPage />} />
-          <Route path="/admin/video-courses/:courseId" element={<VideoCourseDetailPage />} />
-          <Route path="/admin/staff"                   element={<XodimlarPage />} />
-          <Route path="/admin/staff/new"               element={<NewStaffPage />} />
-          <Route path="/admin/broadcast"               element={<BroadcastPage />} />
-          <Route path="/admin/notifications"  element={<NotificationsPage />} />
-          <Route path="/admin/reports"        element={<ReportsPage />} />
-          <Route path="/admin/settings"       element={<SettingsPage />} />
+
+          {/* Arizalar, O'quvchilar — + operator (front-ofis/CRM) */}
+          <Route element={<RequireAuth roles={["super_admin", "admin", "assistant_admin", "operator"]} />}>
+            <Route path="/admin/applications"   element={<ApplicationsPage />} />
+            <Route path="/admin/students"       element={<StudentsPage />} />
+            <Route path="/admin/students/new"   element={<NewStudentPage />} />
+            <Route path="/admin/students/:id"   element={<StudentDetailPage />} />
+          </Route>
+
+          {/* Qolgan admin funksiyalari — faqat super_admin/admin/assistant_admin */}
+          <Route element={<RequireAuth roles={["super_admin", "admin", "assistant_admin"]} />}>
+            <Route path="/admin/teachers"       element={<TeachersPage />} />
+            <Route path="/admin/groups"         element={<GroupsPage />} />
+            <Route path="/admin/packages"       element={<PackagesPage />} />
+            <Route path="/admin/payments"       element={<PaymentsPage />} />
+            <Route path="/admin/income"         element={<IncomeReportPage />} />
+            <Route path="/admin/teacher-rating"           element={<TeacherRatingPage />} />
+            <Route path="/admin/video-courses"           element={<VideoCoursesPage />} />
+            <Route path="/admin/video-courses/:courseId" element={<VideoCourseDetailPage />} />
+            <Route path="/admin/staff"                   element={<XodimlarPage />} />
+            <Route path="/admin/staff/new"               element={<NewStaffPage />} />
+            <Route path="/admin/broadcast"               element={<BroadcastPage />} />
+            <Route path="/admin/notifications"  element={<NotificationsPage />} />
+            <Route path="/admin/reports"        element={<ReportsPage />} />
+          </Route>
+
+          {/* Sozlamalar — faqat super_admin/admin */}
+          <Route element={<RequireAuth roles={["super_admin", "admin"]} />}>
+            <Route path="/admin/settings"       element={<SettingsPage />} />
+          </Route>
         </Route>
       </Route>
 

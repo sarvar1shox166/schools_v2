@@ -1,24 +1,32 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Icon } from "@chess-school/ui";
-import { useCreateStaff } from "../../lib/queries.js";
-
-type StaffRole = "operator" | "accountant" | "admin";
+import { useCreateStaff, useAssignModeratorTeachers, useTeachers, type StaffRole } from "../../lib/queries.js";
 
 export default function NewStaffPage() {
   const navigate = useNavigate();
   const createStaff = useCreateStaff();
+  const assignTeachers = useAssignModeratorTeachers();
+  const { data: teachers = [] } = useTeachers();
 
   const [form, setForm] = useState({ fullName: "", phone: "", role: "operator" as StaffRole });
+  const [moderatorTeacherIds, setModeratorTeacherIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ tempPassword: string } | null>(null);
 
   const canSubmit = form.fullName.trim().length > 0 && form.phone.trim().length > 0;
 
+  function toggleTeacher(id: string) {
+    setModeratorTeacherIds((prev) => prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]);
+  }
+
   async function handleSubmit() {
     setError(null);
     try {
       const res = await createStaff.mutateAsync(form);
+      if (form.role === "moderator" && moderatorTeacherIds.length > 0) {
+        await assignTeachers.mutateAsync({ id: res.id, teacherIds: moderatorTeacherIds });
+      }
       setResult(res);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -80,11 +88,38 @@ export default function NewStaffPage() {
           <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>ROL</label>
           <select className="input" style={{ width: "100%", boxSizing: "border-box" }}
             value={form.role} onChange={e => setForm({ ...form, role: e.target.value as StaffRole })}>
-            <option value="operator">Operator — Arizalar va davomat</option>
+            <option value="operator">Operator — Arizalar, o'quvchilar, davomat</option>
+            <option value="moderator">Moderator — Darslar/davomat nazorati</option>
             <option value="accountant">Buxgalter — Moliya bo'limi</option>
+            <option value="assistant_admin">Yordamchi admin — Sozlamalardan tashqari hammasi</option>
             <option value="admin">Administrator — To'liq huquq</option>
           </select>
         </div>
+
+        {form.role === "moderator" && (
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>
+              BIRIKTIRILGAN O'QITUVCHILAR
+            </label>
+            <div style={{
+              border: "1px solid var(--border)", borderRadius: 10, padding: 10,
+              display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto",
+            }}>
+              {teachers.length === 0 && (
+                <div style={{ fontSize: 13, color: "var(--text-faint)", padding: 4 }}>O'qituvchilar topilmadi</div>
+              )}
+              {teachers.map((t) => (
+                <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                  <input type="checkbox" checked={moderatorTeacherIds.includes(t.id)} onChange={() => toggleTeacher(t.id)} />
+                  {t.fullName}
+                </label>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
+              Moderator faqat shu o'qituvchilarning dars davomatini ko'radi va to'g'irlaydi
+            </div>
+          </div>
+        )}
 
         {error && <div style={{ color: "#ef4444", fontSize: 13, fontWeight: 600 }}>{error}</div>}
 

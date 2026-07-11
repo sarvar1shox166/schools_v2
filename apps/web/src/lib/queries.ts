@@ -289,7 +289,10 @@ export function useCreateScheduleSlot() {
   return useMutation({
     mutationFn: async (payload: CreateSlotPayload) =>
       (await api.post("/schedule", payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
+    },
   });
 }
 
@@ -298,7 +301,10 @@ export function useUpdateScheduleSlot() {
   return useMutation({
     mutationFn: async ({ id, ...payload }: { id: string } & Partial<CreateSlotPayload>) =>
       (await api.patch(`/schedule/${id}`, payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
+    },
   });
 }
 
@@ -306,7 +312,10 @@ export function useDeleteScheduleSlot() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => (await api.delete(`/schedule/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
+    },
   });
 }
 
@@ -340,6 +349,7 @@ export function useCreateScheduleException() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scheduleExceptions"] });
       qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+      qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
     },
   });
 }
@@ -351,6 +361,7 @@ export function useDeleteScheduleException() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scheduleExceptions"] });
       qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+      qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
     },
   });
 }
@@ -363,6 +374,7 @@ export function useCreateHoliday() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scheduleExceptions"] });
       qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+      qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
     },
   });
 }
@@ -374,6 +386,7 @@ export function useDeleteHoliday() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scheduleExceptions"] });
       qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+      qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
     },
   });
 }
@@ -1664,15 +1677,6 @@ export interface SystemSettings {
   language: string; currency: string; timezone: string; yearStart: string;
 }
 
-export interface PricingTier {
-  id: string;
-  name: string;
-  color: string;
-  groupMonthly: number;
-  individualPerLesson: number;
-  sortOrder: number;
-}
-
 export interface SalarySetting {
   teacherId: string;
   teacherName: string;
@@ -1712,39 +1716,6 @@ export function useUpdateSystemSettings() {
   return useMutation({
     mutationFn: async (body: Partial<SystemSettings>) => (await api.put("/settings/system", body)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "system"] }),
-  });
-}
-
-export function usePricingTiers() {
-  return useQuery({
-    queryKey: ["settings", "pricing"],
-    queryFn: async () => (await api.get<PricingTier[]>("/settings/pricing")).data,
-  });
-}
-
-export function useCreatePricingTier() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (body: Omit<PricingTier, "id">) =>
-      (await api.post<{ id: string }>("/settings/pricing", body)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "pricing"] }),
-  });
-}
-
-export function useUpdatePricingTier() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, ...body }: Partial<PricingTier> & { id: string }) =>
-      (await api.patch(`/settings/pricing/${id}`, body)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "pricing"] }),
-  });
-}
-
-export function useDeletePricingTier() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/settings/pricing/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "pricing"] }),
   });
 }
 
@@ -1831,12 +1802,14 @@ export function useResetTeacherPassword() {
 }
 
 // ─── Staff hooks ──────────────────────────────────────────────────────────────
+export type StaffRole = "operator" | "accountant" | "moderator" | "assistant_admin" | "admin";
+
 export interface StaffMember {
   id: string;
   fullName: string;
   phone: string;
   login: string;
-  role: "operator" | "accountant" | "admin";
+  role: StaffRole;
   isActive: boolean;
   createdAt: string;
 }
@@ -1851,7 +1824,7 @@ export function useStaff() {
 export function useCreateStaff() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { fullName: string; phone: string; role: "operator" | "accountant" | "admin" }) =>
+    mutationFn: async (body: { fullName: string; phone: string; role: StaffRole }) =>
       (await api.post("/staff", body)).data as { id: string; tempPassword: string },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
   });
@@ -1871,5 +1844,22 @@ export function useDeleteStaff() {
   return useMutation({
     mutationFn: async (id: string) => (await api.delete(`/staff/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
+export function useModeratorTeachers(staffId: string | null) {
+  return useQuery<string[]>({
+    queryKey: ["staff", staffId, "teachers"],
+    queryFn: async () => (await api.get(`/staff/${staffId}/teachers`)).data,
+    enabled: !!staffId,
+  });
+}
+
+export function useAssignModeratorTeachers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, teacherIds }: { id: string; teacherIds: string[] }) =>
+      (await api.put(`/staff/${id}/teachers`, { teacherIds })).data,
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ["staff", vars.id, "teachers"] }),
   });
 }

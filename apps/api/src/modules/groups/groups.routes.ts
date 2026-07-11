@@ -34,7 +34,7 @@ export async function groupsRoutes(app: FastifyInstance) {
     return rows;
   });
 
-  app.post("/groups", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/groups", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
     const { tenantId } = request.user;
     const { rows } = await pool.query(
@@ -45,7 +45,7 @@ export async function groupsRoutes(app: FastifyInstance) {
     return reply.code(201).send({ id: rows[0].id });
   });
 
-  app.patch("/groups/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.patch("/groups/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const body = updateSchema.parse(request.body);
     const { tenantId } = request.user;
@@ -60,7 +60,7 @@ export async function groupsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete("/groups/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.delete("/groups/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     await pool.query(`DELETE FROM groups WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);

@@ -38,7 +38,7 @@ const DIAGNOSTIC_DURATION_MINUTES = 60;
 export async function applicationsRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
-  app.get("/applications", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.get("/applications", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request) => {
     const { tenantId } = request.user;
     const { status } = request.query as { status?: string };
     const params: unknown[] = [tenantId];
@@ -71,7 +71,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
     return rows;
   });
 
-  app.get("/applications/stats", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.get("/applications/stats", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT status, COUNT(*)::int AS count FROM applications WHERE tenant_id = $1 GROUP BY status`,
@@ -82,7 +82,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
     return base;
   });
 
-  app.post("/applications", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/applications", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
     const { tenantId } = request.user;
 
@@ -145,7 +145,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch("/applications/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.patch("/applications/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = updateSchema.parse(request.body);
     const { tenantId } = request.user;
@@ -244,7 +244,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
   });
 
   // Convert application to student
-  app.post("/applications/:id/convert", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/applications/:id/convert", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
 
@@ -289,7 +289,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/applications/:id", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.delete("/applications/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     const cur = await pool.query(

@@ -81,7 +81,7 @@ export async function videosRoutes(app: FastifyInstance) {
     return rows;
   });
 
-  app.post("/videos", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.post("/videos", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const body = createVideoSchema.parse(request.body);
     const { tenantId, sub, role } = request.user;
     if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
@@ -99,7 +99,7 @@ export async function videosRoutes(app: FastifyInstance) {
   });
 
   // Upload video file → returns { url }
-  app.post("/videos/upload", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.post("/videos/upload", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { tenantId } = request.user;
     if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
     const data = await request.file({ limits: { fileSize: UPLOAD_LIMITS.video.maxBytes } });
@@ -125,7 +125,7 @@ export async function videosRoutes(app: FastifyInstance) {
   });
 
   // Upload thumbnail image → returns { url }
-  app.post("/upload/image", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.post("/upload/image", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { tenantId } = request.user;
     if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
     const data = await request.file({ limits: { fileSize: UPLOAD_LIMITS.image.maxBytes } });
@@ -150,7 +150,7 @@ export async function videosRoutes(app: FastifyInstance) {
     return { url };
   });
 
-  app.patch("/videos/:id", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.patch("/videos/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = updateVideoSchema.parse(request.body);
     const { tenantId } = request.user;
@@ -175,7 +175,7 @@ export async function videosRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete("/videos/:id", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.delete("/videos/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     const { rowCount } = await pool.query(
@@ -239,7 +239,7 @@ export async function videosRoutes(app: FastifyInstance) {
     return rows;
   });
 
-  app.post("/videos/:id/quiz", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.post("/videos/:id/quiz", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = quizQuestionSchema.parse(request.body);
     const { rows } = await pool.query(
@@ -250,7 +250,7 @@ export async function videosRoutes(app: FastifyInstance) {
     return reply.code(201).send({ id: rows[0].id });
   });
 
-  app.delete("/videos/quiz/:questionId", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request, reply) => {
+  app.delete("/videos/quiz/:questionId", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { questionId } = request.params as { questionId: string };
     const { rowCount } = await pool.query(`DELETE FROM video_quiz_questions WHERE id = $1`, [questionId]);
     if (!rowCount) return reply.code(404).send({ error: "Not found" });

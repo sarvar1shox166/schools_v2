@@ -2,14 +2,13 @@ import { useState, useRef, useEffect } from "react";
 import { Card, Icon } from "@chess-school/ui";
 import {
   useBrandSettings, useUpdateBrandSettings,
-  usePricingTiers, useCreatePricingTier, useUpdatePricingTier, useDeletePricingTier,
   useSystemSettings, useUpdateSystemSettings,
   useSalarySettings, useUpdateSalarySetting,
-  type PricingTier, type SalarySetting, type SystemSettings,
+  type SalarySetting, type SystemSettings,
 } from "../../lib/queries.js";
 
 /* ─── types ──────────────────────────────────────────────── */
-type Tab = "brend" | "narxlar" | "rollar" | "umumiy" | "ish-haqi";
+type Tab = "brend" | "rollar" | "umumiy" | "ish-haqi";
 
 interface RoleRow {
   id: string;
@@ -177,171 +176,6 @@ function BrendTab() {
             : <><Icon name="check" size={14} /> Saqlash</>
         }
       </button>
-    </Card>
-  );
-}
-
-/* ─── NarxlarTab ──────────────────────────────────────────── */
-function NarxlarTab() {
-  const { data: tiers = [], isLoading, isError } = usePricingTiers();
-  const updateMut = useUpdatePricingTier();
-  const createMut = useCreatePricingTier();
-  const deleteMut = useDeletePricingTier();
-
-  const [editId, setEditId]     = useState<string | null>(null);
-  const [editGroup, setEditGroup] = useState("");
-  const [editIndiv, setEditIndiv] = useState("");
-  const [showAdd, setShowAdd]   = useState(false);
-  const [newName, setNewName]   = useState("");
-  const [newGroup, setNewGroup] = useState("");
-  const [newIndiv, setNewIndiv] = useState("");
-
-  function startEdit(t: PricingTier) {
-    setEditId(t.id);
-    setEditGroup(String(t.groupMonthly));
-    setEditIndiv(String(t.individualPerLesson));
-  }
-
-  function saveEdit(id: string) {
-    updateMut.mutate(
-      { id, groupMonthly: Number(editGroup) || 0, individualPerLesson: Number(editIndiv) || 0 },
-      { onSuccess: () => setEditId(null) }
-    );
-  }
-
-  function addTier() {
-    if (!newName.trim()) return;
-    const colors = ["#ef4444","#f97316","#22c55e","#3b82f6","#a855f7","#06b6d4"];
-    createMut.mutate(
-      {
-        name: newName.trim(),
-        color: colors[tiers.length % colors.length],
-        groupMonthly: Number(newGroup) || 0,
-        individualPerLesson: Number(newIndiv) || 0,
-        sortOrder: tiers.length,
-      },
-      { onSuccess: () => { setNewName(""); setNewGroup(""); setNewIndiv(""); setShowAdd(false); } }
-    );
-  }
-
-  const thStyle: React.CSSProperties = {
-    padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700,
-    color: "var(--text-dim)", letterSpacing: ".06em", borderBottom: "1px solid var(--border)",
-  };
-  const tdStyle: React.CSSProperties = {
-    padding: "14px 16px", borderBottom: "1px solid var(--border)", fontSize: 14,
-  };
-
-  if (isLoading) {
-    return <Card style={{ padding: 24 }}><div style={{ color: "var(--text-dim)", fontSize: 14 }}>Yuklanmoqda...</div></Card>;
-  }
-  if (isError) {
-    return <Card style={{ padding: 24 }}><div style={{ color: "#dc2626", fontSize: 14 }}>Ma'lumotlarni yuklashda xatolik.</div></Card>;
-  }
-
-  return (
-    <Card style={{ padding: 0 }}>
-      <div style={{ padding: "20px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, background: "#dbeafe",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Icon name="wallet" size={18} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>Kurs narxlari</div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Daraja bo'yicha oylik to'lov</div>
-          </div>
-        </div>
-        <button className="btn primary" onClick={() => setShowAdd(true)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Icon name="plus" size={14} /> Daraja
-        </button>
-      </div>
-
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={thStyle}>DARAJA</th>
-            <th style={thStyle}>GURUH DARSI (OY)</th>
-            <th style={thStyle}>INDIVIDUAL (DARS)</th>
-            <th style={{ ...thStyle, width: 90 }}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {tiers.map(t => (
-            <tr key={t.id}>
-              <td style={tdStyle}>
-                <span style={{ color: t.color, fontWeight: 700 }}>{t.name}</span>
-              </td>
-              <td style={tdStyle}>
-                {editId === t.id
-                  ? <input className="input" value={editGroup} onChange={e => setEditGroup(e.target.value)}
-                      style={{ width: 120 }} autoFocus />
-                  : <strong>{fmt(t.groupMonthly)}</strong>
-                }
-              </td>
-              <td style={tdStyle}>
-                {editId === t.id
-                  ? <input className="input" value={editIndiv} onChange={e => setEditIndiv(e.target.value)}
-                      style={{ width: 120 }} />
-                  : fmt(t.individualPerLesson)
-                }
-              </td>
-              <td style={{ ...tdStyle, textAlign: "right", paddingRight: 16 }}>
-                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  {editId === t.id ? (
-                    <button className="btn primary" onClick={() => saveEdit(t.id)} disabled={updateMut.isPending}
-                      style={{ padding: "4px 12px", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
-                      <Icon name="check" size={13} />
-                    </button>
-                  ) : (
-                    <button className="btn" onClick={() => startEdit(t)} style={{
-                      width: 32, height: 32, padding: 0, borderRadius: 8,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      <Icon name="edit" size={14} />
-                    </button>
-                  )}
-                  <button
-                    className="btn"
-                    onClick={() => deleteMut.mutate(t.id)}
-                    disabled={deleteMut.isPending}
-                    style={{
-                      width: 32, height: 32, padding: 0, borderRadius: 8,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: "#dc2626",
-                    }}
-                  >
-                    <Icon name="trash" size={14} />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {showAdd && (
-        <div style={{ padding: "16px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>Nomi</label>
-            <input className="input" placeholder="Daraja nomi" value={newName} onChange={e => setNewName(e.target.value)} style={{ width: 180 }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>Guruh (oy)</label>
-            <input className="input" placeholder="500000" value={newGroup} onChange={e => setNewGroup(e.target.value)} style={{ width: 120 }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>Individual (dars)</label>
-            <input className="input" placeholder="150000" value={newIndiv} onChange={e => setNewIndiv(e.target.value)} style={{ width: 120 }} />
-          </div>
-          <button className="btn primary" onClick={addTier} disabled={createMut.isPending} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Icon name="check" size={14} /> Qo'shish
-          </button>
-          <button className="btn" onClick={() => setShowAdd(false)}>Bekor</button>
-        </div>
-      )}
     </Card>
   );
 }
@@ -826,7 +660,6 @@ function IshHaqiTab() {
 /* ─── main ────────────────────────────────────────────────── */
 const TABS: { id: Tab; label: string }[] = [
   { id: "brend",    label: "Brend" },
-  { id: "narxlar",  label: "Narxlar" },
   { id: "rollar",   label: "Rollar" },
   { id: "umumiy",   label: "Umumiy" },
   { id: "ish-haqi", label: "Ish haqi" },
@@ -867,7 +700,6 @@ export default function SettingsPage() {
 
       {/* Content */}
       {tab === "brend"    && <BrendTab />}
-      {tab === "narxlar"  && <NarxlarTab />}
       {tab === "rollar"   && <RollarTab />}
       {tab === "umumiy"   && <UmumiyTab />}
       {tab === "ish-haqi" && <IshHaqiTab />}

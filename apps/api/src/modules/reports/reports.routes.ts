@@ -3,7 +3,7 @@ import { pool } from "../../db/pool.js";
 
 export async function reportsRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
-  app.addHook("onRequest", app.requireRole("super_admin", "admin"));
+  app.addHook("onRequest", app.requireRole("super_admin", "admin", "assistant_admin"));
 
   // Monthly income for the last 6 months
   app.get("/reports/income-summary", async (request) => {

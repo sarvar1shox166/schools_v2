@@ -23,7 +23,7 @@ export async function payrollRoutes(app: FastifyInstance) {
 
   // ---- Teacher rates ----
 
-  app.get("/teachers/:id/rate", { onRequest: [app.requireRole("super_admin", "admin", "teacher")] }, async (request) => {
+  app.get("/teachers/:id/rate", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request) => {
     const { id } = request.params as { id: string };
     const { rows } = await pool.query(
       `SELECT group_rate AS "groupRate", individual_rate AS "individualRate",
@@ -34,7 +34,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return rows[0] ?? { groupRate: 0, individualRate: 0, diagnosticRate: 0, retentionCoef: 1 };
   });
 
-  app.patch("/teachers/:id/rate", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.patch("/teachers/:id/rate", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const body = rateSchema.parse(request.body);
     await pool.query(
@@ -101,7 +101,7 @@ export async function payrollRoutes(app: FastifyInstance) {
 
   // ---- Admin payroll ----
 
-  app.get("/payroll", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request) => {
+  app.get("/payroll", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { period } = periodSchema.parse(request.query);
     const { tenantId } = request.user;
     const { rows } = await pool.query(
@@ -119,7 +119,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return rows;
   });
 
-  app.post("/payroll/generate", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/payroll/generate", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const body = periodSchema.parse(request.body);
     const { tenantId } = request.user;
 

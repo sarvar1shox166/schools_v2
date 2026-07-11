@@ -141,6 +141,7 @@ export default function LessonsPage() {
   const isToday     = next ? new Date(next.nextAt).toDateString()===new Date().toDateString() : false;
   const todayDow = (new Date().getDay()+6)%7;
   const sortedSched = [...schedule].sort((a,b)=>((a.dayOfWeek-todayDow+7)%7)-((b.dayOfWeek-todayDow+7)%7));
+  const liveSlot = useMemo(() => sortedSched.find(s => slotStatus(s) === "live"), [sortedSched, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>
@@ -235,6 +236,39 @@ export default function LessonsPage() {
           padding:"24px",marginBottom:"var(--gap)",textAlign:"center",color:"var(--text-faint)",fontSize:14,
         }}>
           📅 Kelgusi dars topilmadi — jadval admin tomonidan tuziladi
+        </div>
+      )}
+
+      {/* ── Hozir davom etayotgan dars ──────────────────────────────────── */}
+      {liveSlot && (
+        <div style={{
+          borderRadius:14, padding:"14px 18px", marginBottom:"var(--gap)",
+          background:"rgba(34,197,94,.1)", border:"1.5px solid rgba(34,197,94,.35)",
+          display:"flex", alignItems:"center", gap:14, flexWrap:"wrap",
+        }}>
+          <span style={{ position:"relative", width:10, height:10, flexShrink:0 }}>
+            <span style={{ position:"absolute", inset:0, borderRadius:"50%", background:"#22c55e", animation:"pulseDot 1.6s ease-out infinite" }} />
+            <span style={{ position:"absolute", inset:0, borderRadius:"50%", background:"#22c55e" }} />
+          </span>
+          <div style={{ flex:1, minWidth:160 }}>
+            <div style={{ fontSize:11, fontWeight:800, letterSpacing:.4, color:"#22c55e", textTransform:"uppercase" }}>
+              Hozir davom etmoqda
+            </div>
+            <div style={{ fontSize:14.5, fontWeight:750, marginTop:2 }}>
+              {liveSlot.groupName} · {liveSlot.startTime.slice(0,5)}–{addMins(liveSlot.startTime, liveSlot.durationMinutes ?? 90)}
+              {liveSlot.teacherName ? ` · ${liveSlot.teacherName}` : ""}
+            </div>
+          </div>
+          {liveSlot.meetingUrl && liveSlot.meetingUrl !== "null" && (
+            <button className="btn primary" style={{ background:"#22c55e", border:"none" }}
+              onClick={() => {
+                joinLesson.mutate(liveSlot.id);
+                window.open(liveSlot.meetingUrl!, "_blank", "noreferrer");
+              }}>
+              {liveSlot.meetingPlatform === "meet" ? "🟢 Google Meet ga kirish" : "📹 Zoom ga kirish"}
+            </button>
+          )}
+          <style>{`@keyframes pulseDot { 0% { transform: scale(1); opacity: .6; } 70%,100% { transform: scale(2.6); opacity: 0; } }`}</style>
         </div>
       )}
 

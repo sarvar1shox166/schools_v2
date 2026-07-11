@@ -65,7 +65,7 @@ export async function notificationsRoutes(app: FastifyInstance) {
   });
 
   // Broadcast: send notification to a group of users (admin only)
-  app.post("/notifications/broadcast", { onRequest: [app.requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.post("/notifications/broadcast", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { title, body: msgBody, icon = "bell", type = "broadcast",
             targetRole } = request.body as {

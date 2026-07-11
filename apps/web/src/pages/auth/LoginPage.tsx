@@ -7,6 +7,10 @@ import { getTelegramInitData, getTelegramWebApp } from "../../lib/telegram.js";
 const ROLE_HOME: Record<Role, string> = {
   super_admin: "/admin",
   admin: "/admin",
+  assistant_admin: "/admin",
+  operator: "/admin",
+  moderator: "/admin",
+  accountant: "/admin",
   teacher: "/teacher",
   student: "/student",
 };

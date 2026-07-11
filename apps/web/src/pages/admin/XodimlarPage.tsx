@@ -4,25 +4,32 @@ import { createPortal } from "react-dom";
 import { Avatar, Card, Icon } from "@chess-school/ui";
 import {
   useStaff, useUpdateStaff, useDeleteStaff,
+  useTeachers, useModeratorTeachers, useAssignModeratorTeachers,
   type StaffMember,
 } from "../../lib/queries.js";
 
 const ROLE_LABELS: Record<string, string> = {
-  admin:      "Administrator",
-  operator:   "Operator",
-  accountant: "Buxgalter",
+  admin:            "Administrator",
+  assistant_admin:  "Yordamchi admin",
+  moderator:        "Moderator",
+  operator:         "Operator",
+  accountant:       "Buxgalter",
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  admin:      "#3b82f6",
-  operator:   "#f59e0b",
-  accountant: "#a855f7",
+  admin:            "#3b82f6",
+  assistant_admin:  "#6366f1",
+  moderator:        "#06b6d4",
+  operator:         "#f59e0b",
+  accountant:       "#a855f7",
 };
 
 const ROLE_DESCS: Record<string, string> = {
-  admin:      "To'liq huquq",
-  operator:   "Arizalar va davomat",
-  accountant: "Moliya bo'limi",
+  admin:            "To'liq huquq",
+  assistant_admin:  "Sozlamalardan tashqari hammasi",
+  moderator:        "Darslar/davomat nazorati",
+  operator:         "Arizalar, o'quvchilar, davomat",
+  accountant:       "Moliya bo'limi",
 };
 
 function RoleBadge({ role }: { role: string }) {
@@ -60,12 +67,13 @@ export default function XodimlarPage() {
   const deleteMut = useDeleteStaff();
 
   const [confirmDelete, setConfirmDelete] = useState<StaffMember | null>(null);
+  const [assignTarget, setAssignTarget] = useState<StaffMember | null>(null);
 
   function toggleActive(member: StaffMember) {
     updateMut.mutate({ id: member.id, isActive: !member.isActive });
   }
 
-  const byRole = ["admin", "operator", "accountant"];
+  const byRole = ["admin", "assistant_admin", "moderator", "operator", "accountant"];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -83,7 +91,7 @@ export default function XodimlarPage() {
       </div>
 
       {/* Role summary cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "var(--gap)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "var(--gap)" }}>
         {byRole.map(role => {
           const count = staff.filter(s => s.role === role).length;
           return (
@@ -148,6 +156,15 @@ export default function XodimlarPage() {
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        {member.role === "moderator" && (
+                          <button
+                            className="btn"
+                            style={{ padding: "4px 10px", fontSize: 12 }}
+                            onClick={() => setAssignTarget(member)}
+                          >
+                            O'qituvchilar
+                          </button>
+                        )}
                         <button
                           className="btn"
                           style={{ padding: "4px 10px", fontSize: 12 }}
@@ -192,6 +209,66 @@ export default function XodimlarPage() {
         </div>,
         document.body
       )}
+
+      {assignTarget && (
+        <ModeratorTeachersModal member={assignTarget} onClose={() => setAssignTarget(null)} />
+      )}
     </div>
+  );
+}
+
+/* ─── Moderatorga o'qituvchi biriktirish modali ─── */
+function ModeratorTeachersModal({ member, onClose }: { member: StaffMember; onClose: () => void }) {
+  const { data: teachers = [] } = useTeachers();
+  const { data: assignedIds, isLoading } = useModeratorTeachers(member.id);
+  const assignMut = useAssignModeratorTeachers();
+  const [selected, setSelected] = useState<string[] | null>(null);
+
+  const current = selected ?? assignedIds ?? [];
+
+  function toggle(id: string) {
+    setSelected((current.includes(id) ? current.filter((t) => t !== id) : [...current, id]));
+  }
+
+  async function save() {
+    await assignMut.mutateAsync({ id: member.id, teacherIds: current });
+    onClose();
+  }
+
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <Card style={{ padding: 28, maxWidth: 420, width: "100%" }}>
+        <h3 style={{ margin: "0 0 4px", fontWeight: 800 }}>{member.fullName} — biriktirilgan o'qituvchilar</h3>
+        <p style={{ color: "var(--text-dim)", fontSize: 13, margin: "0 0 16px" }}>
+          Moderator faqat shu o'qituvchilarning dars davomatini ko'radi va to'g'irlaydi
+        </p>
+        {isLoading ? (
+          <div style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>Yuklanmoqda...</div>
+        ) : (
+          <div style={{
+            border: "1px solid var(--border)", borderRadius: 10, padding: 10,
+            display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflowY: "auto", marginBottom: 20,
+          }}>
+            {teachers.length === 0 && (
+              <div style={{ fontSize: 13, color: "var(--text-faint)", padding: 4 }}>O'qituvchilar topilmadi</div>
+            )}
+            {teachers.map((t) => (
+              <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                <input type="checkbox" checked={current.includes(t.id)} onChange={() => toggle(t.id)} />
+                {t.fullName}
+              </label>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
+          <button className="btn primary" style={{ flex: 1 }} disabled={assignMut.isPending} onClick={save}>
+            {assignMut.isPending ? "Saqlanmoqda..." : "Saqlash"}
+          </button>
+        </div>
+      </Card>
+    </div>,
+    document.body
   );
 }

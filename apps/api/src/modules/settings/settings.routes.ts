@@ -22,16 +22,6 @@ const systemSchema = z.object({
   yearStart: z.string().optional(),
 });
 
-const tierCreateSchema = z.object({
-  name: z.string().min(1),
-  color: z.string().default("#6366f1"),
-  groupMonthly: z.number().nonnegative(),
-  individualPerLesson: z.number().nonnegative(),
-  sortOrder: z.number().int().default(0),
-});
-
-const tierUpdateSchema = tierCreateSchema.partial();
-
 const salaryTypeSchema = z.object({
   teacherId: z.string().uuid(),
   salaryType: z.enum(["per_lesson", "monthly_fixed", "percent_income"]),
@@ -108,55 +98,6 @@ export async function settingsRoutes(app: FastifyInstance) {
     const current = (await getSetting(tenantId!, "system")) ?? {};
     await setSetting(tenantId!, "system", { ...current, ...body });
     return reply.send({ ok: true });
-  });
-
-  // ── Pricing tiers ───────────────────────────────────────────────────
-  app.get("/settings/pricing", async (request) => {
-    const { tenantId } = request.user;
-    const { rows } = await pool.query(
-      `SELECT id, name, color,
-              group_monthly AS "groupMonthly",
-              individual_per_lesson AS "individualPerLesson",
-              sort_order AS "sortOrder"
-       FROM pricing_tiers WHERE tenant_id = $1 ORDER BY sort_order, created_at`,
-      [tenantId]
-    );
-    return rows;
-  });
-
-  app.post("/settings/pricing", async (request, reply) => {
-    const { tenantId } = request.user;
-    const body = tierCreateSchema.parse(request.body);
-    const { rows } = await pool.query(
-      `INSERT INTO pricing_tiers (tenant_id, name, color, group_monthly, individual_per_lesson, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [tenantId, body.name, body.color, body.groupMonthly, body.individualPerLesson, body.sortOrder]
-    );
-    return reply.code(201).send({ id: rows[0].id });
-  });
-
-  app.patch("/settings/pricing/:id", async (request) => {
-    const { id } = request.params as { id: string };
-    const { tenantId } = request.user;
-    const body = tierUpdateSchema.parse(request.body);
-    await pool.query(
-      `UPDATE pricing_tiers SET
-         name = COALESCE($1, name), color = COALESCE($2, color),
-         group_monthly = COALESCE($3, group_monthly),
-         individual_per_lesson = COALESCE($4, individual_per_lesson),
-         sort_order = COALESCE($5, sort_order)
-       WHERE id = $6 AND tenant_id = $7`,
-      [body.name ?? null, body.color ?? null, body.groupMonthly ?? null,
-       body.individualPerLesson ?? null, body.sortOrder ?? null, id, tenantId]
-    );
-    return { ok: true };
-  });
-
-  app.delete("/settings/pricing/:id", async (request) => {
-    const { id } = request.params as { id: string };
-    const { tenantId } = request.user;
-    await pool.query(`DELETE FROM pricing_tiers WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
-    return { ok: true };
   });
 
   // ── Teacher salary types ────────────────────────────────────────────

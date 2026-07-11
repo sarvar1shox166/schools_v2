@@ -64,12 +64,42 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Administrator",
   teacher: "O'qituvchi",
   student: "O'quvchi",
+  operator: "Operator",
+  accountant: "Buxgalter",
+  moderator: "Moderator",
+  assistant_admin: "Yordamchi admin",
 };
 
 const NOTIFICATIONS_ROUTE: Record<string, string> = {
   admin: "/admin/notifications",
+  assistant_admin: "/admin/notifications",
   teacher: "/teacher/notifications",
 };
+
+/** Admin navigatsiyasida har bir sahifani kim ko'ra oladi (backend requireRole bilan mos). */
+const ADMIN_NAV_ROLES: Record<string, string[]> = {
+  "/admin":               ["super_admin", "admin", "assistant_admin", "operator", "moderator"],
+  "/admin/schedule":      ["super_admin", "admin", "assistant_admin", "operator", "moderator"],
+  "/admin/attendance":    ["super_admin", "admin", "assistant_admin", "operator", "moderator"],
+  "/admin/applications":  ["super_admin", "admin", "assistant_admin", "operator"],
+  "/admin/students":      ["super_admin", "admin", "assistant_admin", "operator"],
+  "/admin/settings":      ["super_admin", "admin"],
+  // Qolganlari (o'qituvchilar, guruhlar, paketlar, to'lovlar, daromadlar, video,
+  // ustoz reytingi, xodimlar, ommaviy xabar, bildirishnoma, hisobotlar) — faqat
+  // super_admin/admin/assistant_admin, xaritada yo'q bo'lsa shu qiymat ishlatiladi.
+};
+const DEFAULT_ADMIN_ROLES = ["super_admin", "admin", "assistant_admin"];
+
+function filterNavByRole(sections: NavSection[], role: string): NavSection[] {
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) =>
+        (ADMIN_NAV_ROLES[item.to] ?? DEFAULT_ADMIN_ROLES).includes(role)
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
+}
 
 export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) {
   const user = useAuthStore((s) => s.user);
@@ -126,15 +156,20 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
     });
   };
 
+  // Faqat admin realmidagi (bir nechta xodim rollari bo'lishi mumkin) navigatsiya
+  // rolga qarab filtrlanadi — teacher/student nav'lari o'zgarmaydi.
+  const isAdminRealm = !!nav?.[0]?.items[0]?.to.startsWith("/admin");
+  const filteredNav = nav && isAdminRealm && user ? filterNavByRole(nav, user.role) : nav;
+
   return (
     <div className={"app" + (isStudent ? " kid-theme" : "") + (!isStudent && collapsed ? " collapsed" : "") + (isStudent && mobOpen ? " mob-open" : "")}>
       <XpToastHost />
       {isStudent && <AutoLessonReviewPrompt />}
       {/* Mobile backdrop — clicks close the sidebar */}
       <div className="mob-backdrop" onClick={() => isStudent ? setMobOpen(false) : setCollapsed(true)} />
-      {nav && (
+      {filteredNav && (
         <Sidebar
-          sections={nav}
+          sections={filteredNav}
           brandSub={title}
           gender={gender}
           onGenderChange={setGender}
