@@ -4,6 +4,7 @@ import { pool } from "../../db/pool.js";
 import { consumeLesson, refundLesson } from "../payments/lessons.js";
 import { createNotification } from "../notifications/notify.js";
 import { recordLessonSession } from "../payroll/lesson-sessions.js";
+import { assignedTeacherIds } from "../../lib/moderator.js";
 
 const querySchema = z.object({
   scheduleSlotId: z.string().uuid(),
@@ -43,15 +44,6 @@ function todayStr(): string {
 
 function dowFromDate(date: string): number {
   return (new Date(date + "T00:00:00").getDay() + 6) % 7;
-}
-
-/** Moderatorga biriktirilgan o'qituvchilar — moderator faqat shularning davomatini ko'radi/to'g'irlaydi. */
-async function assignedTeacherIds(tenantId: string, moderatorUserId: string): Promise<string[]> {
-  const { rows } = await pool.query(
-    `SELECT teacher_id AS "teacherId" FROM moderator_teachers WHERE tenant_id = $1 AND moderator_user_id = $2`,
-    [tenantId, moderatorUserId]
-  );
-  return rows.map((r) => r.teacherId as string);
 }
 
 // 'ae' = sababli yo'qlik. Dars hisoblanmaydi.

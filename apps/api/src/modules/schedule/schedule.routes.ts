@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { dayOfWeekOf, todayStr, toDateStr } from "../../lib/schedule-dates.js";
+import { assignedTeacherIds } from "../../lib/moderator.js";
 
 const createSchema = z.object({
   groupId: z.string().uuid().optional(),
@@ -42,14 +43,18 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { tenantId, role, sub } = request.user;
 
     const params: unknown[] = [tenantId];
-    let studentFilter = "";
+    let roleFilter = "";
     if (role === "student") {
-      studentFilter = `AND g.id IN (
+      roleFilter = `AND g.id IN (
         SELECT gm.group_id FROM group_members gm
         JOIN students s ON s.id = gm.student_id
         WHERE s.user_id = $2
       )`;
       params.push(sub);
+    } else if (role === "moderator") {
+      const ids = await assignedTeacherIds(tenantId!, sub);
+      roleFilter = `AND COALESCE(sl.teacher_id, g.teacher_id) = ANY($2::uuid[])`;
+      params.push(ids);
     }
 
     const { rows } = await pool.query(
@@ -69,7 +74,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
        LEFT JOIN users tu ON tu.id = t.user_id
        LEFT JOIN teachers t2 ON t2.id = sl.teacher_id
        LEFT JOIN users tu2 ON tu2.id = t2.user_id
-       WHERE sl.tenant_id = $1 ${studentFilter}
+       WHERE sl.tenant_id = $1 ${roleFilter}
          AND (sl.specific_date IS NULL OR sl.specific_date >= CURRENT_DATE)
        ORDER BY sl.day_of_week, sl.start_time`,
       params
@@ -109,6 +114,15 @@ export async function scheduleRoutes(app: FastifyInstance) {
         WHERE s.user_id = $4
       )`;
       params.push(sub);
+    } else if (role === "moderator") {
+      const ids = await assignedTeacherIds(tenantId!, sub);
+      filter = `AND COALESCE(sl.teacher_id, g.teacher_id) = ANY($4::uuid[])`;
+      params.push(ids);
+      extraSelect = `l.id AS "lessonId", (l.id IS NOT NULL) AS "isEnded", (ta.id IS NOT NULL) AS "isStarted"`;
+      extraJoin = `
+        LEFT JOIN lessons l ON l.schedule_slot_id = sl.id AND l.conducted_at = CURRENT_DATE AND l.status = 'conducted'
+        LEFT JOIN teacher_attendance ta ON ta.schedule_slot_id = sl.id AND ta.date = CURRENT_DATE
+          AND ta.teacher_id = COALESCE(sl.teacher_id, g.teacher_id)`;
     }
 
     const { rows } = await pool.query(
@@ -383,8 +397,8 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   // ── Bitta darsni bekor qilish / ko'chirish (haftalik shablonni o'zgartirmasdan) ──
 
-  app.get("/schedule/exceptions", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request) => {
-    const { tenantId } = request.user;
+  app.get("/schedule/exceptions", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] }, async (request) => {
+    const { tenantId, role, sub } = request.user;
     const { from, to } = request.query as { from?: string; to?: string };
     const params: unknown[] = [tenantId];
     let range = "";
@@ -392,11 +406,20 @@ export async function scheduleRoutes(app: FastifyInstance) {
       params.push(from, to);
       range = `AND se.date BETWEEN $2 AND $3`;
     }
+    let moderatorFilter = "";
+    if (role === "moderator") {
+      const ids = await assignedTeacherIds(tenantId!, sub);
+      params.push(ids);
+      // Bayramlar (schedule_slot_id IS NULL) hammaga tegishli — cheklanmaydi.
+      moderatorFilter = `AND (se.schedule_slot_id IS NULL OR COALESCE(sl.teacher_id, g.teacher_id) = ANY($${params.length}::uuid[]))`;
+    }
     const { rows } = await pool.query(
       `SELECT se.id, se.schedule_slot_id AS "scheduleSlotId", se.date, se.kind,
               se.new_date AS "newDate", se.new_start_time AS "newStartTime", se.reason
        FROM schedule_exceptions se
-       WHERE se.tenant_id = $1 ${range}
+       LEFT JOIN schedule_slots sl ON sl.id = se.schedule_slot_id
+       LEFT JOIN groups g ON g.id = sl.group_id
+       WHERE se.tenant_id = $1 ${range} ${moderatorFilter}
        ORDER BY se.date`,
       params
     );
@@ -488,6 +511,10 @@ export async function scheduleRoutes(app: FastifyInstance) {
     } else if (role === "teacher") {
       roleFilter = `AND (g.teacher_id = (SELECT id FROM teachers WHERE user_id = $2) OR sl.teacher_id = (SELECT id FROM teachers WHERE user_id = $2))`;
       params.push(sub);
+    } else if (role === "moderator") {
+      const ids = await assignedTeacherIds(tenantId!, sub);
+      roleFilter = `AND COALESCE(sl.teacher_id, g.teacher_id) = ANY($2::uuid[])`;
+      params.push(ids);
     }
 
     const slotsRes = await pool.query(

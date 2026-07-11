@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import LoginPage from "./pages/auth/LoginPage.js";
 import AdminDashboard from "./pages/admin/AdminDashboard.js";
+import ModeratorDashboard from "./pages/admin/ModeratorDashboard.js";
 import TeachersPage from "./pages/admin/TeachersPage.js";
 import StudentsPage from "./pages/admin/StudentsPage.js";
 import NewStudentPage from "./pages/admin/NewStudentPage.js";
@@ -47,6 +48,14 @@ import ProfilePage from "./pages/student/ProfilePage.js";
 import { RequireAuth } from "./layouts/RequireAuth.js";
 import { AppShell } from "./layouts/AppShell.js";
 import type { NavSection } from "./layouts/Sidebar.js";
+import { useAuthStore } from "./lib/auth-store.js";
+
+/** Moderator uchun umumiy Dashboard o'rniga o'ziga xos (biriktirilgan o'qituvchilar
+ *  darslariga qaratilgan) sahifa ko'rsatiladi — moliyaviy/umumiy statistikalarsiz. */
+function AdminHome() {
+  const role = useAuthStore((s) => s.user?.role);
+  return role === "moderator" ? <ModeratorDashboard /> : <AdminDashboard />;
+}
 
 const ADMIN_NAV: NavSection[] = [
   {
@@ -144,7 +153,7 @@ export default function App() {
       <Route element={<RequireAuth roles={["super_admin", "admin", "assistant_admin", "operator", "moderator"]} />}>
         <Route element={<AppShell title="Admin paneli" nav={ADMIN_NAV} />}>
           {/* Dashboard, Jadval, Davomat — super_admin/admin/assistant_admin/operator/moderator */}
-          <Route path="/admin"                element={<AdminDashboard />} />
+          <Route path="/admin"                element={<AdminHome />} />
           <Route path="/admin/schedule"       element={<SchedulePage />} />
           <Route path="/admin/attendance"     element={<AttendancePage />} />
 
