@@ -16,6 +16,8 @@ export interface Teacher {
 export interface StudentGroupRef {
   id: string;
   name: string;
+  teacherId?: string | null;
+  teacherName?: string | null;
 }
 
 export interface Student {
@@ -416,6 +418,15 @@ export function useGroupStudents(groupId: string | null) {
   });
 }
 
+export function useAwardXp() {
+  return useMutation({
+    mutationFn: async ({ studentId, amount, note }: { studentId: string; amount: number; note?: string }) =>
+      (await api.post<{ xp: number; level: number; streak: number; xpAwarded: number }>(
+        `/teacher/students/${studentId}/xp`, { amount, note }
+      )).data,
+  });
+}
+
 export function useTodaySchedule() {
   return useQuery({
     queryKey: ["scheduleToday"],
@@ -632,7 +643,7 @@ export function useMarkTeacherAttendance() {
 export function useAssignPackage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { studentId: string; packageId: string; method: "click" | "payme" | "naqd" | "uzcard"; expiresAt?: string }) =>
+    mutationFn: async (payload: { studentId: string; packageId: string; method: "click" | "payme" | "naqd" | "uzcard"; expiresAt?: string; paidAt?: string }) =>
       (await api.post("/student-packages", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
@@ -1468,8 +1479,8 @@ export function useSubmitQuiz() {
 
 export interface NextLesson {
   id: string;
-  groupId: string;
-  groupName: string;
+  groupId: string | null;
+  groupName: string | null;
   color: string | null;
   dayOfWeek: number;
   startTime: string;
@@ -1477,6 +1488,8 @@ export interface NextLesson {
   isOnline: boolean;
   meetingUrl: string | null;
   meetingPlatform: "zoom" | "meet";
+  lessonType?: "guruh" | "individual" | "diagnostika";
+  customName?: string | null;
   teacherName: string | null;
   teacherPhone: string | null;
   nextAt: string;
@@ -1615,7 +1628,7 @@ export function useCreateApplication() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (p: ApplicationCreatePayload) =>
-      (await api.post<{ id: string }>("/applications", p)).data,
+      (await api.post<{ id: string; studentId: string | null; tempPassword: string | null }>("/applications", p)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["applications"] });
       qc.invalidateQueries({ queryKey: ["schedule"] });
@@ -1634,7 +1647,7 @@ export function useUpdateApplication() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...body }: ApplicationUpdatePayload) =>
-      (await api.patch(`/applications/${id}`, body)).data,
+      (await api.patch<{ ok: true; studentId: string | null; tempPassword: string | null }>(`/applications/${id}`, body)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["applications"] });
       qc.invalidateQueries({ queryKey: ["schedule"] });

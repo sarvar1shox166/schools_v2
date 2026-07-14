@@ -16,6 +16,12 @@ const METHODS = [
 
 type Method = "naqd" | "uzcard" | "click" | "payme";
 
+/** Mahalliy sana — .toISOString() UTC'ga o'tkazib kunni siljitib yuborishi mumkin. */
+function todayLocalStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function NewStudentPage() {
   const navigate = useNavigate();
   const createStudent = useCreateStudent();
@@ -38,6 +44,7 @@ export default function NewStudentPage() {
     packageId: "",
     method: "naqd" as Method,
     expiresAt: "",
+    paidAt: todayLocalStr(),
   });
 
   /* Result */
@@ -68,6 +75,7 @@ export default function NewStudentPage() {
           packageId: pay.packageId,
           method: pay.method,
           expiresAt: pay.expiresAt || undefined,
+          paidAt: pay.paidAt || undefined,
         });
       }
 
@@ -149,7 +157,7 @@ export default function NewStudentPage() {
               onClick={() => {
                 setResult(null);
                 setInfo({ fullName: "", phone: "+998", age: "", level: "", groupId: "" });
-                setPay({ packageId: "", method: "naqd", expiresAt: "" });
+                setPay({ packageId: "", method: "naqd", expiresAt: "", paidAt: todayLocalStr() });
               }}
             >
               Yana qo'shish
@@ -374,13 +382,24 @@ export default function NewStudentPage() {
                 </div>
               </Field>
 
-              {/* Expiry date (optional) */}
-              <Field label="MUDDATI (ixtiyoriy)">
-                <input className="inp" style={{ width: "100%" }}
-                  type="date" value={pay.expiresAt}
-                  min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => setPay({ ...pay, expiresAt: e.target.value })} />
-              </Field>
+              {/* Payment date + expiry date */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Field label="TO'LOV SANASI">
+                  <input className="inp" style={{ width: "100%" }}
+                    type="date" value={pay.paidAt}
+                    max={todayLocalStr()}
+                    onChange={(e) => setPay({ ...pay, paidAt: e.target.value })} />
+                  <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
+                    O'tgan sanadagi to'lovni ham belgilash mumkin
+                  </div>
+                </Field>
+                <Field label="MUDDATI (ixtiyoriy)">
+                  <input className="inp" style={{ width: "100%" }}
+                    type="date" value={pay.expiresAt}
+                    min={todayLocalStr()}
+                    onChange={(e) => setPay({ ...pay, expiresAt: e.target.value })} />
+                </Field>
+              </div>
 
               {/* Summary */}
               {selectedPkg && (

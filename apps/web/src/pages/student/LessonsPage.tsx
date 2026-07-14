@@ -169,13 +169,13 @@ export default function LessonsPage() {
                 🔴 {isToday?"Bugun":DAY_SHORT[next.dayOfWeek]} · {next.startTime.slice(0,5)}
               </span>
               <span style={{ background:"rgba(255,255,255,.18)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
-                🎓 {next.groupName.split(" ")[0]}
+                🎓 {(next.groupName ?? next.customName ?? "Individual dars").split(" ")[0]}
               </span>
             </div>
 
             {/* Title */}
             <h2 style={{ fontSize:24,fontWeight:900,color:"#fff",margin:"0 0 20px",lineHeight:1.2 }}>
-              {next.groupName}
+              {next.groupName ?? next.customName ?? "Individual dars"}
             </h2>
 
             {/* Countdown */}

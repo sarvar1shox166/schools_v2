@@ -29,8 +29,8 @@ const SOURCE_LABEL: Record<string, string> = {
 
 const LEVELS = ["Boshlang'ich", "O'rta", "Yuqori", "Professional"];
 const HOURS = [
-  "09:00","10:00","11:00","12:00","13:00",
-  "14:00","15:00","16:00","17:00","18:00","19:00","20:00",
+  "07:00","08:00","09:00","10:00","11:00","12:00","13:00",
+  "14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00",
 ];
 
 type AppStatus = Application["status"];
@@ -353,8 +353,8 @@ export default function ApplicationsPage() {
         )}
       </Card>
 
-      {showCreate && <CreateAppModal onClose={() => setShowCreate(false)} />}
-      {editApp && <EditAppModal app={editApp} onClose={() => setEditApp(null)} />}
+      {showCreate && <CreateAppModal onClose={() => setShowCreate(false)} onStudentCreated={setConvertResult} />}
+      {editApp && <EditAppModal app={editApp} onClose={() => setEditApp(null)} onStudentCreated={setConvertResult} />}
       {convertResult && (
         <ConvertResultModal
           result={convertResult}
@@ -455,7 +455,7 @@ function DiagnosticFields({
 }
 
 /* ─── Create Application Modal ─── */
-function CreateAppModal({ onClose }: { onClose: () => void }) {
+function CreateAppModal({ onClose, onStudentCreated }: { onClose: () => void; onStudentCreated: (result: { studentId: string; tempPassword: string }) => void }) {
   const createApp = useCreateApplication();
 
   const [fullName, setFullName] = useState("");
@@ -476,7 +476,7 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
     if (diagnosticTeacherId && !diagnosticDate) { setErr("Diagnostika sanasi tanlanishi shart"); return; }
     setErr("");
     try {
-      await createApp.mutateAsync({
+      const res = await createApp.mutateAsync({
         fullName: fullName.trim(),
         phone: phone.trim(),
         age: age ? Number(age) : undefined,
@@ -489,6 +489,9 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
         meetingUrl: meetingUrl || undefined,
       });
       onClose();
+      if (res.studentId && res.tempPassword) {
+        onStudentCreated({ studentId: res.studentId, tempPassword: res.tempPassword });
+      }
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
     }
@@ -569,7 +572,7 @@ function CreateAppModal({ onClose }: { onClose: () => void }) {
 }
 
 /* ─── Edit Application Modal ─── */
-function EditAppModal({ app, onClose }: { app: Application; onClose: () => void }) {
+function EditAppModal({ app, onClose, onStudentCreated }: { app: Application; onClose: () => void; onStudentCreated: (result: { studentId: string; tempPassword: string }) => void }) {
   const updateApp = useUpdateApplication();
 
   const [fullName, setFullName] = useState(app.fullName);
@@ -582,6 +585,7 @@ function EditAppModal({ app, onClose }: { app: Application; onClose: () => void 
   const [diagnosticTime, setDiagnosticTime]           = useState(app.diagnosticTime?.slice(0, 5) ?? "15:00");
   const [meetingPlatform, setMeetingPlatform]         = useState<"zoom" | "meet">(app.meetingPlatform ?? "zoom");
   const [meetingUrl, setMeetingUrl]                   = useState(app.meetingUrl ?? "");
+  const [status, setStatus]     = useState<AppStatus>(app.status);
   const [err, setErr]           = useState("");
 
   async function handleSubmit() {
@@ -589,7 +593,7 @@ function EditAppModal({ app, onClose }: { app: Application; onClose: () => void 
     if (!phone.trim())    { setErr("Telefon kiritilishi shart"); return; }
     setErr("");
     try {
-      await updateApp.mutateAsync({
+      const res = await updateApp.mutateAsync({
         id: app.id,
         fullName: fullName.trim(),
         phone: phone.trim(),
@@ -600,8 +604,12 @@ function EditAppModal({ app, onClose }: { app: Application; onClose: () => void 
         diagnosticTime: diagnosticTeacherId ? diagnosticTime : null,
         meetingPlatform,
         meetingUrl: meetingUrl || null,
+        status,
       });
       onClose();
+      if (res.studentId && res.tempPassword) {
+        onStudentCreated({ studentId: res.studentId, tempPassword: res.tempPassword });
+      }
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
     }
@@ -659,6 +667,31 @@ function EditAppModal({ app, onClose }: { app: Application; onClose: () => void 
             meetingPlatform={meetingPlatform} setMeetingPlatform={setMeetingPlatform}
             meetingUrl={meetingUrl} setMeetingUrl={setMeetingUrl}
           />
+
+          <FieldRow label="Diagnostika natijasi">
+            <div style={{ display: "flex", gap: 8 }}>
+              {(["diagnostika", "royxatdan_otdi", "rad"] as AppStatus[]).map((st) => {
+                const s = STATUS_STYLE[st];
+                const active = status === st;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setStatus(st)}
+                    style={{
+                      flex: 1, padding: "9px 4px", borderRadius: 8, cursor: "pointer",
+                      border: active ? `1.5px solid ${s.color}` : "1px solid var(--border)",
+                      background: active ? s.bg : "var(--surface-2)",
+                      color: active ? s.color : "var(--text-dim)",
+                      fontWeight: 700, fontSize: 12.5,
+                    }}
+                  >
+                    {st === "diagnostika" ? "Hali diagnostikada" : st === "royxatdan_otdi" ? "Qoldi (ro'yxatdan o'tdi)" : "Ketdi (rad etildi)"}
+                  </button>
+                );
+              })}
+            </div>
+          </FieldRow>
 
           {err && <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>{err}</div>}
 

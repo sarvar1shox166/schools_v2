@@ -34,6 +34,7 @@ import TPuzzlesPage from "./pages/teacher/TPuzzlesPage.js";
 import TPuzzleCreatePage from "./pages/teacher/TPuzzleCreatePage.js";
 import TSchedulePage from "./pages/teacher/TSchedulePage.js";
 import TAttendancePage from "./pages/teacher/TAttendancePage.js";
+import TLiveLessonPage from "./pages/teacher/TLiveLessonPage.js";
 import StudentDashboard from "./pages/student/StudentDashboard.js";
 import PuzzlesPage from "./pages/student/PuzzlesPage.js";
 import LeaderboardPage from "./pages/student/LeaderboardPage.js";
@@ -195,6 +196,7 @@ export default function App() {
           <Route path="/teacher/income"         element={<TeacherIncomePage />} />
           <Route path="/teacher/schedule"       element={<TSchedulePage />} />
           <Route path="/teacher/attendance"     element={<TAttendancePage />} />
+          <Route path="/teacher/live-lesson/:scheduleSlotId" element={<TLiveLessonPage />} />
           <Route path="/teacher/students"       element={<TStudentsPage />} />
           <Route path="/teacher/progress"       element={<TProgressPage />} />
           <Route path="/teacher/materials"      element={<TMaterialsPage />} />

@@ -1,10 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createPortal } from "react-dom";
 import { Avatar, Card, Icon } from "@chess-school/ui";
 import {
   useAttendance,
-  useEndLesson,
   useJoinTeacherLesson,
   useMarkAttendance,
   useMyLessons,
@@ -12,7 +10,6 @@ import {
   useMyStudents,
   useMyStudentsProgress,
   useTodaySchedule,
-  type ScheduleSlot,
 } from "../../lib/queries.js";
 
 /* ─── helpers ─── */
@@ -95,8 +92,6 @@ export default function TeacherDashboard() {
   const noLessonToday = todaySchedule !== undefined && !liveLesson && !upcomingLesson;
 
   const joinTeacherLesson = useJoinTeacherLesson();
-  const endLesson = useEndLesson();
-  const [endModalSlot, setEndModalSlot] = useState<ScheduleSlot | null>(null);
 
   /* attendance for first slot */
   const firstSlot = todaySchedule?.[0];
@@ -229,7 +224,19 @@ export default function TeacherDashboard() {
             <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.09em", opacity:0.65, marginBottom:8, textTransform:"uppercase" }}>
               Keyingi dars
             </div>
-            <div style={{ fontSize:20, fontWeight:800, marginBottom:12 }}>{upcomingLesson.groupName}</div>
+            <div style={{ fontSize:20, fontWeight:800, marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+              {upcomingLesson.groupName ?? upcomingLesson.customName ?? "Dars"}
+              {upcomingLesson.lessonType === "diagnostika" && (
+                <span style={{ fontSize:11, fontWeight:700, color:"#fff", background:"rgba(245,158,11,.35)", border:"1px solid rgba(245,158,11,.6)", padding:"2px 9px", borderRadius:20 }}>
+                  Diagnostika
+                </span>
+              )}
+              {upcomingLesson.lessonType === "individual" && (
+                <span style={{ fontSize:11, fontWeight:700, color:"#fff", background:"rgba(124,58,237,.35)", border:"1px solid rgba(124,58,237,.6)", padding:"2px 9px", borderRadius:20 }}>
+                  Individual
+                </span>
+              )}
+            </div>
             <div style={{ display:"flex", gap:22, fontSize:13.5, opacity:0.85 }}>
               <span style={{ display:"flex", alignItems:"center", gap:6 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -272,11 +279,6 @@ export default function TeacherDashboard() {
       )}
 
       {liveLesson && (() => {
-        const [lh, lmi] = liveLesson.startTime.split(":").map(Number);
-        const startMs = new Date(); startMs.setHours(lh, lmi, 0, 0);
-        const endMs = new Date(startMs.getTime() + (liveLesson.durationMinutes ?? 90) * 60000);
-        const canEnd = Date.now() >= endMs.getTime();
-        const platformLabel = liveLesson.meetingPlatform === "meet" ? "🟢 Google Meet ga kirish" : "📹 Zoom ga kirish";
         return (
           <div style={{
             borderRadius:18, padding:"22px 28px",
@@ -290,35 +292,38 @@ export default function TeacherDashboard() {
                   Hozir davom etmoqda
                 </span>
               </div>
-              <div style={{ fontSize:20, fontWeight:800, marginBottom:8 }}>{liveLesson.groupName}</div>
+              <div style={{ fontSize:20, fontWeight:800, marginBottom:8, display:"flex", alignItems:"center", gap:10 }}>
+                {liveLesson.groupName ?? liveLesson.customName ?? "Dars"}
+                {liveLesson.lessonType === "diagnostika" && (
+                  <span style={{ fontSize:11, fontWeight:700, color:"#fff", background:"rgba(245,158,11,.35)", border:"1px solid rgba(245,158,11,.6)", padding:"2px 9px", borderRadius:20 }}>
+                    Diagnostika
+                  </span>
+                )}
+                {liveLesson.lessonType === "individual" && (
+                  <span style={{ fontSize:11, fontWeight:700, color:"#fff", background:"rgba(124,58,237,.35)", border:"1px solid rgba(124,58,237,.6)", padding:"2px 9px", borderRadius:20 }}>
+                    Individual
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize:13.5, opacity:0.85 }}>
                 {liveLesson.startTime.slice(0,5)} · {studentsMap[liveLesson.groupName ?? ""] ?? slotStudents.length} o'quvchi
               </div>
             </div>
 
             <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-              {liveLesson.isStarted && liveLesson.meetingUrl && (
-                <button className="btn"
-                  style={{ background:"rgba(255,255,255,.16)", border:"1px solid rgba(255,255,255,.35)", color:"#fff" }}
-                  onClick={() => window.open(liveLesson.meetingUrl!, "_blank", "noreferrer")}>
-                  {platformLabel}
-                </button>
-              )}
               {!liveLesson.isStarted ? (
                 <button className="btn primary" style={{ background:"#fff", color:"#065f46" }}
                   disabled={joinTeacherLesson.isPending}
                   onClick={() => {
                     joinTeacherLesson.mutate(liveLesson.id);
-                    if (liveLesson.meetingUrl) window.open(liveLesson.meetingUrl, "_blank", "noreferrer");
+                    navigate(`/teacher/live-lesson/${liveLesson.id}`);
                   }}>
                   ▶ Darsni boshlash
                 </button>
               ) : (
-                <button className="btn primary" style={{ background: canEnd ? "#fff" : "rgba(255,255,255,.3)", color:"#065f46", cursor: canEnd ? "pointer" : "not-allowed" }}
-                  disabled={!canEnd}
-                  title={canEnd ? "" : "Dars davomiyligi tugagach faollashadi"}
-                  onClick={() => setEndModalSlot(liveLesson)}>
-                  ⏹ Darsni tugatish
+                <button className="btn primary" style={{ background:"#fff", color:"#065f46" }}
+                  onClick={() => navigate(`/teacher/live-lesson/${liveLesson.id}`)}>
+                  → Dars jurnaliga o'tish
                 </button>
               )}
             </div>
@@ -429,7 +434,19 @@ export default function TeacherDashboard() {
                   <div style={{ fontSize:12, color:"var(--text-faint)", marginBottom:4, fontWeight:600 }}>
                     {s.startTime.slice(0, 5)}
                   </div>
-                  <div style={{ fontWeight:750, fontSize:14.5, marginBottom:6 }}>{s.groupName}</div>
+                  <div style={{ fontWeight:750, fontSize:14.5, marginBottom:6, display:"flex", alignItems:"center", gap:8 }}>
+                    {s.groupName ?? s.customName ?? "Dars"}
+                    {s.lessonType === "diagnostika" && (
+                      <span style={{ fontSize:10.5, fontWeight:700, color:"#f59e0b", background:"#fef3c7", padding:"2px 7px", borderRadius:20 }}>
+                        Diagnostika
+                      </span>
+                    )}
+                    {s.lessonType === "individual" && (
+                      <span style={{ fontSize:10.5, fontWeight:700, color:"#7c3aed", background:"#ede9fe", padding:"2px 7px", borderRadius:20 }}>
+                        Individual
+                      </span>
+                    )}
+                  </div>
                   <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
                     <span style={{ fontSize:12.5, color:"var(--text-faint)", display:"flex", alignItems:"center", gap:4 }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -581,90 +598,6 @@ export default function TeacherDashboard() {
           ))}
         </div>
       </Card>
-
-      {endModalSlot && (
-        <EndLessonModal slot={endModalSlot} onClose={() => setEndModalSlot(null)} />
-      )}
     </div>
-  );
-}
-
-/* ─── Darsni tugatish oynasi ─── */
-function EndLessonModal({ slot, onClose }: { slot: ScheduleSlot; onClose: () => void }) {
-  const endLesson = useEndLesson();
-  const [topic, setTopic] = useState("");
-  const [hwTitle, setHwTitle] = useState("");
-  const [hwDescription, setHwDescription] = useState("");
-  const [hwDueDate, setHwDueDate] = useState("");
-  const [hwXp, setHwXp] = useState(30);
-  const [err, setErr] = useState("");
-
-  const showHomework = slot.lessonType === "guruh";
-
-  async function handleConfirm() {
-    setErr("");
-    try {
-      await endLesson.mutateAsync({
-        scheduleSlotId: slot.id,
-        topic: topic.trim() || undefined,
-        homework: hwTitle.trim()
-          ? { title: hwTitle.trim(), description: hwDescription.trim() || undefined, dueDate: hwDueDate || undefined, xpReward: hwXp }
-          : undefined,
-      });
-      onClose();
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
-    }
-  }
-
-  return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "var(--surface)", borderRadius: 18, width: 440, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", padding: "24px 22px" }}>
-        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>Darsni tugatish</div>
-        <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 16 }}>{slot.groupName}</div>
-
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>MAVZU (IXTIYORIY)</label>
-          <input className="inp" style={{ width: "100%" }} placeholder="Bugungi dars mavzusi"
-            value={topic} onChange={(e) => setTopic(e.target.value)} />
-        </div>
-
-        {showHomework && (
-          <>
-            <div style={{ height: 1, background: "var(--border)", margin: "14px 0" }} />
-            <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 10 }}>Uyga vazifa (ixtiyoriy)</div>
-            <div style={{ marginBottom: 10 }}>
-              <input className="inp" style={{ width: "100%" }} placeholder="Vazifa sarlavhasi"
-                value={hwTitle} onChange={(e) => setHwTitle(e.target.value)} />
-            </div>
-            <div style={{ marginBottom: 10 }}>
-              <textarea className="inp" style={{ width: "100%", minHeight: 60, resize: "vertical" }}
-                placeholder="Tavsif (ixtiyoriy)..." value={hwDescription} onChange={(e) => setHwDescription(e.target.value)} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 4 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", marginBottom: 4 }}>MUDDAT</label>
-                <input className="inp" type="date" style={{ width: "100%" }} value={hwDueDate} onChange={(e) => setHwDueDate(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", marginBottom: 4 }}>XP MUKOFOT</label>
-                <input className="inp" type="number" min={0} max={200} style={{ width: "100%" }} value={hwXp} onChange={(e) => setHwXp(Number(e.target.value))} />
-              </div>
-            </div>
-          </>
-        )}
-
-        {err && <div style={{ color: "#ef4444", fontSize: 13, fontWeight: 600, marginTop: 12 }}>{err}</div>}
-
-        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-          <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
-          <button className="btn primary" style={{ flex: 2 }} onClick={handleConfirm} disabled={endLesson.isPending}>
-            <Icon name="check" size={14} /> {endLesson.isPending ? "Saqlanmoqda..." : "Darsni yakunlash"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
   );
 }

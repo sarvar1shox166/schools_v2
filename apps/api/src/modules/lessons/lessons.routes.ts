@@ -279,7 +279,7 @@ export async function lessonsRoutes(app: FastifyInstance) {
       const lessonRes = await client.query(
         `INSERT INTO lessons (tenant_id, schedule_slot_id, group_id, teacher_id, conducted_at, topic, zoom_link, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'conducted')
-         ON CONFLICT (schedule_slot_id, conducted_at) DO NOTHING
+         ON CONFLICT (schedule_slot_id, conducted_at) WHERE schedule_slot_id IS NOT NULL DO NOTHING
          RETURNING id`,
         [tenantId, slot.id, slot.groupId, teacherId, today, body.topic ?? null, slot.zoomLink]
       );

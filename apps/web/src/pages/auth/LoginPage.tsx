@@ -84,8 +84,29 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [tgChecking, setTgChecking] = useState(false);
+  // Sahifa ochilganda — agar refresh token (7-30 kunlik) hali amal qilsa, qayta
+  // login qildirmasdan avtomatik tegishli sahifaga o'tkaziladi. Access token
+  // atigi 15 daqiqa yashaydi, shuning uchun bu tekshiruv har safar kerak.
+  const [autoChecking, setAutoChecking] = useState(() => {
+    const { refreshToken, user } = useAuthStore.getState();
+    return !!(refreshToken && user);
+  });
   const setSession = useAuthStore((s) => s.setSession);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const { refreshToken, user, logout } = useAuthStore.getState();
+    if (!refreshToken || !user) return;
+    api.post("/auth/refresh", { refreshToken })
+      .then(({ data }) => {
+        setSession({ accessToken: data.accessToken, refreshToken: data.refreshToken, user });
+        navigate(ROLE_HOME[user.role]);
+      })
+      .catch(() => {
+        logout();
+        setAutoChecking(false);
+      });
+  }, [navigate, setSession]);
 
   useEffect(() => {
     const webApp = getTelegramWebApp();
@@ -116,11 +137,11 @@ export default function LoginPage() {
     }
   }
 
-  if (tgChecking) {
+  if (tgChecking || autoChecking) {
     return (
       <div style={{ ...S.body }}>
         <div style={{ color: "#6b6480", fontSize: 15, fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>
-          Telegram orqali tekshirilmoqda...
+          {tgChecking ? "Telegram orqali tekshirilmoqda..." : "Tizimga kirilmoqda..."}
         </div>
       </div>
     );

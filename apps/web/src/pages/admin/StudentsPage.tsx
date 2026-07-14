@@ -21,7 +21,7 @@ type Student = {
   age: number | null;
   status: "yangi" | "faol" | "nofaol";
   joinedAt: string;
-  groups: Array<{ id: string; name: string; teacherName?: string | null }>;
+  groups: Array<{ id: string; name: string; teacherId?: string | null; teacherName?: string | null }>;
   paymentStatus?: "active" | "debt" | "inactive" | "no_package" | null;
   activePackageExpires?: string | null;
 };
@@ -38,14 +38,7 @@ const LEVEL_COLOR: Record<string, string> = {
   "Nomzod":       "#14b8a6",
 };
 
-const FILTER_TABS = [
-  { v: "hammasi" as const, label: "Hammasi" },
-  { v: "faol"    as const, label: "Faol" },
-  { v: "yangi"   as const, label: "Yangi" },
-  { v: "nofaol"  as const, label: "Nofaol" },
-];
-
-type FilterTab = "hammasi" | "faol" | "yangi" | "nofaol";
+const ALL_TAB = "hammasi";
 
 const PAY_STATUS_LABEL: Record<string, string> = {
   active:     "To'langan",
@@ -65,7 +58,7 @@ const PAY_STATUS_COLOR: Record<string, { bg: string; color: string }> = {
 export default function StudentsPage() {
   const navigate = useNavigate();
   const { data: students = [], isLoading } = useStudents();
-  const [tab, setTab] = useState<FilterTab>("hammasi");
+  const [tab, setTab] = useState<string>(ALL_TAB);
   const [q, setQ] = useState("");
 
   type Modal =
@@ -76,9 +69,21 @@ export default function StudentsPage() {
     | null;
   const [modal, setModal] = useState<Modal>(null);
 
+  const teacherTabs = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of students as Student[]) {
+      for (const g of s.groups) {
+        if (g.teacherId && g.teacherName) map.set(g.teacherId, g.teacherName);
+      }
+    }
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [students]);
+
   const filtered = useMemo(() => {
     let rows = students as Student[];
-    if (tab !== "hammasi") rows = rows.filter((s) => s.status === tab);
+    if (tab !== ALL_TAB) rows = rows.filter((s) => s.groups.some((g) => g.teacherId === tab));
     if (q) {
       const lq = q.toLowerCase();
       rows = rows.filter((s) =>
@@ -115,23 +120,41 @@ export default function StudentsPage() {
           display: "flex", alignItems: "center", gap: 8,
           padding: "14px 22px", borderBottom: "1px solid var(--border)",
         }}>
-          {FILTER_TABS.map((t) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, overflowX: "auto", minWidth: 0 }}>
             <button
-              key={t.v}
-              onClick={() => setTab(t.v)}
+              onClick={() => setTab(ALL_TAB)}
               style={{
                 padding: "6px 16px", borderRadius: 8,
-                border: tab === t.v ? "1.5px solid var(--border-strong)" : "1.5px solid transparent",
-                background: tab === t.v ? "var(--surface)" : "transparent",
-                fontWeight: tab === t.v ? 700 : 600, fontSize: 13.5,
-                color: tab === t.v ? "var(--text)" : "var(--text-faint)",
+                border: tab === ALL_TAB ? "1.5px solid var(--border-strong)" : "1.5px solid transparent",
+                background: tab === ALL_TAB ? "var(--surface)" : "transparent",
+                fontWeight: tab === ALL_TAB ? 700 : 600, fontSize: 13.5,
+                color: tab === ALL_TAB ? "var(--text)" : "var(--text-faint)",
                 cursor: "pointer", transition: "all .15s",
-                boxShadow: tab === t.v ? "var(--shadow-xs)" : "none",
+                boxShadow: tab === ALL_TAB ? "var(--shadow-xs)" : "none",
+                flexShrink: 0,
               }}
             >
-              {t.label}
+              Hammasi
             </button>
-          ))}
+            {teacherTabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                style={{
+                  padding: "6px 16px", borderRadius: 8,
+                  border: tab === t.id ? "1.5px solid var(--border-strong)" : "1.5px solid transparent",
+                  background: tab === t.id ? "var(--surface)" : "transparent",
+                  fontWeight: tab === t.id ? 700 : 600, fontSize: 13.5,
+                  color: tab === t.id ? "var(--text)" : "var(--text-faint)",
+                  cursor: "pointer", transition: "all .15s",
+                  boxShadow: tab === t.id ? "var(--shadow-xs)" : "none",
+                  whiteSpace: "nowrap", flexShrink: 0,
+                }}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
           <div style={{ flex: 1 }} />
           <label className="search" style={{ minWidth: 240 }}>
             <Icon name="search" size={16} />
@@ -214,16 +237,23 @@ export default function StudentsPage() {
                       </td>
                       <td>
                         {s.groups.length > 0 ? (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                             {s.groups.map((g) => (
-                              <span key={g.id} style={{
-                                display: "inline-flex", alignItems: "center",
-                                padding: "2px 8px", borderRadius: 6,
-                                background: "var(--surface-2)", fontSize: 12,
-                                fontWeight: 600, color: "var(--text-dim)",
-                              }}>
-                                {g.name}
-                              </span>
+                              <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                <span style={{
+                                  display: "inline-flex", alignItems: "center",
+                                  padding: "2px 8px", borderRadius: 6,
+                                  background: "var(--surface-2)", fontSize: 12,
+                                  fontWeight: 600, color: "var(--text-dim)",
+                                }}>
+                                  {g.name}
+                                </span>
+                                {g.teacherName && (
+                                  <span style={{ fontSize: 11.5, color: "var(--text-faint)" }}>
+                                    {g.teacherName}
+                                  </span>
+                                )}
+                              </div>
                             ))}
                           </div>
                         ) : <span style={{ color: "var(--text-faint)", fontSize: 13 }}>—</span>}

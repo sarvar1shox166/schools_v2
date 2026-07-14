@@ -1018,7 +1018,6 @@ function ExceptionModal({ slot, occurrenceDate, existing, onClose, onCancel, onR
   isPending: boolean;
 }) {
   const [action, setAction] = useState<"cancelled" | "rescheduled">("cancelled");
-  const [date, setDate] = useState(occurrenceDate);
   const [newDate, setNewDate] = useState(occurrenceDate);
   const [newTime, setNewTime] = useState(String(slot.startTime).slice(0, 5));
   const [reason, setReason] = useState("");
@@ -1067,12 +1066,11 @@ function ExceptionModal({ slot, occurrenceDate, existing, onClose, onCancel, onR
               </button>
             ))}
           </div>
-        </div>
-
-        <div>
-          <label style={labelStyle}>QAYSI SANADA</label>
-          <input className="inp" type="date" style={{ width: "100%" }} value={date}
-            onChange={(e) => setDate(e.target.value)} />
+          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+            {action === "cancelled"
+              ? `Faqat ${fmtDisplayDate(occurrenceDate)} kungi darsni bekor qiladi — haftalik jadval o'zgarmaydi, keyingi safar dars odatdagidek bo'ladi.`
+              : `Faqat ${fmtDisplayDate(occurrenceDate)} kungi darsni boshqa sana/vaqtga ko'chiradi — haftalik jadval o'zgarmaydi, bu bir martalik ko'chirish.`}
+          </div>
         </div>
 
         {action === "rescheduled" && (
@@ -1101,8 +1099,8 @@ function ExceptionModal({ slot, occurrenceDate, existing, onClose, onCancel, onR
         <button className="btn" style={{ flex: 1 }} onClick={onClose}>Bekor</button>
         <button className="btn primary" style={{ flex: 2 }} disabled={isPending}
           onClick={() => action === "cancelled"
-            ? onCancel(date, reason || undefined)
-            : onReschedule(date, newDate, newTime, reason || undefined)}>
+            ? onCancel(occurrenceDate, reason || undefined)
+            : onReschedule(occurrenceDate, newDate, newTime, reason || undefined)}>
           <Icon name="check" size={14} /> {isPending ? "Saqlanmoqda..." : "Tasdiqlash"}
         </button>
       </div>

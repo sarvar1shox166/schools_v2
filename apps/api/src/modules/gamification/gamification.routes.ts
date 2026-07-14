@@ -3,6 +3,7 @@ import { z } from "zod";
 import { checkPuzzleMove } from "@chess-school/chess-engine";
 import { pool } from "../../db/pool.js";
 import { awardXp } from "./xp.js";
+import { notifyStudent } from "../notifications/notify.js";
 
 const PUZZLE_SECTIONS = ["mot1", "mot2", "mot3", "series", "time"] as const;
 
@@ -25,6 +26,11 @@ async function getTeacherIdForUser(userId: string): Promise<string | null> {
 const attemptSchema = z.object({
   moveIndex: z.number().int().nonnegative(),
   move: z.string().min(4),
+});
+
+const awardXpSchema = z.object({
+  amount: z.number().int().min(1).max(500),
+  note: z.string().max(200).optional(),
 });
 
 async function getStudentIdForUser(userId: string): Promise<string | null> {
@@ -213,6 +219,45 @@ export async function gamificationRoutes(app: FastifyInstance) {
       client.release();
     }
   });
+
+  // ---- O'qituvchi tomonidan qo'lda XP berish (masalan jonli dars davomida) ----
+
+  app.post(
+    "/teacher/students/:studentId/xp",
+    { onRequest: [app.requireRole("teacher")] },
+    async (request, reply) => {
+      const { studentId } = request.params as { studentId: string };
+      const body = awardXpSchema.parse(request.body);
+      const teacherId = await getTeacherIdForUser(request.user.sub);
+      if (!teacherId) return reply.code(404).send({ error: "Teacher not found" });
+
+      const ownRes = await pool.query(
+        `SELECT 1 FROM group_members gm JOIN groups g ON g.id = gm.group_id
+         WHERE gm.student_id = $1 AND g.teacher_id = $2 LIMIT 1`,
+        [studentId, teacherId]
+      );
+      if (ownRes.rows.length === 0) return reply.code(403).send({ error: "Forbidden" });
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await awardXp(client, studentId, body.amount);
+        await notifyStudent(
+          client,
+          studentId,
+          `O'qituvchingiz sizga ${body.amount} XP berdi${body.note ? `: ${body.note}` : ""}`,
+          { title: "XP olindi!", type: "xp_earned", icon: "zap" }
+        );
+        await client.query("COMMIT");
+        return { ...result, xpAwarded: body.amount };
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+    }
+  );
 
   // ---- Student XP / achievements ----
 

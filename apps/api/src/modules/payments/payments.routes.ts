@@ -37,6 +37,9 @@ const assignSchema = z.object({
   packageId: z.string().uuid(),
   method: z.enum(["click", "payme", "naqd", "uzcard"]),
   expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // O'tgan sanadagi to'lovni ro'yxatga olish uchun (masalan avvalroq qo'shilgan o'quvchi) —
+  // bo'sh bo'lsa hozirgi vaqt ishlatiladi.
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export async function paymentsRoutes(app: FastifyInstance) {
@@ -171,17 +174,17 @@ export async function paymentsRoutes(app: FastifyInstance) {
       const pkg = pkgRes.rows[0];
 
       const spRes = await client.query(
-        `INSERT INTO student_packages (student_id, package_id, total_lessons, expires_at)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
-        [body.studentId, body.packageId, pkg.lessons_count, body.expiresAt ?? null]
+        `INSERT INTO student_packages (student_id, package_id, total_lessons, expires_at, purchased_at)
+         VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, now())) RETURNING id`,
+        [body.studentId, body.packageId, pkg.lessons_count, body.expiresAt ?? null, body.paidAt ?? null]
       );
       const studentPackageId = spRes.rows[0].id;
 
       const txStatus = body.method === "click" || body.method === "payme" ? "pending" : "paid";
       const txRes = await client.query(
-        `INSERT INTO transactions (tenant_id, student_id, student_package_id, amount, method, status)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [tenantId, body.studentId, studentPackageId, pkg.price, body.method, txStatus]
+        `INSERT INTO transactions (tenant_id, student_id, student_package_id, amount, method, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, now())) RETURNING id`,
+        [tenantId, body.studentId, studentPackageId, pkg.price, body.method, txStatus, body.paidAt ?? null]
       );
 
       await client.query("COMMIT");

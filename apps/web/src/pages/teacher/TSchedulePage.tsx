@@ -73,7 +73,19 @@ export default function TSchedulePage() {
                           {DAY_NAMES[slot.dayOfWeek]} · {String(slot.startTime).slice(0, 5)}
                           {slot.isOnline ? " · Online" : ""}
                         </div>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{slot.groupName}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontWeight: 700, fontSize: 14 }}>{slot.groupName ?? slot.customName ?? "Dars"}</span>
+                          {slot.lessonType === "diagnostika" && (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: "#f59e0b", background: "#fef3c7", padding: "2px 7px", borderRadius: 20, flexShrink: 0 }}>
+                              Diagnostika
+                            </span>
+                          )}
+                          {slot.lessonType === "individual" && (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", padding: "2px 7px", borderRadius: 20, flexShrink: 0 }}>
+                              Individual
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                         <span style={{ fontSize: 12, color: "var(--text-faint)" }}>

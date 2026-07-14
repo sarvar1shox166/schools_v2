@@ -45,10 +45,13 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const params: unknown[] = [tenantId];
     let roleFilter = "";
     if (role === "student") {
-      roleFilter = `AND g.id IN (
-        SELECT gm.group_id FROM group_members gm
-        JOIN students s ON s.id = gm.student_id
-        WHERE s.user_id = $2
+      roleFilter = `AND (
+        g.id IN (
+          SELECT gm.group_id FROM group_members gm
+          JOIN students s ON s.id = gm.student_id
+          WHERE s.user_id = $2
+        )
+        OR sl.student_id = (SELECT id FROM students WHERE user_id = $2)
       )`;
       params.push(sub);
     } else if (role === "moderator") {
@@ -108,10 +111,13 @@ export async function scheduleRoutes(app: FastifyInstance) {
         LEFT JOIN teacher_attendance ta ON ta.schedule_slot_id = sl.id AND ta.date = CURRENT_DATE
           AND ta.teacher_id = (SELECT id FROM teachers WHERE user_id = $4)`;
     } else if (role === "student") {
-      filter = `AND g.id IN (
-        SELECT gm.group_id FROM group_members gm
-        JOIN students s ON s.id = gm.student_id
-        WHERE s.user_id = $4
+      filter = `AND (
+        g.id IN (
+          SELECT gm.group_id FROM group_members gm
+          JOIN students s ON s.id = gm.student_id
+          WHERE s.user_id = $4
+        )
+        OR sl.student_id = (SELECT id FROM students WHERE user_id = $4)
       )`;
       params.push(sub);
     } else if (role === "moderator") {
@@ -168,15 +174,22 @@ export async function scheduleRoutes(app: FastifyInstance) {
               sl.duration_minutes AS "durationMinutes", sl.specific_date AS "specificDate",
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
               sl.meeting_platform AS "meetingPlatform",
-              tu.full_name AS "teacherName", tu.phone AS "teacherPhone"
+              sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
+              COALESCE(tu2.full_name, tu.full_name) AS "teacherName",
+              COALESCE(tu2.phone, tu.phone) AS "teacherPhone"
        FROM schedule_slots sl
-       JOIN groups g ON g.id = sl.group_id
+       LEFT JOIN groups g ON g.id = sl.group_id
        LEFT JOIN teachers t ON t.id = g.teacher_id
        LEFT JOIN users tu ON tu.id = t.user_id
-       WHERE g.id IN (
-         SELECT gm.group_id FROM group_members gm
-         JOIN students s ON s.id = gm.student_id
-         WHERE s.user_id = $1
+       LEFT JOIN teachers t2 ON t2.id = sl.teacher_id
+       LEFT JOIN users tu2 ON tu2.id = t2.user_id
+       WHERE (
+         g.id IN (
+           SELECT gm.group_id FROM group_members gm
+           JOIN students s ON s.id = gm.student_id
+           WHERE s.user_id = $1
+         )
+         OR sl.student_id = (SELECT id FROM students WHERE user_id = $1)
        )
        AND (sl.specific_date IS NULL OR sl.specific_date >= CURRENT_DATE)`,
       [sub]
@@ -506,7 +519,10 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const params: unknown[] = [tenantId];
     let roleFilter = "";
     if (role === "student") {
-      roleFilter = `AND g.id IN (SELECT gm.group_id FROM group_members gm JOIN students s ON s.id = gm.student_id WHERE s.user_id = $2)`;
+      roleFilter = `AND (
+        g.id IN (SELECT gm.group_id FROM group_members gm JOIN students s ON s.id = gm.student_id WHERE s.user_id = $2)
+        OR sl.student_id = (SELECT id FROM students WHERE user_id = $2)
+      )`;
       params.push(sub);
     } else if (role === "teacher") {
       roleFilter = `AND (g.teacher_id = (SELECT id FROM teachers WHERE user_id = $2) OR sl.teacher_id = (SELECT id FROM teachers WHERE user_id = $2))`;

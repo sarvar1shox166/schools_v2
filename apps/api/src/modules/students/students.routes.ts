@@ -37,6 +37,7 @@ export async function studentsRoutes(app: FastifyInstance) {
              s.level, s.age, s.status, s.joined_at AS "joinedAt",
              COALESCE(
                (SELECT json_agg(json_build_object('id', g.id, 'name', g.name,
+                  'teacherId', g.teacher_id,
                   'teacherName', (SELECT full_name FROM users WHERE id = (
                     SELECT user_id FROM teachers WHERE id = g.teacher_id))))
                 FROM group_members gm JOIN groups g ON g.id = gm.group_id

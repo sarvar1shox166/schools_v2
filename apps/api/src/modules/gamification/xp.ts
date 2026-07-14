@@ -14,12 +14,16 @@ export async function awardXp(client: PoolClient, studentId: string, amount: num
 
   // Atomic upsert avoids read-modify-write race when two concurrent calls
   // both see no existing row and race to insert for the first time.
+  // xp/level are INTEGER columns and $2 is always a whole number — plain
+  // integer division (which truncates toward zero, equivalent to floor()
+  // for non-negative values) avoids re-casting $2 to numeric elsewhere in
+  // the same statement, which Postgres rejects as an inconsistent param type.
   const res = await client.query(
     `INSERT INTO student_xp (student_id, xp, level, streak, last_active_date)
-     VALUES ($1, $2, floor($2::numeric / 200) + 1, 1, $3)
+     VALUES ($1, $2, ($2 / 200) + 1, 1, $3)
      ON CONFLICT (student_id) DO UPDATE SET
        xp   = student_xp.xp + $2,
-       level = floor((student_xp.xp + $2) / 200) + 1,
+       level = ((student_xp.xp + $2) / 200) + 1,
        streak = CASE
                   WHEN student_xp.last_active_date = $3 THEN student_xp.streak
                   WHEN student_xp.last_active_date = $4 THEN student_xp.streak + 1
