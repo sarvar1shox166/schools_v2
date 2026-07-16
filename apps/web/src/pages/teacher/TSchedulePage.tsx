@@ -1,29 +1,57 @@
-import { useJoinTeacherLesson, useTeacherSchedule } from "../../lib/queries.js";
+import { useMemo } from "react";
+import { useJoinTeacherLesson, useTeacherSchedule, useScheduleOccurrences } from "../../lib/queries.js";
 
 const DAY_NAMES = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
 const DAY_SHORT = ["Du", "Se", "Cho", "Pay", "Ju", "Sha", "Yak"];
 
-function todayDow() {
-  return (new Date().getDay() + 6) % 7;
+/* ─── Mahalliy sana yordamchilari (UTC siljishisiz) ─── */
+function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+function mondayOf(d: Date): Date {
+  return addDays(d, -todayDowOf(d));
+}
+function todayDowOf(d: Date): number {
+  return (d.getDay() + 6) % 7;
 }
 
 export default function TSchedulePage() {
   const { data, isLoading } = useTeacherSchedule();
   const joinLesson = useJoinTeacherLesson();
-  const slots = data?.slots ?? [];
   const groups = data?.groups ?? [];
+  const templateSlots = data?.slots ?? [];
+
+  // Joriy hafta (Dushanba-Yakshanba) — bekor qilingan/ko'chirilgan darslarni
+  // hisobga olgan holda haqiqiy sanalarga yoyilgan ro'yxat.
+  const weekStart = useMemo(() => mondayOf(new Date()), []);
+  const from = toDateStr(weekStart);
+  const to = toDateStr(addDays(weekStart, 6));
+  const { data: occurrenceDays, isLoading: occLoading } = useScheduleOccurrences(from, to);
+
+  const weekSlots = useMemo(() => {
+    const list = (occurrenceDays ?? []).flatMap((day) => day.slots);
+    return list.sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate) || String(a.startTime).localeCompare(String(b.startTime)));
+  }, [occurrenceDays]);
 
   const totalStudents = groups.reduce((s, g) => s + g.studentsCount, 0);
   const weeklyHours = groups.reduce((s, g) => s + g.weeklyHours, 0);
 
   const kpis = [
-    { v: String(slots.length),          l: "Dars (hafta)" },
+    { v: String(templateSlots.length),  l: "Dars (hafta)" },
     { v: `${weeklyHours.toFixed(1)} s`, l: "Umumiy soat" },
     { v: String(groups.length),         l: "Guruh" },
     { v: String(totalStudents),         l: "O'quvchilar" },
   ];
 
-  if (isLoading) {
+  if (isLoading || occLoading) {
     return (
       <div style={{ padding: "40px", textAlign: "center", color: "var(--text-faint)" }}>
         Yuklanmoqda...
@@ -48,33 +76,38 @@ export default function TSchedulePage() {
             </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>Haftalik jadval</div>
-              <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 1 }}>Jami {slots.length} ta dars joylashgan</div>
+              <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 1 }}>Jami {weekSlots.length} ta dars joylashgan</div>
             </div>
           </div>
 
-          {slots.length === 0 ? (
+          {weekSlots.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "var(--text-faint)" }}>
               Jadval topilmadi
             </div>
           ) : (
             <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-              {[...slots]
-                .sort((a, b) => a.dayOfWeek - b.dayOfWeek || String(a.startTime).localeCompare(String(b.startTime)))
-                .map((slot) => {
+              {weekSlots.map((slot) => {
                   const color = slot.color ?? "#3b82f6";
+                  const cancelled = slot.exceptionKind === "cancelled";
+                  const rescheduled = slot.exceptionKind === "rescheduled";
+                  const occDate = new Date(slot.occurrenceDate + "T00:00:00");
+                  const studentsCount = groups.find((g) => g.id === slot.groupId)?.studentsCount ?? 0;
                   return (
-                    <div key={slot.id} style={{
+                    <div key={`${slot.id}-${slot.occurrenceDate}`} style={{
                       background: "var(--surface-2)", borderRadius: 12, padding: "12px 14px",
-                      borderLeft: `3px solid ${color}`,
+                      borderLeft: `3px solid ${cancelled ? "var(--text-faint)" : color}`,
                       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                      opacity: cancelled ? 0.55 : 1,
                     }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 3 }}>
-                          {DAY_NAMES[slot.dayOfWeek]} · {String(slot.startTime).slice(0, 5)}
+                          {DAY_NAMES[todayDowOf(occDate)]} {occDate.getDate()} · {String(slot.startTime).slice(0, 5)}
                           {slot.isOnline ? " · Online" : ""}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontWeight: 700, fontSize: 14 }}>{slot.groupName ?? slot.customName ?? "Dars"}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 700, fontSize: 14, textDecoration: cancelled ? "line-through" : "none" }}>
+                            {slot.groupName ?? slot.customName ?? "Dars"}
+                          </span>
                           {slot.lessonType === "diagnostika" && (
                             <span style={{ fontSize: 10.5, fontWeight: 700, color: "#f59e0b", background: "#fef3c7", padding: "2px 7px", borderRadius: 20, flexShrink: 0 }}>
                               Diagnostika
@@ -85,16 +118,26 @@ export default function TSchedulePage() {
                               Individual
                             </span>
                           )}
+                          {cancelled && (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-faint)", background: "var(--surface-3)", padding: "2px 7px", borderRadius: 20, flexShrink: 0 }}>
+                              ⊘ Bekor qilindi
+                            </span>
+                          )}
+                          {rescheduled && (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: "#059669", background: "#d1fae5", padding: "2px 7px", borderRadius: 20, flexShrink: 0 }}>
+                              → Ko'chirilgan
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                         <span style={{ fontSize: 12, color: "var(--text-faint)" }}>
-                          {slot.studentsCount} o'q
+                          {studentsCount} o'q
                         </span>
-                        {slot.isOnline && slot.meetingUrl && (
+                        {!cancelled && slot.isOnline && slot.meetingUrl && (
                           <button
                             onClick={() => {
-                              if (slot.dayOfWeek === todayDow()) joinLesson.mutate(slot.id);
+                              if (slot.occurrenceDate === toDateStr(new Date())) joinLesson.mutate(slot.id);
                               window.open(slot.meetingUrl!, "_blank", "noreferrer");
                             }}
                             style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", textDecoration: "none",
@@ -145,7 +188,7 @@ export default function TSchedulePage() {
               <div style={{ display: "flex", flexDirection: "column" }}>
                 {groups.map((g, i) => {
                   const color = g.color ?? "#3b82f6";
-                  const groupSlots = slots.filter((s) => s.groupId === g.id);
+                  const groupSlots = templateSlots.filter((s) => s.groupId === g.id);
                   const days = [...new Set(groupSlots.map((s) => s.dayOfWeek))].sort().map((d) => DAY_SHORT[d]).join("·");
                   const time = groupSlots[0] ? String(groupSlots[0].startTime).slice(0, 5) : "";
                   const letter = (g.name[0] ?? "G").toUpperCase();

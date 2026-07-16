@@ -9,6 +9,7 @@ const createSchema = z.object({
   roomId: z.string().uuid().optional(),
   color: z.string().optional(),
   capacity: z.number().int().positive().optional(),
+  totalLessons: z.number().int().positive().optional().nullable(),
 });
 
 const updateSchema = createSchema.partial();
@@ -22,7 +23,9 @@ export async function groupsRoutes(app: FastifyInstance) {
       `SELECT g.id, g.name, g.level, g.color, g.capacity, g.room_id AS "roomId",
               r.name AS "roomName",
               g.teacher_id AS "teacherId", tu.full_name AS "teacherName",
-              (SELECT count(*) FROM group_members gm WHERE gm.group_id = g.id) AS "studentsCount"
+              g.total_lessons AS "totalLessons",
+              (SELECT count(*) FROM group_members gm WHERE gm.group_id = g.id) AS "studentsCount",
+              (SELECT count(*) FROM lessons l WHERE l.group_id = g.id AND l.status = 'conducted') AS "completedLessons"
        FROM groups g
        LEFT JOIN rooms r ON r.id = g.room_id
        LEFT JOIN teachers t ON t.id = g.teacher_id
@@ -38,9 +41,9 @@ export async function groupsRoutes(app: FastifyInstance) {
     const body = createSchema.parse(request.body);
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `INSERT INTO groups (tenant_id, name, level, teacher_id, room_id, color, capacity)
-       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 12)) RETURNING id`,
-      [tenantId, body.name, body.level ?? null, body.teacherId ?? null, body.roomId ?? null, body.color ?? null, body.capacity ?? null]
+      `INSERT INTO groups (tenant_id, name, level, teacher_id, room_id, color, capacity, total_lessons)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 12), $8) RETURNING id`,
+      [tenantId, body.name, body.level ?? null, body.teacherId ?? null, body.roomId ?? null, body.color ?? null, body.capacity ?? null, body.totalLessons ?? null]
     );
     return reply.code(201).send({ id: rows[0].id });
   });
@@ -53,9 +56,10 @@ export async function groupsRoutes(app: FastifyInstance) {
       `UPDATE groups SET
          name = COALESCE($1, name), level = COALESCE($2, level),
          teacher_id = COALESCE($3, teacher_id), room_id = COALESCE($4, room_id),
-         color = COALESCE($5, color), capacity = COALESCE($6, capacity)
+         color = COALESCE($5, color), capacity = COALESCE($6, capacity),
+         total_lessons = COALESCE($9, total_lessons)
        WHERE id = $7 AND tenant_id = $8`,
-      [body.name ?? null, body.level ?? null, body.teacherId ?? null, body.roomId ?? null, body.color ?? null, body.capacity ?? null, id, tenantId]
+      [body.name ?? null, body.level ?? null, body.teacherId ?? null, body.roomId ?? null, body.color ?? null, body.capacity ?? null, id, tenantId, body.totalLessons ?? null]
     );
     return { ok: true };
   });

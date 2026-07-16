@@ -36,6 +36,8 @@ const updateSchema = z.object({
 
 const DIAGNOSTIC_DURATION_MINUTES = 60;
 
+class PhoneTakenError extends Error {}
+
 /** Diagnostika belgilangan arizadan darhol o'quvchi hisobi yaratadi — shu bilan
  *  arizaga login/parol berish mumkin bo'ladi va diagnostika darsi o'quvchining
  *  o'z jadvalida (schedule_slots.student_id orqali) ko'rinadi. */
@@ -44,6 +46,11 @@ async function createStudentAccount(
   tenantId: string,
   info: { fullName: string; phone: string; age?: number | null; level?: string | null }
 ): Promise<{ studentId: string; tempPassword: string }> {
+  const existing = await client.query(`SELECT 1 FROM users WHERE phone = $1`, [info.phone]);
+  if (existing.rows.length > 0) {
+    throw new PhoneTakenError("Bu telefon raqami bilan foydalanuvchi allaqachon mavjud");
+  }
+
   const { hashPassword, generateTempPassword } = await import("../auth/auth.service.js");
   const tempPassword = generateTempPassword();
   const passwordHash = await hashPassword(tempPassword);
@@ -175,6 +182,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
       return reply.code(201).send({ id: rows[0].id, studentId, tempPassword });
     } catch (err) {
       await client.query("ROLLBACK");
+      if (err instanceof PhoneTakenError) return reply.code(409).send({ error: "phone_taken", message: err.message });
       throw err;
     } finally {
       client.release();
@@ -291,6 +299,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
       return { ok: true, studentId, tempPassword };
     } catch (err) {
       await client.query("ROLLBACK");
+      if (err instanceof PhoneTakenError) return reply.code(409).send({ error: "phone_taken", message: err.message });
       throw err;
     } finally {
       client.release();
@@ -358,12 +367,31 @@ export async function applicationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     const cur = await pool.query(
-      `SELECT schedule_slot_id AS "scheduleSlotId" FROM applications WHERE id = $1 AND tenant_id = $2`,
+      `SELECT schedule_slot_id AS "scheduleSlotId", converted_student_id AS "convertedStudentId", status
+       FROM applications WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
     );
     await pool.query(`DELETE FROM applications WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
     const slotId = cur.rows[0]?.scheduleSlotId;
     if (slotId) await pool.query(`DELETE FROM schedule_slots WHERE id = $1`, [slotId]);
+
+    // Diagnostika bosqichida arizadan avtomatik yaratilgan (lekin hali "ro'yxatdan
+    // o'tdi" holatiga o'tkazilmagan, ya'ni haqiqiy o'quvchi bo'lmagan) hisobni ham
+    // tozalaymiz — aks holda telefon raqami band bo'lib qolib, xuddi shu raqam bilan
+    // yangi ariza qo'shib bo'lmay qoladi. Real bog'liq ma'lumot bo'lsa (masalan
+    // allaqachon guruh/davomat) xatolik jim yutiladi — ariza o'chirish shu sababli
+    // to'xtab qolmasligi kerak.
+    const studentId = cur.rows[0]?.convertedStudentId;
+    if (studentId && cur.rows[0]?.status !== "royxatdan_otdi") {
+      try {
+        const userRes = await pool.query(`SELECT user_id AS "userId" FROM students WHERE id = $1`, [studentId]);
+        if (userRes.rows[0]) await pool.query(`DELETE FROM users WHERE id = $1`, [userRes.rows[0].userId]);
+      } catch {
+        // Bog'liq ma'lumot (davomat, guruh a'zoligi va h.k.) bo'lsa — hisobni
+        // o'chirmasdan qoldiramiz, ariza o'chirish baribir muvaffaqiyatli tugaydi.
+      }
+    }
+
     return { ok: true };
   });
 }

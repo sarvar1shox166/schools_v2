@@ -455,24 +455,59 @@ function IshHaqiTab() {
   const { data: settings = [], isLoading, isError } = useSalarySettings();
   const updateMut = useUpdateSalarySetting();
 
+  const NUM_FIELDS = ["groupRate", "individualRate", "diagnosticRate", "monthlyAmount", "incomePercent", "retentionCoef"] as const;
+  type NumField = (typeof NUM_FIELDS)[number];
+
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm]     = useState<Partial<SalarySetting>>({});
+  const [salaryType, setSalaryType] = useState<SalarySetting["salaryType"] | null>(null);
+  // Raqamli maydonlar tahrirlash paytida matn sifatida saqlanadi — shu bilan
+  // maydonni vaqtincha bo'shatib (masalan eski qiymatni o'chirib) yangisini yozish
+  // mumkin bo'ladi; NaN/bo'sh qiymat hech qachon to'g'ridan-to'g'ri serverga
+  // yuborilmaydi, saqlashda haqiqiy sonlarga aylantiriladi (noto'g'ri bo'lsa eski
+  // qiymat ishlatiladi).
+  const [rawInputs, setRawInputs] = useState<Partial<Record<NumField, string>>>({});
 
   function startEdit(s: SalarySetting) {
     setEditId(s.teacherId);
-    setForm({ ...s });
+    setSalaryType(s.salaryType);
+    setRawInputs({
+      groupRate: String(s.groupRate), individualRate: String(s.individualRate),
+      diagnosticRate: String(s.diagnosticRate), monthlyAmount: String(s.monthlyAmount),
+      incomePercent: String(s.incomePercent), retentionCoef: String(s.retentionCoef),
+    });
   }
 
   function cancelEdit() {
     setEditId(null);
-    setForm({});
+    setSalaryType(null);
+    setRawInputs({});
+  }
+
+  function numValue(field: NumField, fallback: number): number {
+    // Backend NUMERIC ustunlari pg drayveri orqali string sifatida kelishi mumkin —
+    // fallback ham har doim haqiqiy songa aylantiriladi.
+    const raw = rawInputs[field];
+    if (raw === undefined || raw === "") return Number(fallback);
+    const n = Number(raw);
+    return Number.isNaN(n) ? Number(fallback) : n;
   }
 
   function saveEdit() {
-    if (!editId) return;
+    if (!editId || !salaryType) return;
+    const s = settings.find(x => x.teacherId === editId);
+    if (!s) return;
     updateMut.mutate(
-      { teacherId: editId, ...form },
-      { onSuccess: () => { setEditId(null); setForm({}); } }
+      {
+        teacherId: editId,
+        salaryType,
+        groupRate: numValue("groupRate", s.groupRate),
+        individualRate: numValue("individualRate", s.individualRate),
+        diagnosticRate: numValue("diagnosticRate", s.diagnosticRate),
+        monthlyAmount: numValue("monthlyAmount", s.monthlyAmount),
+        incomePercent: numValue("incomePercent", s.incomePercent),
+        retentionCoef: Math.max(0.01, numValue("retentionCoef", s.retentionCoef)),
+      },
+      { onSuccess: () => { setEditId(null); setSalaryType(null); setRawInputs({}); } }
     );
   }
 
@@ -507,7 +542,7 @@ function IshHaqiTab() {
       </div>
 
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
           <thead>
             <tr>
               <th style={thStyle}>O'QITUVCHI</th>
@@ -520,7 +555,7 @@ function IshHaqiTab() {
           <tbody>
             {settings.map(s => {
               const isEditing = editId === s.teacherId;
-              const currentType = (form.salaryType ?? s.salaryType);
+              const currentType = isEditing ? (salaryType ?? s.salaryType) : s.salaryType;
               return (
                 <tr key={s.teacherId}>
                   <td style={tdStyle}>
@@ -531,7 +566,7 @@ function IshHaqiTab() {
                       <select
                         className="input"
                         value={currentType}
-                        onChange={e => setForm(f => ({ ...f, salaryType: e.target.value as SalarySetting["salaryType"] }))}
+                        onChange={e => setSalaryType(e.target.value as SalarySetting["salaryType"])}
                         style={{ width: 160 }}
                       >
                         <option value="per_lesson">Dars boshiga</option>
@@ -548,45 +583,45 @@ function IshHaqiTab() {
                       </span>
                     )}
                   </td>
-                  <td style={tdStyle}>
+                  <td style={{ ...tdStyle, minWidth: 230 }}>
                     {isEditing ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {currentType === "per_lesson" && (
                           <>
                             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                              <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76 }}>Guruh:</span>
-                              <input className="input" style={{ width: 100 }}
-                                value={form.groupRate ?? s.groupRate}
-                                onChange={e => setForm(f => ({ ...f, groupRate: Number(e.target.value) }))} />
+                              <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76, flexShrink: 0 }}>Guruh:</span>
+                              <input className="input" type="number" style={{ width: 110 }}
+                                value={rawInputs.groupRate ?? ""}
+                                onChange={e => setRawInputs(f => ({ ...f, groupRate: e.target.value }))} />
                             </div>
                             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                              <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76 }}>Individual:</span>
-                              <input className="input" style={{ width: 100 }}
-                                value={form.individualRate ?? s.individualRate}
-                                onChange={e => setForm(f => ({ ...f, individualRate: Number(e.target.value) }))} />
+                              <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76, flexShrink: 0 }}>Individual:</span>
+                              <input className="input" type="number" style={{ width: 110 }}
+                                value={rawInputs.individualRate ?? ""}
+                                onChange={e => setRawInputs(f => ({ ...f, individualRate: e.target.value }))} />
                             </div>
                             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                              <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76 }}>Diagnostik:</span>
-                              <input className="input" style={{ width: 100 }}
-                                value={form.diagnosticRate ?? s.diagnosticRate}
-                                onChange={e => setForm(f => ({ ...f, diagnosticRate: Number(e.target.value) }))} />
+                              <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76, flexShrink: 0 }}>Diagnostik:</span>
+                              <input className="input" type="number" style={{ width: 110 }}
+                                value={rawInputs.diagnosticRate ?? ""}
+                                onChange={e => setRawInputs(f => ({ ...f, diagnosticRate: e.target.value }))} />
                             </div>
                           </>
                         )}
                         {currentType === "monthly_fixed" && (
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76 }}>Oylik:</span>
-                            <input className="input" style={{ width: 120 }}
-                              value={form.monthlyAmount ?? s.monthlyAmount}
-                              onChange={e => setForm(f => ({ ...f, monthlyAmount: Number(e.target.value) }))} />
+                            <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76, flexShrink: 0 }}>Oylik:</span>
+                            <input className="input" type="number" style={{ width: 130 }}
+                              value={rawInputs.monthlyAmount ?? ""}
+                              onChange={e => setRawInputs(f => ({ ...f, monthlyAmount: e.target.value }))} />
                           </div>
                         )}
                         {currentType === "percent_income" && (
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76 }}>%:</span>
-                            <input className="input" style={{ width: 80 }}
-                              value={form.incomePercent ?? s.incomePercent}
-                              onChange={e => setForm(f => ({ ...f, incomePercent: Number(e.target.value) }))} />
+                            <span style={{ fontSize: 12, color: "var(--text-dim)", width: 76, flexShrink: 0 }}>%:</span>
+                            <input className="input" type="number" style={{ width: 90 }}
+                              value={rawInputs.incomePercent ?? ""}
+                              onChange={e => setRawInputs(f => ({ ...f, incomePercent: e.target.value }))} />
                           </div>
                         )}
                       </div>
@@ -604,9 +639,9 @@ function IshHaqiTab() {
                   <td style={tdStyle}>
                     {isEditing ? (
                       currentType === "per_lesson" ? (
-                        <input className="input" style={{ width: 80 }}
-                          value={form.retentionCoef ?? s.retentionCoef}
-                          onChange={e => setForm(f => ({ ...f, retentionCoef: Number(e.target.value) }))} />
+                        <input className="input" type="number" style={{ width: 80 }}
+                          value={rawInputs.retentionCoef ?? ""}
+                          onChange={e => setRawInputs(f => ({ ...f, retentionCoef: e.target.value }))} />
                       ) : <span style={{ color: "var(--text-dim)", fontSize: 13 }}>—</span>
                     ) : (
                       s.salaryType === "per_lesson"

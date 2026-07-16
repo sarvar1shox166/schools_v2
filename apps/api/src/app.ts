@@ -1,6 +1,7 @@
 import path from "node:path";
 import { mkdir } from "node:fs/promises";
 import Fastify from "fastify";
+import { ZodError } from "zod";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
@@ -37,6 +38,21 @@ export async function buildApp() {
   await mkdir(UPLOADS_ROOT, { recursive: true });
 
   const app = Fastify({ logger: true });
+
+  // Zod validation failures otherwise surface as opaque 500s (Fastify's default
+  // handler doesn't know about ZodError) — return a proper 400 with the field-level
+  // message instead so the frontend can show something more useful than "server error".
+  app.setErrorHandler((err, request, reply) => {
+    if (err instanceof ZodError) {
+      const first = err.issues[0];
+      return reply.code(400).send({
+        error: "validation_error",
+        message: first ? `${first.path.join(".")}: ${first.message}` : "Invalid request",
+      });
+    }
+    request.log.error(err);
+    return reply.code(err.statusCode ?? 500).send({ error: "Internal Server Error" });
+  });
 
   // The web app is served same-origin via nginx, so no cross-origin allowance is needed by default.
   // Set CORS_ORIGINS (comma-separated) to allow specific external origins (e.g. a future mobile app).

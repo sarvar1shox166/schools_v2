@@ -99,6 +99,7 @@ export default function GroupsPage() {
                   <th>DARAJA</th>
                   <th>XONA</th>
                   <th>TO'LDIRILGANLIK</th>
+                  <th>DARSLAR</th>
                   <th />
                 </tr>
               </thead>
@@ -129,6 +130,11 @@ export default function GroupsPage() {
                             {g.studentsCount}/{g.capacity}
                           </span>
                         </div>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>
+                          {g.totalLessons != null ? `${g.completedLessons}/${g.totalLessons}` : "—"}
+                        </span>
                       </td>
                       <td>
                         <div style={{ position: "relative" }}>
@@ -201,6 +207,9 @@ function GroupCard({ group: g, menuOpen, onMenuToggle, onEdit, onDelete }: {
         <InfoRow icon="teacher" text={g.teacherName ?? "O'qituvchi yo'q"} />
         <InfoRow icon="mapPin" text={g.roomName ?? "Xona belgilanmagan"} />
         <InfoRow icon="users" text={`${g.studentsCount} o'quvchi · ${g.capacity} joy`} />
+        {g.totalLessons != null && (
+          <InfoRow icon="calendar" text={`${g.completedLessons}/${g.totalLessons} dars o'tildi`} />
+        )}
       </div>
 
       {/* Fill rate */}
@@ -257,11 +266,12 @@ function GroupModal({ mode, group, onClose }: GroupModalProps) {
   const { data: teachers = [] } = useTeachers();
 
   const [form, setForm] = useState({
-    name:      group?.name      ?? "",
-    level:     group?.level     ?? "",
-    teacherId: group?.teacherId ?? "",
-    color:     group?.color     ?? GROUP_COLORS[0],
-    capacity:  group?.capacity  ? String(group.capacity) : "12",
+    name:         group?.name         ?? "",
+    level:        group?.level        ?? "",
+    teacherId:    group?.teacherId    ?? "",
+    color:        group?.color        ?? GROUP_COLORS[0],
+    capacity:     group?.capacity     ? String(group.capacity) : "12",
+    totalLessons: group?.totalLessons ? String(group.totalLessons) : "",
   });
 
   const [error, setError] = useState<string | null>(null);
@@ -273,20 +283,22 @@ function GroupModal({ mode, group, onClose }: GroupModalProps) {
     try {
       if (isAdd) {
         await createGroup.mutateAsync({
-          name:      form.name,
-          level:     form.level     || undefined,
-          teacherId: form.teacherId || undefined,
-          color:     form.color     || undefined,
-          capacity:  form.capacity ? Number(form.capacity) : undefined,
+          name:         form.name,
+          level:        form.level     || undefined,
+          teacherId:    form.teacherId || undefined,
+          color:        form.color     || undefined,
+          capacity:     form.capacity ? Number(form.capacity) : undefined,
+          totalLessons: form.totalLessons ? Number(form.totalLessons) : undefined,
         });
       } else {
         await updateGroup.mutateAsync({
-          id:        group!.id,
-          name:      form.name,
-          level:     form.level     || undefined,
-          teacherId: form.teacherId || undefined,
-          color:     form.color     || undefined,
-          capacity:  form.capacity ? Number(form.capacity) : undefined,
+          id:           group!.id,
+          name:         form.name,
+          level:        form.level     || undefined,
+          teacherId:    form.teacherId || undefined,
+          color:        form.color     || undefined,
+          capacity:     form.capacity ? Number(form.capacity) : undefined,
+          totalLessons: form.totalLessons ? Number(form.totalLessons) : undefined,
         });
       }
       onClose();
@@ -330,6 +342,13 @@ function GroupModal({ mode, group, onClose }: GroupModalProps) {
               onChange={(e) => setForm({ ...form, capacity: e.target.value })} />
           </FieldWrap>
         </div>
+
+        {/* JAMI DARS SONI */}
+        <FieldWrap label="JAMI DARS SONI (ixtiyoriy)">
+          <input className="inp" type="number" min={1} max={200} placeholder="Masalan: 14"
+            value={form.totalLessons}
+            onChange={(e) => setForm({ ...form, totalLessons: e.target.value })} />
+        </FieldWrap>
 
         {/* O'QITUVCHI */}
         <FieldWrap label="O'QITUVCHI">

@@ -43,6 +43,8 @@ export interface Group {
   teacherId: string | null;
   teacherName: string | null;
   studentsCount: number;
+  totalLessons: number | null;
+  completedLessons: number;
 }
 
 export interface ScheduleSlot {
@@ -67,6 +69,8 @@ export interface ScheduleSlot {
   lessonId?: string | null;
   isEnded?: boolean;
   isStarted?: boolean;
+  /** /schedule/today ga xos: bu dars boshqa kundan bugunga ko'chirilganmi. */
+  isRescheduled?: boolean;
 }
 
 export function useTeachers() {
@@ -231,7 +235,7 @@ export function useGroups() {
 export function useCreateGroup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { name: string; level?: string; teacherId?: string; color?: string; capacity?: number }) =>
+    mutationFn: async (payload: { name: string; level?: string; teacherId?: string; color?: string; capacity?: number; totalLessons?: number }) =>
       (await api.post("/groups", payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["groups"] }),
   });
@@ -1759,7 +1763,7 @@ export function useBroadcastNotification() {
 export function useUpdateGroup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...body }: { id: string; name?: string; level?: string; teacherId?: string; color?: string; capacity?: number }) =>
+    mutationFn: async ({ id, ...body }: { id: string; name?: string; level?: string; teacherId?: string; color?: string; capacity?: number; totalLessons?: number }) =>
       (await api.patch(`/groups/${id}`, body)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["groups"] }),
   });

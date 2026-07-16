@@ -132,8 +132,28 @@ export async function scheduleRoutes(app: FastifyInstance) {
     }
 
     const { rows } = await pool.query(
-      `SELECT sl.id, sl.group_id AS "groupId", g.name AS "groupName", g.color,
-              sl.day_of_week AS "dayOfWeek", sl.start_time AS "startTime",
+      `WITH today_slots AS (
+         -- Odatiy holat: bugun uchun rejalashtirilgan (bekor qilinmagan/boshqa kunga ko'chirilmagan) darslar
+         SELECT sl.id, sl.start_time AS effective_start_time, false AS is_rescheduled
+         FROM schedule_slots sl
+         WHERE sl.tenant_id = $1
+           AND (
+             (sl.specific_date IS NULL AND sl.day_of_week = $2)
+             OR sl.specific_date = $3
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM schedule_exceptions se
+             WHERE se.schedule_slot_id = sl.id AND se.date = $3 AND se.kind IN ('cancelled', 'rescheduled')
+           )
+         UNION ALL
+         -- Boshqa kundan bugunga ko'chirilgan darslar
+         SELECT sl.id, se.new_start_time AS effective_start_time, true AS is_rescheduled
+         FROM schedule_slots sl
+         JOIN schedule_exceptions se ON se.schedule_slot_id = sl.id
+         WHERE sl.tenant_id = $1 AND se.kind = 'rescheduled' AND se.new_date = $3
+       )
+       SELECT sl.id, sl.group_id AS "groupId", g.name AS "groupName", g.color,
+              sl.day_of_week AS "dayOfWeek", ts.effective_start_time AS "startTime",
               sl.duration_minutes AS "durationMinutes", sl.specific_date AS "specificDate",
               sl.room_id AS "roomId", r.name AS "roomName",
               COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId",
@@ -141,8 +161,10 @@ export async function scheduleRoutes(app: FastifyInstance) {
               sl.meeting_platform AS "meetingPlatform",
               sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
               COALESCE(tu2.full_name, tu.full_name) AS "teacherName",
+              ts.is_rescheduled AS "isRescheduled",
               ${extraSelect}
-       FROM schedule_slots sl
+       FROM today_slots ts
+       JOIN schedule_slots sl ON sl.id = ts.id
        LEFT JOIN groups g ON g.id = sl.group_id
        LEFT JOIN rooms r ON r.id = sl.room_id
        LEFT JOIN teachers t ON t.id = g.teacher_id
@@ -150,17 +172,9 @@ export async function scheduleRoutes(app: FastifyInstance) {
        LEFT JOIN teachers t2 ON t2.id = sl.teacher_id
        LEFT JOIN users tu2 ON tu2.id = t2.user_id
        ${extraJoin}
-       WHERE sl.tenant_id = $1
-         AND (
-           (sl.specific_date IS NULL AND sl.day_of_week = $2)
-           OR sl.specific_date = $3
-         )
-         AND NOT EXISTS (
-           SELECT 1 FROM schedule_exceptions se
-           WHERE se.schedule_slot_id = sl.id AND se.date = $3 AND se.kind IN ('cancelled', 'rescheduled')
-         )
+       WHERE 1=1
          ${filter}
-       ORDER BY sl.start_time`,
+       ORDER BY ts.effective_start_time`,
       params
     );
     return rows;

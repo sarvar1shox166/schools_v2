@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Card, Icon } from "@chess-school/ui";
+import { Avatar, Card, fmtSom, Icon } from "@chess-school/ui";
 import {
   useAttendance,
   useJoinTeacherLesson,
   useMarkAttendance,
+  useMyIncome,
   useMyLessons,
   useMyProfile,
   useMyStudents,
@@ -15,6 +16,11 @@ import {
 /* ─── helpers ─── */
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function currentPeriod() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function nowMins() {
@@ -58,6 +64,7 @@ export default function TeacherDashboard() {
   const { data: myStudents }    = useMyStudents();
   const { data: lessons }       = useMyLessons();
   const { data: progressData }  = useMyStudentsProgress("attendance");
+  const { data: income }        = useMyIncome(currentPeriod());
 
   const todayLessons = useMemo(
     () => lessons?.filter(l => l.date.slice(0, 10) === date) ?? [],
@@ -226,6 +233,11 @@ export default function TeacherDashboard() {
             </div>
             <div style={{ fontSize:20, fontWeight:800, marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
               {upcomingLesson.groupName ?? upcomingLesson.customName ?? "Dars"}
+              {upcomingLesson.isRescheduled && (
+                <span style={{ fontSize:11, fontWeight:700, color:"#fff", background:"rgba(34,197,94,.35)", border:"1px solid rgba(34,197,94,.6)", padding:"2px 9px", borderRadius:20 }}>
+                  → Ko'chirilgan
+                </span>
+              )}
               {upcomingLesson.lessonType === "diagnostika" && (
                 <span style={{ fontSize:11, fontWeight:700, color:"#fff", background:"rgba(245,158,11,.35)", border:"1px solid rgba(245,158,11,.6)", padding:"2px 9px", borderRadius:20 }}>
                   Diagnostika
@@ -294,6 +306,11 @@ export default function TeacherDashboard() {
               </div>
               <div style={{ fontSize:20, fontWeight:800, marginBottom:8, display:"flex", alignItems:"center", gap:10 }}>
                 {liveLesson.groupName ?? liveLesson.customName ?? "Dars"}
+                {liveLesson.isRescheduled && (
+                  <span style={{ fontSize:11, fontWeight:700, color:"#fff", background:"rgba(255,255,255,.25)", border:"1px solid rgba(255,255,255,.5)", padding:"2px 9px", borderRadius:20 }}>
+                    → Ko'chirilgan
+                  </span>
+                )}
                 {liveLesson.lessonType === "diagnostika" && (
                   <span style={{ fontSize:11, fontWeight:700, color:"#fff", background:"rgba(245,158,11,.35)", border:"1px solid rgba(245,158,11,.6)", padding:"2px 9px", borderRadius:20 }}>
                     Diagnostika
@@ -361,10 +378,10 @@ export default function TeacherDashboard() {
           },
           {
             bg:"#fef3c7", color:"#d97706",
-            value: "4.9",
-            label: "O'rtacha reyting",
+            value: `${fmtSom(income?.totalAmount ?? 0)} so'm`,
+            label: "Bu oy daromad",
             svg: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
             </svg>,
           },
         ].map(card => (
@@ -436,6 +453,11 @@ export default function TeacherDashboard() {
                   </div>
                   <div style={{ fontWeight:750, fontSize:14.5, marginBottom:6, display:"flex", alignItems:"center", gap:8 }}>
                     {s.groupName ?? s.customName ?? "Dars"}
+                    {s.isRescheduled && (
+                      <span style={{ fontSize:10.5, fontWeight:700, color:"#059669", background:"#d1fae5", padding:"2px 7px", borderRadius:20 }}>
+                        → Ko'chirilgan
+                      </span>
+                    )}
                     {s.lessonType === "diagnostika" && (
                       <span style={{ fontSize:10.5, fontWeight:700, color:"#f59e0b", background:"#fef3c7", padding:"2px 7px", borderRadius:20 }}>
                         Diagnostika
