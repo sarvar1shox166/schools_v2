@@ -2,12 +2,14 @@ import { createReadStream as fsReadStream, createWriteStream } from "node:fs";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl as s3GetSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const LOCAL_UPLOADS = path.resolve(process.cwd(), "uploads");
@@ -65,6 +67,62 @@ export async function uploadFile(
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, buffer);
   return publicUrl(key);
+}
+
+// ── Stream upload (katta fayllar — video) ──────────────────────────────────────
+// Butun faylni xotirada Buffer sifatida ushlab turmasdan to'g'ridan-to'g'ri
+// diskka/S3'ga oqim (stream) sifatida yuboradi. `abort()` chaqirilsa — S3'da
+// multipart upload'ning tugallanmagan qismlari ham, lokal yarim yozilgan fayl
+// ham tozalanadi (mijoz yuklashni bekor qilganda orfan fayl qolmasligi uchun).
+export interface StreamUploadHandle {
+  done: Promise<string>;
+  abort: () => Promise<void>;
+}
+
+export function uploadStream(stream: Readable, key: string, mimeType: string): StreamUploadHandle {
+  if (USE_S3) {
+    const upload = new Upload({
+      client: s3!,
+      params: { Bucket: BUCKET, Key: key, Body: stream, ContentType: mimeType },
+      queueSize: 4,
+      partSize: 8 * 1024 * 1024,
+    });
+    return {
+      done: upload.done().then(() => publicUrl(key)),
+      abort: async () => {
+        try { await upload.abort(); } catch { /* already finished/aborted */ }
+      },
+    };
+  }
+
+  const filePath = path.join(LOCAL_UPLOADS, key);
+  let ws: ReturnType<typeof createWriteStream> | null = null;
+  const done = (async () => {
+    await mkdir(path.dirname(filePath), { recursive: true });
+    ws = createWriteStream(filePath);
+    await pipeline(stream, ws);
+    return publicUrl(key);
+  })();
+  return {
+    done,
+    abort: async () => {
+      stream.destroy();
+      ws?.destroy();
+      await unlink(filePath).catch(() => {});
+    },
+  };
+}
+
+// ── URL → storage key (o'chirish uchun) ────────────────────────────────────────
+export function keyFromUrl(url: string): string | null {
+  if (!url) return null;
+  if (url.startsWith("/uploads/")) return url.slice("/uploads/".length);
+  if (USE_S3) {
+    if (CDN_URL && url.startsWith(CDN_URL)) return decodeURIComponent(url.slice(CDN_URL.replace(/\/$/, "").length + 1));
+    const s3Match = url.match(/\.amazonaws\.com\/(.+)$/);
+    if (s3Match) return decodeURIComponent(s3Match[1]);
+  }
+  return null;
 }
 
 // ── Presigned download URL (materiallar uchun) ────────────────────────────────
@@ -139,7 +197,7 @@ export function assertAllowedMimeType(
 // ── Content sniffing (defense-in-depth against a spoofed Content-Type) ────────
 // The client-declared MIME type above is trivially spoofable. This checks the
 // actual file bytes against the declared type once the buffer is in memory.
-function looksLikeTextMarkup(buffer: Buffer): boolean {
+export function looksLikeTextMarkup(buffer: Buffer): boolean {
   const head = buffer.subarray(0, 512).toString("utf8").trimStart().toLowerCase();
   return (
     head.startsWith("<!doctype") || head.startsWith("<html") ||

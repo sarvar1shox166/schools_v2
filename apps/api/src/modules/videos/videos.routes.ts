@@ -1,10 +1,14 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { PassThrough } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { awardXp } from "../gamification/xp.js";
-import { uploadFile, assertAllowedMimeType, assertContentMatchesMimeType, UploadValidationError, UPLOAD_LIMITS } from "../../lib/storage.js";
+import {
+  uploadFile, uploadStream, deleteFile, keyFromUrl, looksLikeTextMarkup,
+  assertAllowedMimeType, assertContentMatchesMimeType, UploadValidationError, UPLOAD_LIMITS,
+} from "../../lib/storage.js";
 
 const createCourseSchema = z.object({
   title: z.string().min(1),
@@ -167,10 +171,26 @@ export async function videosRoutes(app: FastifyInstance) {
   app.delete("/video-courses/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
+
+    const courseRes = await pool.query(
+      `SELECT thumbnail_url AS "thumbnailUrl" FROM video_courses WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (!courseRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+    const lessonsRes = await pool.query(`SELECT video_url AS "videoUrl" FROM video_lessons WHERE course_id = $1`, [id]);
+
     const { rowCount } = await pool.query(
       `DELETE FROM video_courses WHERE id = $1 AND tenant_id = $2`, [id, tenantId]
     );
     if (!rowCount) return reply.code(404).send({ error: "Not found" });
+
+    // Kursning o'zi (cascade orqali darslari ham) DB'dan o'chdi — endi S3/diskdagi
+    // haqiqiy fayllarni ham tozalaymiz, aks holda orfan fayllar qolib ketadi.
+    const urls = [courseRes.rows[0].thumbnailUrl, ...lessonsRes.rows.map((r) => r.videoUrl)].filter(Boolean) as string[];
+    for (const url of urls) {
+      const key = keyFromUrl(url);
+      if (key) await deleteFile(key).catch(() => {});
+    }
     return { ok: true };
   });
 
@@ -193,6 +213,11 @@ export async function videosRoutes(app: FastifyInstance) {
   });
 
   // Upload video file → returns { url }
+  // Katta fayl (1 GB gacha) bo'lgani uchun butun faylni xotirada Buffer sifatida
+  // ushlab turmasdan to'g'ridan-to'g'ri oqim (stream) sifatida S3/diskka yuboriladi.
+  // Faqat birinchi bo'lakni (peek) HTML/skript sifatida yashirilgan fayllarni
+  // aniqlash uchun tekshiramiz — bu butun faylni sniff qilishga teng emas, lekin
+  // asosiy spoofing hujumini (masalan .html faylni video deb yuklash) to'xtatadi.
   app.post("/videos/upload", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { tenantId } = request.user;
     if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
@@ -206,22 +231,43 @@ export async function videosRoutes(app: FastifyInstance) {
       throw err;
     }
 
+    const firstChunk: Buffer = await new Promise((resolve, reject) => {
+      data.file.once("data", (chunk: Buffer) => { data.file.pause(); resolve(chunk); });
+      data.file.once("end", () => resolve(Buffer.alloc(0)));
+      data.file.once("error", reject);
+    });
+    if (looksLikeTextMarkup(firstChunk)) {
+      return reply.code(400).send({ error: "Fayl mazmuni e'lon qilingan turga mos kelmadi" });
+    }
+
+    const combined = new PassThrough();
+    combined.write(firstChunk);
+    data.file.pipe(combined);
+
     const ext = path.extname(data.filename) || ".mp4";
     const key = `videos/${tenantId}/${randomUUID()}${ext}`;
-    let buffer: Buffer;
+    const upload = uploadStream(combined, key, data.mimetype);
+
+    let clientAborted = false;
+    request.raw.on("close", () => {
+      if (!request.raw.complete && !clientAborted) {
+        clientAborted = true;
+        upload.abort();
+      }
+    });
+
     try {
-      buffer = await data.toBuffer();
-    } catch {
-      return reply.code(413).send({ error: "Fayl hajmi juda katta (max 1 GB)" });
-    }
-    try {
-      assertContentMatchesMimeType(data.mimetype, buffer);
+      const url = await upload.done;
+      if (data.file.truncated) {
+        await upload.abort();
+        return reply.code(413).send({ error: "Fayl hajmi juda katta (max 1 GB)" });
+      }
+      return { url };
     } catch (err) {
-      if (err instanceof UploadValidationError) return reply.code(400).send({ error: err.message });
-      throw err;
+      if (clientAborted) return reply.code(499).send({ error: "Yuklash bekor qilindi" });
+      request.log.error(err);
+      return reply.code(500).send({ error: "Video yuklashda xatolik yuz berdi" });
     }
-    const url = await uploadFile(buffer, key, data.mimetype);
-    return { url };
   });
 
   // Upload thumbnail image → returns { url }
@@ -260,6 +306,14 @@ export async function videosRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = updateLessonSchema.parse(request.body);
     const { tenantId } = request.user;
+
+    const prevRes = await pool.query(
+      `SELECT video_url AS "videoUrl" FROM video_lessons WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (!prevRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+    const previousVideoUrl = prevRes.rows[0].videoUrl as string;
+
     const { rowCount } = await pool.query(
       `UPDATE video_lessons SET
          title = COALESCE($1, title),
@@ -269,16 +323,31 @@ export async function videosRoutes(app: FastifyInstance) {
       [body.title ?? null, body.videoUrl ?? null, body.durationSeconds ?? null, id, tenantId]
     );
     if (!rowCount) return reply.code(404).send({ error: "Not found" });
+
+    // Video fayl almashtirilgan bo'lsa — eski faylni S3/diskdan ham o'chiramiz.
+    if (body.videoUrl && body.videoUrl !== previousVideoUrl) {
+      const oldKey = keyFromUrl(previousVideoUrl);
+      if (oldKey) await deleteFile(oldKey).catch(() => {});
+    }
     return { ok: true };
   });
 
   app.delete("/videos/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
+    const videoRes = await pool.query(
+      `SELECT video_url AS "videoUrl" FROM video_lessons WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (!videoRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+
     const { rowCount } = await pool.query(
       `DELETE FROM video_lessons WHERE id = $1 AND tenant_id = $2`, [id, tenantId]
     );
     if (!rowCount) return reply.code(404).send({ error: "Not found" });
+
+    const key = keyFromUrl(videoRes.rows[0].videoUrl);
+    if (key) await deleteFile(key).catch(() => {});
     return { ok: true };
   });
 
