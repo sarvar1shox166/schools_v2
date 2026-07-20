@@ -116,20 +116,20 @@ async function seed() {
     // 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat
     // Group A: Mon/Wed/Fri at 09:00
     const slotsARes = await client.query(
-      `INSERT INTO schedule_slots (group_id, day_of_week, start_time) VALUES
-         ($1, 0, '09:00'), ($1, 2, '09:00'), ($1, 4, '09:00')
+      `INSERT INTO schedule_slots (tenant_id, group_id, day_of_week, start_time) VALUES
+         ($1, $2, 0, '09:00'), ($1, $2, 2, '09:00'), ($1, $2, 4, '09:00')
        RETURNING id, day_of_week`,
-      [groupAId]
+      [tenantId, groupAId]
     );
     // rows returned in insertion order: [Mon, Wed, Fri]
     const slotsA = slotsARes.rows as { id: string; day_of_week: number }[];
 
     // Group B: Tue/Thu/Sat at 11:00
     const slotsBRes = await client.query(
-      `INSERT INTO schedule_slots (group_id, day_of_week, start_time) VALUES
-         ($1, 1, '11:00'), ($1, 3, '11:00'), ($1, 5, '11:00')
+      `INSERT INTO schedule_slots (tenant_id, group_id, day_of_week, start_time) VALUES
+         ($1, $2, 1, '11:00'), ($1, $2, 3, '11:00'), ($1, $2, 5, '11:00')
        RETURNING id, day_of_week`,
-      [groupBId]
+      [tenantId, groupBId]
     );
     // rows returned in insertion order: [Tue, Thu, Sat]
     const slotsB = slotsBRes.rows as { id: string; day_of_week: number }[];
