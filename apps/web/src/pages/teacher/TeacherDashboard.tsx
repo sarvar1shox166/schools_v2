@@ -135,9 +135,10 @@ export default function TeacherDashboard() {
 
   const today    = new Date();
   const MONTHS_S = ["Yan","Fev","Mar","Apr","May","Iyu","Iyu","Avg","Sen","Okt","Noy","Dek"];
+  const MONTHS_FULL = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
   const DAYS_S   = ["Yak","Du","Se","Ch","Pa","Ju","Sha"];
   const dayShort = `${MONTHS_S[today.getMonth()]} ${today.getDate()}, ${DAYS_S[today.getDay()]}`;
-  const longDate = today.toLocaleDateString("uz-UZ", { day: "numeric", month: "long", year: "numeric" });
+  const longDate = `${today.getDate()} ${MONTHS_FULL[today.getMonth()]} ${today.getFullYear()}`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -589,10 +590,9 @@ export default function TeacherDashboard() {
             <div style={{ padding:"36px 22px", textAlign:"center", color:"var(--text-faint)", fontSize:13 }}>
               O'quvchilar topilmadi
             </div>
-          ) : (progressData ?? []).slice(0, 6).map((s, i, arr) => (
+          ) : (progressData ?? []).slice(0, 6).map((s) => (
             <div key={s.id} style={{
               display:"flex", alignItems:"center", gap:14, padding:"14px 24px",
-              borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
             }}>
               <Avatar name={s.fullName} size="sm" />
               <div style={{ width:200, flexShrink:0 }}>

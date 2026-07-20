@@ -33,7 +33,7 @@ api.interceptors.response.use(
     if (!refreshing) {
       refreshing = (async () => {
         const { refreshToken, setSession, logout, user } = useAuthStore.getState();
-        if (!refreshToken) {
+        if (!refreshToken || !user) {
           logout();
           return null;
         }
@@ -43,7 +43,7 @@ api.interceptors.response.use(
             { refreshToken }
           );
           const { accessToken, refreshToken: newRefresh } = res.data;
-          setSession({ accessToken, refreshToken: newRefresh, user: user! });
+          setSession({ accessToken, refreshToken: newRefresh, user });
           return accessToken;
         } catch {
           logout();

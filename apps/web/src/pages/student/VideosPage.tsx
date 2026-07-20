@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@chess-school/ui";
-import { useVideos, type VideoLesson } from "../../lib/queries.js";
+import { useVideoCourses, useVideoCourseDetail, type VideoCourse, type VideoLessonItem } from "../../lib/queries.js";
 import type { VideoWatchState } from "./VideoWatchPage.js";
 
 /* ── Category metadata ───────────────────────────────────────────────────── */
@@ -31,25 +31,25 @@ function fmtSec(sec: number | null): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/* ── Video card ──────────────────────────────────────────────────────────── */
+/* ── Lesson card ─────────────────────────────────────────────────────────── */
 
-function VideoCard({ video, idx, categoryLabel }: { video: VideoLesson; idx: number; categoryLabel: string }) {
+function LessonCard({ lesson, idx, course }: { lesson: VideoLessonItem; idx: number; course: VideoCourse }) {
   const navigate = useNavigate();
-  const watched = video.progressPct >= 100;
-  const grad = video.thumbnailColor
-    ? `linear-gradient(135deg,${video.thumbnailColor}44,${video.thumbnailColor}99)`
+  const watched = lesson.progressPct >= 100;
+  const grad = course.thumbnailColor
+    ? `linear-gradient(135deg,${course.thumbnailColor}44,${course.thumbnailColor}99)`
     : GRAD_PALETTE[idx % GRAD_PALETTE.length];
 
   function handleClick() {
     const state: VideoWatchState = {
-      title: video.title,
-      courseTitle: categoryLabel,
-      videoUrl: video.videoUrl,
+      title: lesson.title,
+      courseTitle: course.title,
+      videoUrl: lesson.videoUrl,
       gradient: grad,
-      duration: fmtSec(video.durationSeconds),
+      duration: fmtSec(lesson.durationSeconds),
       watched,
     };
-    navigate(`/student/videos/watch/${video.id}`, { state });
+    navigate(`/student/videos/watch/${lesson.id}`, { state });
   }
 
   return (
@@ -65,22 +65,22 @@ function VideoCard({ video, idx, categoryLabel }: { video: VideoLesson; idx: num
             <div style={{ width: 0, height: 0, borderTop: "10px solid transparent", borderBottom: "10px solid transparent", borderLeft: "18px solid #fff", marginLeft: 4 }} />
           </div>
         </div>
-        {video.durationSeconds && (
+        {lesson.durationSeconds && (
           <div style={{ position: "absolute", bottom: 10, right: 10, background: "rgba(0,0,0,.7)", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 700, color: "#fff" }}>
-            {fmtSec(video.durationSeconds)}
+            {fmtSec(lesson.durationSeconds)}
           </div>
         )}
       </div>
-      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{video.title}</div>
+      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{lesson.title}</div>
     </div>
   );
 }
 
-/* ── Category detail view ────────────────────────────────────────────────── */
+/* ── Course detail view ─────────────────────────────────────────────────── */
 
-function CategoryVideos({ category, onBack }: { category: string; onBack: () => void }) {
-  const { data: videos = [], isLoading } = useVideos(category);
-  const meta = CATEGORY_META[category] ?? { label: category, gradient: GRAD_PALETTE[0] };
+function CourseLessons({ courseId, onBack }: { courseId: string; onBack: () => void }) {
+  const { data: course, isLoading } = useVideoCourseDetail(courseId);
+  const meta = course ? (CATEGORY_META[course.category] ?? { label: course.category, gradient: GRAD_PALETTE[0] }) : { label: "", gradient: GRAD_PALETTE[0] };
 
   return (
     <div>
@@ -88,23 +88,27 @@ function CategoryVideos({ category, onBack }: { category: string; onBack: () => 
         onClick={onBack}
         style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "var(--text-faint)", cursor: "pointer", fontSize: 14, fontWeight: 600, marginBottom: 16, padding: 0 }}
       >
-        ← {meta.label}
+        ← {course?.title ?? meta.label}
       </button>
 
       <div style={{ width: "100%", height: 220, borderRadius: 18, background: meta.gradient, marginBottom: 18, position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 120, opacity: .08, userSelect: "none" }}>
-          ♟
-        </div>
+        {course?.thumbnailUrl ? (
+          <img src={course.thumbnailUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 120, opacity: .08, userSelect: "none" }}>
+            ♟
+          </div>
+        )}
       </div>
 
-      {isLoading ? (
+      {isLoading || !course ? (
         <div style={{ color: "var(--text-faint)", textAlign: "center", padding: 40, fontSize: 14 }}>Yuklanmoqda...</div>
-      ) : videos.length === 0 ? (
+      ) : course.lessons.length === 0 ? (
         <div style={{ color: "var(--text-faint)", textAlign: "center", padding: 40, fontSize: 14 }}>Video darslar hali qo'shilmagan</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
-          {videos.map((v, i) => (
-            <VideoCard key={v.id} video={v} idx={i} categoryLabel={meta.label} />
+          {course.lessons.map((lesson, i) => (
+            <LessonCard key={lesson.id} lesson={lesson} idx={i} course={course} />
           ))}
         </div>
       )}
@@ -115,21 +119,12 @@ function CategoryVideos({ category, onBack }: { category: string; onBack: () => 
 /* ── Main page ───────────────────────────────────────────────────────────── */
 
 export default function VideosPage() {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const { data: allVideos = [], isLoading } = useVideos();
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const { data: courses = [], isLoading } = useVideoCourses();
 
-  if (selectedCategory) {
-    return <CategoryVideos category={selectedCategory} onBack={() => setSelectedCategory(null)} />;
+  if (selectedCourseId) {
+    return <CourseLessons courseId={selectedCourseId} onBack={() => setSelectedCourseId(null)} />;
   }
-
-  // Group videos by category
-  const byCategory = allVideos.reduce<Record<string, VideoLesson[]>>((acc, v) => {
-    if (!acc[v.category]) acc[v.category] = [];
-    acc[v.category].push(v);
-    return acc;
-  }, {});
-
-  const categories = Object.keys(byCategory);
 
   if (isLoading) {
     return (
@@ -139,7 +134,7 @@ export default function VideosPage() {
     );
   }
 
-  if (categories.length === 0) {
+  if (courses.length === 0) {
     return (
       <Card style={{ padding: "48px 32px", textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🎬</div>
@@ -153,28 +148,30 @@ export default function VideosPage() {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 24 }}>
-      {categories.map(cat => {
-        const videos = byCategory[cat];
-        const meta = CATEGORY_META[cat] ?? { label: cat, gradient: GRAD_PALETTE[0] };
-        const watched = videos.filter(v => v.progressPct >= 100).length;
+      {courses.map((c) => {
+        const meta = CATEGORY_META[c.category] ?? { label: c.category, gradient: GRAD_PALETTE[0] };
 
         return (
-          <div key={cat} onClick={() => setSelectedCategory(cat)} style={{ cursor: "pointer" }}>
+          <div key={c.id} onClick={() => setSelectedCourseId(c.id)} style={{ cursor: "pointer" }}>
             <div style={{ borderRadius: 16, overflow: "hidden", background: meta.gradient, aspectRatio: "16/9", position: "relative", marginBottom: 12 }}>
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 72, opacity: .08, userSelect: "none" }}>
-                ♟
-              </div>
+              {c.thumbnailUrl ? (
+                <img src={c.thumbnailUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 72, opacity: .08, userSelect: "none" }}>
+                  ♟
+                </div>
+              )}
               <div style={{ position: "absolute", bottom: 10, right: 10, background: "rgba(0,0,0,.65)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, color: "#fff" }}>
-                {videos.length} video
+                {c.videoCount} video
               </div>
             </div>
-            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 8 }}>{meta.label}</div>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 8 }}>{c.title}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ flex: 1, height: 5, borderRadius: 99, background: "rgba(255,255,255,.1)", overflow: "hidden" }}>
-                <div style={{ height: "100%", borderRadius: 99, background: "#f59e0b", width: `${(watched / videos.length) * 100}%` }} />
+                <div style={{ height: "100%", borderRadius: 99, background: "#f59e0b", width: c.videoCount ? `${(c.watchedCount / c.videoCount) * 100}%` : "0%" }} />
               </div>
               <span style={{ fontSize: 12, color: "var(--text-faint)", flexShrink: 0, fontWeight: 600 }}>
-                {watched}/{videos.length} dars
+                {c.watchedCount}/{c.videoCount} dars
               </span>
             </div>
           </div>

@@ -104,9 +104,6 @@ export default function StudentsPage() {
           O'quvchilar — {(students as Student[]).length} ta
         </h2>
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn">
-            <Icon name="download" size={15} /> Eksport
-          </button>
           <button className="btn primary" onClick={() => navigate("/admin/students/new")}>
             <Icon name="plus" size={15} /> Qo'shish
           </button>
@@ -187,6 +184,7 @@ export default function StudentsPage() {
                   <th>GURUH</th>
                   <th>TO'LOV</th>
                   <th>HOLATI</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -278,6 +276,16 @@ export default function StudentsPage() {
                         }}>
                           {s.status}
                         </span>
+                      </td>
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
+                        <button
+                          className="iconbtn"
+                          title="O'chirish"
+                          onClick={() => setModal({ mode: "delete", student: s })}
+                          style={{ color: "#ef4444" }}
+                        >
+                          <Icon name="trash" size={14} />
+                        </button>
                       </td>
                     </tr>
                   );

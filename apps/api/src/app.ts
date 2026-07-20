@@ -7,8 +7,10 @@ import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import staticFiles from "@fastify/static";
 import rateLimit from "@fastify/rate-limit";
+import helmet from "@fastify/helmet";
 import authPlugin from "./plugins/auth.js";
 import { env } from "./env.js";
+import { initSentry, captureError } from "./lib/sentry.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { teachersRoutes } from "./modules/teachers/teachers.routes.js";
 import { studentsRoutes } from "./modules/students/students.routes.js";
@@ -35,6 +37,7 @@ import { homeworkRoutes } from "./modules/homework/homework.routes.js";
 const UPLOADS_ROOT = path.resolve(process.cwd(), "uploads");
 
 export async function buildApp() {
+  initSentry();
   await mkdir(UPLOADS_ROOT, { recursive: true });
 
   const app = Fastify({ logger: true });
@@ -51,7 +54,23 @@ export async function buildApp() {
       });
     }
     request.log.error(err);
+    if (!err.statusCode || err.statusCode >= 500) captureError(err);
     return reply.code(err.statusCode ?? 500).send({ error: "Internal Server Error" });
+  });
+
+  // Standart xavfsizlik sarlavhalari (X-Content-Type-Options, X-Frame-Options,
+  // HSTS va h.k.). Bu server asosan JSON API bo'lgani uchun CSP faqat /uploads
+  // orqali xizmat qilinadigan video/rasm fayllariga ta'sir qilmasligi uchun
+  // yengil sozlangan.
+  app.register(helmet, {
+    crossOriginResourcePolicy: { policy: "same-origin" },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'none'"],
+        imgSrc: ["'self'"],
+        mediaSrc: ["'self'"],
+      },
+    },
   });
 
   // The web app is served same-origin via nginx, so no cross-origin allowance is needed by default.
@@ -62,7 +81,14 @@ export async function buildApp() {
   // Outer safety net — actual per-endpoint caps are tighter (see lib/storage.ts UPLOAD_LIMITS).
   app.register(multipart, { limits: { fileSize: 1024 * 1024 * 1024 } }); // 1 GB
   app.register(websocket);
-  app.register(staticFiles, { root: UPLOADS_ROOT, prefix: "/uploads/" });
+  // Faqat ochiq bo'lishi kerak papkalar (video/rasm — <video>/<img> to'g'ridan-to'g'ri
+  // shu URL'larni ishlatadi, Authorization header yubora olmaydi). "materials/" ataylab
+  // bu yerga qo'shilmagan — u faqat GET /materials/:id/download orqali (avtorizatsiya bilan)
+  // xizmat qilinadi, aks holda "shaxsiy" materiallar hech qanday tekshiruvsiz ochiq bo'lib qolardi.
+  await mkdir(path.join(UPLOADS_ROOT, "videos"), { recursive: true });
+  await mkdir(path.join(UPLOADS_ROOT, "images"), { recursive: true });
+  app.register(staticFiles, { root: path.join(UPLOADS_ROOT, "videos"), prefix: "/uploads/videos/" });
+  app.register(staticFiles, { root: path.join(UPLOADS_ROOT, "images"), prefix: "/uploads/images/", decorateReply: false });
   app.register(authPlugin);
 
   app.get("/health", async () => ({ status: "ok" }));

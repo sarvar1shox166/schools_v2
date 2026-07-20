@@ -115,4 +115,28 @@ export async function teacherPortalRoutes(app: FastifyInstance) {
 
     return { ...teacher, attendanceRate: attRes.rows[0]?.rate ?? 0 };
   });
+
+  app.get("/me/rating-breakdown", async (request, reply) => {
+    const teacherRes = await pool.query(`SELECT id FROM teachers WHERE user_id = $1`, [request.user.sub]);
+    const teacherId = teacherRes.rows[0]?.id;
+    if (!teacherId) return reply.code(404).send({ error: "Teacher not found" });
+
+    const { rows } = await pool.query(
+      `SELECT ROUND(AVG(lesson_quality)::numeric, 1) AS "lessonQuality",
+              ROUND(AVG(student_results)::numeric, 1) AS "studentResults",
+              ROUND(AVG(punctuality)::numeric, 1) AS "punctuality",
+              ROUND(AVG(communication)::numeric, 1) AS "communication",
+              COUNT(*)::int AS "reviewCount"
+       FROM teacher_reviews WHERE teacher_id = $1`,
+      [teacherId]
+    );
+    const r = rows[0];
+    return {
+      reviewCount: r.reviewCount,
+      lessonQuality: r.lessonQuality != null ? Number(r.lessonQuality) : null,
+      studentResults: r.studentResults != null ? Number(r.studentResults) : null,
+      punctuality: r.punctuality != null ? Number(r.punctuality) : null,
+      communication: r.communication != null ? Number(r.communication) : null,
+    };
+  });
 }

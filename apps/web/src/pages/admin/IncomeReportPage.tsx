@@ -1,4 +1,4 @@
-import { Card, CardHead, Icon, StatCard } from "@chess-school/ui";
+import { Card, CardHead, StatCard, fmtSom } from "@chess-school/ui";
 import {
   useIncomeSummary,
   useIncomeBreakdown,
@@ -13,9 +13,7 @@ function fmtM(n: number) {
   return String(n);
 }
 
-function fmt(n: number) {
-  return n.toLocaleString("ru-RU");
-}
+const fmt = fmtSom;
 
 const BREAKDOWN_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4"];
 
@@ -64,9 +62,6 @@ export default function IncomeReportPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Daromadlar tahlili</h2>
-        <button className="btn" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Icon name="download" size={14} /> PDF
-        </button>
       </div>
 
       {/* KPI */}

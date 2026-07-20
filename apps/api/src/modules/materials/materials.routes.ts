@@ -5,7 +5,7 @@ import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import {
   uploadFile, deleteFile, getSignedDownloadUrl, localReadStream, USE_S3,
-  assertAllowedMimeType, UploadValidationError, UPLOAD_LIMITS,
+  assertAllowedMimeType, assertContentMatchesMimeType, UploadValidationError, UPLOAD_LIMITS,
 } from "../../lib/storage.js";
 
 async function getTeacherIdForUser(userId: string): Promise<string | null> {
@@ -129,6 +129,12 @@ export async function materialsRoutes(app: FastifyInstance) {
       buffer = await data.toBuffer();
     } catch {
       return reply.code(413).send({ error: "Fayl hajmi juda katta (max 200 MB)" });
+    }
+    try {
+      assertContentMatchesMimeType(data.mimetype, buffer);
+    } catch (err) {
+      if (err instanceof UploadValidationError) return reply.code(400).send({ error: err.message });
+      throw err;
     }
     await uploadFile(buffer, key, data.mimetype);
 

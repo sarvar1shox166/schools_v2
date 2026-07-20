@@ -109,6 +109,9 @@ export async function messagesRoutes(app: FastifyInstance) {
     const { tenantId, sub } = request.user;
     if (!tenantId) return reply.code(400).send({ error: "Tenant topilmadi" });
 
+    const recipientRes = await pool.query(`SELECT id FROM users WHERE id = $1 AND tenant_id = $2`, [body.recipientId, tenantId]);
+    if (!recipientRes.rows[0]) return reply.code(404).send({ error: "Qabul qiluvchi topilmadi" });
+
     const { rows } = await pool.query(
       `INSERT INTO messages (tenant_id, sender_id, recipient_id, body) VALUES ($1, $2, $3, $4)
        RETURNING id, sender_id AS "senderId", recipient_id AS "recipientId", body, read_at AS "readAt", created_at AS "createdAt"`,

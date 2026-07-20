@@ -163,18 +163,20 @@ export async function lessonsRoutes(app: FastifyInstance) {
   app.patch(
     "/lessons/:id",
     { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] },
-    async (request) => {
+    async (request, reply) => {
       const { id } = request.params as { id: string };
       const body = updateSchema.parse(request.body);
-      await pool.query(
+      const { tenantId } = request.user;
+      const { rowCount } = await pool.query(
         `UPDATE lessons SET
            topic = COALESCE($1, topic),
            homework = COALESCE($2, homework),
            zoom_link = COALESCE($3, zoom_link),
            status = COALESCE($4, status)
-         WHERE id = $5`,
-        [body.topic ?? null, body.homework ?? null, body.zoomLink ?? null, body.status ?? null, id]
+         WHERE id = $5 AND tenant_id = $6`,
+        [body.topic ?? null, body.homework ?? null, body.zoomLink ?? null, body.status ?? null, id, tenantId]
       );
+      if (!rowCount) return reply.code(404).send({ error: "Not found" });
       return { ok: true };
     }
   );
@@ -237,6 +239,7 @@ export async function lessonsRoutes(app: FastifyInstance) {
   // Admin-only: student reviews for a given teacher
   app.get("/teachers/:id/student-reviews", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT r.id, r.rating, r.comment, r.created_at AS "createdAt",
               su.full_name AS "studentName", l.topic, l.conducted_at AS "conductedAt"
@@ -244,10 +247,11 @@ export async function lessonsRoutes(app: FastifyInstance) {
        JOIN students s ON s.id = r.student_id
        JOIN users su ON su.id = s.user_id
        JOIN lessons l ON l.id = r.lesson_id
-       WHERE r.teacher_id = $1
+       JOIN teachers t ON t.id = r.teacher_id
+       WHERE r.teacher_id = $1 AND t.tenant_id = $2
        ORDER BY r.created_at DESC
        LIMIT 100`,
-      [id]
+      [id, tenantId]
     );
     return rows;
   });
@@ -285,7 +289,7 @@ export async function lessonsRoutes(app: FastifyInstance) {
       );
 
       let homeworkId: string | null = null;
-      if (body.homework && slot.lessonType === "guruh" && slot.groupId) {
+      if (body.homework && lessonRes.rows.length > 0 && slot.lessonType === "guruh" && slot.groupId) {
         const hwRes = await client.query(
           `INSERT INTO homework (tenant_id, group_id, title, description, due_date, xp_reward)
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,

@@ -108,18 +108,20 @@ export default function ApplicationsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Bu arizani o'chirishni tasdiqlaysizmi?")) return;
-    try { await deleteApp.mutateAsync(id); } catch { /* ignore */ }
+    // Xatolik bo'lsa global xato-toast avtomatik ko'rsatiladi (main.tsx); bu yerda
+    // faqat kutilmagan promise rejection'ning oshib ketishini oldini olamiz.
+    try { await deleteApp.mutateAsync(id); } catch { /* toast global handlerda ko'rsatiladi */ }
   }
 
   async function handleConvert(id: string) {
     try {
       const result = await convertApp.mutateAsync(id);
       setConvertResult(result);
-    } catch { /* ignore */ }
+    } catch { /* toast global handlerda ko'rsatiladi */ }
   }
 
   async function handleStatusChange(id: string, status: AppStatus) {
-    try { await updateApp.mutateAsync({ id, status }); } catch { /* ignore */ }
+    try { await updateApp.mutateAsync({ id, status }); } catch { /* toast global handlerda ko'rsatiladi */ }
   }
 
   return (

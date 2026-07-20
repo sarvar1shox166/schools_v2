@@ -69,7 +69,11 @@ export async function scheduleRoutes(app: FastifyInstance) {
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
               sl.meeting_platform AS "meetingPlatform",
               sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
-              COALESCE(tu2.full_name, tu.full_name) AS "teacherName"
+              COALESCE(tu2.full_name, tu.full_name) AS "teacherName",
+              EXISTS (
+                SELECT 1 FROM lessons l
+                WHERE l.schedule_slot_id = sl.id AND l.conducted_at = CURRENT_DATE AND l.status = 'conducted'
+              ) AS "endedToday"
        FROM schedule_slots sl
        LEFT JOIN groups g ON g.id = sl.group_id
        LEFT JOIN rooms r ON r.id = sl.room_id
@@ -190,13 +194,27 @@ export async function scheduleRoutes(app: FastifyInstance) {
               sl.meeting_platform AS "meetingPlatform",
               sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
               COALESCE(tu2.full_name, tu.full_name) AS "teacherName",
-              COALESCE(tu2.phone, tu.phone) AS "teacherPhone"
+              COALESCE(tu2.phone, tu.phone) AS "teacherPhone",
+              EXISTS (
+                SELECT 1 FROM lessons l
+                WHERE l.schedule_slot_id = sl.id AND l.conducted_at = CURRENT_DATE AND l.status = 'conducted'
+              ) AS "endedToday",
+              rev.avg_rating AS "teacherRating",
+              (
+                SELECT COUNT(DISTINCT gm.student_id)::int FROM group_members gm
+                JOIN groups gg ON gg.id = gm.group_id
+                WHERE gg.teacher_id = COALESCE(t2.id, t.id)
+              ) AS "teacherStudentsCount"
        FROM schedule_slots sl
        LEFT JOIN groups g ON g.id = sl.group_id
        LEFT JOIN teachers t ON t.id = g.teacher_id
        LEFT JOIN users tu ON tu.id = t.user_id
        LEFT JOIN teachers t2 ON t2.id = sl.teacher_id
        LEFT JOIN users tu2 ON tu2.id = t2.user_id
+       LEFT JOIN (
+         SELECT teacher_id, ROUND(AVG(rating)::numeric, 1) AS avg_rating
+         FROM teacher_reviews GROUP BY teacher_id
+       ) rev ON rev.teacher_id = COALESCE(t2.id, t.id)
        WHERE (
          g.id IN (
            SELECT gm.group_id FROM group_members gm
@@ -274,7 +292,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     }
 
     if (!best) return null;
-    const isLive = best.at <= now && now < best.endsAt;
+    const isLive = best.at <= now && now < best.endsAt && !best.row.endedToday;
     return { ...best.row, nextAt: best.at.toISOString(), endsAt: best.endsAt.toISOString(), isLive };
   });
 

@@ -2,19 +2,6 @@ import { useMemo, useState } from "react";
 import { Avatar, Card, Icon, PageHead, StatusBadge } from "@chess-school/ui";
 import { useMyStudents, useStudentPackages } from "../../lib/queries.js";
 
-function RatingStars({ xp }: { xp: number }) {
-  const rating = 4 + (xp % 100) / 100;
-  const full = Math.round(rating);
-  return (
-    <div className="stars">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Icon key={i} name="star" size={14} className={i < full ? "" : "empty"} />
-      ))}
-      <span className="cell-sub" style={{ marginLeft: 4 }}>{rating.toFixed(1)}</span>
-    </div>
-  );
-}
-
 function PaymentBadge({ studentId }: { studentId: string }) {
   const { data: packages, isLoading } = useStudentPackages(studentId);
   if (isLoading) return <span className="cell-sub">...</span>;
@@ -57,7 +44,6 @@ export default function TStudentsPage() {
                 <th>Holat</th>
                 <th>XP</th>
                 <th>So'nggi dars</th>
-                <th>Reyting</th>
                 <th>To'lov</th>
               </tr>
             </thead>
@@ -78,12 +64,11 @@ export default function TStudentsPage() {
                   <td><StatusBadge status={s.status} /></td>
                   <td className="tnum">{s.xp} (L{s.xpLevel})</td>
                   <td>{s.lastLessonDate ? new Date(s.lastLessonDate).toLocaleDateString("uz-UZ") : "—"}</td>
-                  <td><RatingStars xp={s.xp} /></td>
                   <td><PaymentBadge studentId={s.id} /></td>
                 </tr>
               ))}
               {!isLoading && (filtered?.length ?? 0) === 0 && (
-                <tr><td colSpan={8}><div className="empty"><Icon name="students" size={28} /><div>O'quvchilar topilmadi</div></div></td></tr>
+                <tr><td colSpan={7}><div className="empty"><Icon name="students" size={28} /><div>O'quvchilar topilmadi</div></div></td></tr>
               )}
             </tbody>
           </table>

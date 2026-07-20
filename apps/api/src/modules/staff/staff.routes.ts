@@ -21,6 +21,15 @@ const teachersAssignSchema = z.object({
   teacherIds: z.array(z.string().uuid()),
 });
 
+// Rol ierarxiyasi: caller o'zidan past yoki teng bo'lmagan rolni yarata/o'zgartira/o'chira olmaydi.
+const ROLE_RANK: Record<string, number> = {
+  admin: 3, assistant_admin: 2, moderator: 1, operator: 1, accountant: 1,
+};
+function canManage(callerRole: string, targetRole: string): boolean {
+  if (callerRole === "super_admin") return true;
+  return (ROLE_RANK[callerRole] ?? 0) > (ROLE_RANK[targetRole] ?? 0);
+}
+
 export async function staffRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
@@ -40,7 +49,10 @@ export async function staffRoutes(app: FastifyInstance) {
 
   app.post("/staff", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const body = createSchema.parse(request.body);
-    const { tenantId } = request.user;
+    const { tenantId, role: callerRole } = request.user;
+    if (!canManage(callerRole, body.role)) {
+      return reply.code(403).send({ error: "Bu rolni yaratishga huquqingiz yo'q" });
+    }
     const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
 
@@ -53,10 +65,20 @@ export async function staffRoutes(app: FastifyInstance) {
     return reply.code(201).send({ id: rows[0].id, tempPassword });
   });
 
-  app.patch("/staff/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
+  app.patch("/staff/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = updateSchema.parse(request.body);
-    const { tenantId } = request.user;
+    const { tenantId, role: callerRole } = request.user;
+
+    const target = await pool.query(
+      `SELECT role FROM users WHERE id = $1 AND tenant_id = $2
+         AND role IN ('operator', 'accountant', 'moderator', 'assistant_admin', 'admin')`,
+      [id, tenantId]
+    );
+    if (!target.rows[0]) return reply.code(404).send({ error: "Not found" });
+    if (!canManage(callerRole, target.rows[0].role)) {
+      return reply.code(403).send({ error: "Bu xodimni o'zgartirishga huquqingiz yo'q" });
+    }
 
     await pool.query(
       `UPDATE users
@@ -71,9 +93,20 @@ export async function staffRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete("/staff/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
+  app.delete("/staff/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { tenantId } = request.user;
+    const { tenantId, role: callerRole } = request.user;
+
+    const target = await pool.query(
+      `SELECT role FROM users WHERE id = $1 AND tenant_id = $2
+         AND role IN ('operator', 'accountant', 'moderator', 'assistant_admin', 'admin')`,
+      [id, tenantId]
+    );
+    if (!target.rows[0]) return reply.code(404).send({ error: "Not found" });
+    if (!canManage(callerRole, target.rows[0].role)) {
+      return reply.code(403).send({ error: "Bu xodimni o'chirishga huquqingiz yo'q" });
+    }
+
     await pool.query(
       `DELETE FROM users WHERE id = $1 AND tenant_id = $2 AND role IN ('operator','accountant','moderator','assistant_admin','admin')`,
       [id, tenantId]

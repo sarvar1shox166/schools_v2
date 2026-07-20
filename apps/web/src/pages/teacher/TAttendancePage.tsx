@@ -2,8 +2,15 @@ import { useEffect, useState } from "react";
 import { Card, Icon } from "@chess-school/ui";
 import {
   useTeacherSchedule, useGroupStudents, useAttendance, useMarkAttendance,
-  useAttendanceHistoryMatrix,
+  useAttendanceHistoryMatrix, type GroupStudent,
 } from "../../lib/queries.js";
+
+// Modul darajasidagi barqaror bo'sh massivlar — `data: x = []` shaklidagi standart
+// qiymat har renderda YANGI massiv obyekti yaratadi (query hali yuklanmagan/enabled:false
+// bo'lganda), bu esa useEffect dependency array'ini har safar "o'zgargan" deb ko'rsatib,
+// cheksiz render siklini keltirib chiqarardi.
+const EMPTY_STUDENTS: GroupStudent[] = [];
+const EMPTY_ATTENDANCE: { studentId: string; status: AttStatus; reason: string | null; lessonCounted: boolean }[] = [];
 
 type AttStatus = "p" | "l" | "a" | "ae";
 
@@ -18,13 +25,15 @@ const AVATAR_COLORS = [
   "#6366f1","#f59e0b","#10b981","#3b82f6","#ef4444","#8b5cf6","#ec4899","#14b8a6",
 ];
 
+const MONTH_FULL = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
 function formatDate(d: string) {
   const dt = new Date(d);
-  return dt.toLocaleDateString("uz-UZ", { day: "numeric", month: "long", year: "numeric" });
+  return `${dt.getDate()} ${MONTH_FULL[dt.getMonth()]} ${dt.getFullYear()}`;
 }
 
 export default function TAttendancePage() {
@@ -47,8 +56,8 @@ export default function TAttendancePage() {
   const selectedDow = (new Date(date + "T00:00:00").getDay() + 6) % 7;
   const activeSlot = groupSlots.find((s) => s.dayOfWeek === selectedDow) ?? null;
 
-  const { data: students = [], isLoading: studLoading } = useGroupStudents(effectiveGroupId);
-  const { data: existingAtt = [] } = useAttendance(activeSlot?.id ?? null, date);
+  const { data: students = EMPTY_STUDENTS, isLoading: studLoading } = useGroupStudents(effectiveGroupId);
+  const { data: existingAtt = EMPTY_ATTENDANCE } = useAttendance(activeSlot?.id ?? null, date);
   const markAttendance = useMarkAttendance();
   const { data: history } = useAttendanceHistoryMatrix(effectiveGroupId, 5);
 

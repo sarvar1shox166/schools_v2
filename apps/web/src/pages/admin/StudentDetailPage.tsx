@@ -1,9 +1,10 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { Avatar, Card, Icon } from "@chess-school/ui";
+import { Avatar, Card, Icon, fmtSom } from "@chess-school/ui";
+import { DateField } from "../../components/DateField.js";
 import {
-  useStudent, useUpdateStudent, useDeleteStudent,
+  useStudent, useUpdateStudent, useDeleteStudent, useSetStudentGroup,
   useResetStudentPassword, useStudentPackages, useAssignPackage,
   useGroups, usePackages, useUploadImage,
   type Package, type StudentDetail,
@@ -37,6 +38,7 @@ export default function StudentDetailPage() {
   const { data: groups = [] } = useGroups();
   const { data: packages = [] } = usePackages();
   const updateStudent = useUpdateStudent();
+  const setStudentGroup = useSetStudentGroup();
   const deleteStudent = useDeleteStudent();
   const resetPassword = useResetStudentPassword();
   const assignPackage = useAssignPackage();
@@ -52,7 +54,7 @@ export default function StudentDetailPage() {
 
   /* Edit mode */
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<{ fullName: string; phone: string; age: string; level: string; status: string } | null>(null);
+  const [form, setForm] = useState<{ fullName: string; phone: string; age: string; level: string; status: string; groupId: string } | null>(null);
 
   /* New password reveal */
   const [newPassword, setNewPassword] = useState<string | null>(null);
@@ -95,6 +97,7 @@ export default function StudentDetailPage() {
       age: student!.age ? String(student!.age) : "",
       level: student!.level ?? "",
       status: student!.status,
+      groupId: student!.groups[0]?.id ?? "",
     });
     setEditing(true);
   }
@@ -109,6 +112,11 @@ export default function StudentDetailPage() {
       level: form.level || undefined,
       status: form.status as StudentDetail["status"],
     });
+    const oldGroupId = student!.groups[0]?.id ?? null;
+    const newGroupId = form.groupId || null;
+    if (newGroupId !== oldGroupId) {
+      await setStudentGroup.mutateAsync({ studentId: id, oldGroupId, newGroupId });
+    }
     setEditing(false);
   }
 
@@ -322,7 +330,7 @@ export default function StudentDetailPage() {
                   </Sel>
                 </FieldWrap>
                 <FieldWrap label="GURUH">
-                  <Sel value={student.groups[0]?.id ?? ""} onChange={() => {}}>
+                  <Sel value={form?.groupId ?? ""} onChange={(v) => setForm(form && { ...form, groupId: v })}>
                     <option value="">Guruhsiz</option>
                     {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
                   </Sel>
@@ -406,7 +414,7 @@ export default function StudentDetailPage() {
                             {pkg.status === "active" ? "Faol" : pkg.status === "finished" ? "Tugagan" : "Muddati o'tgan"}
                           </span>
                           <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-faint)" }}>
-                            {pkg.price.toLocaleString()} so'm
+                            {fmtSom(pkg.price)} so'm
                           </span>
                         </div>
                       </div>
@@ -485,7 +493,7 @@ export default function StudentDetailPage() {
                         <div style={{ fontSize: 12, color: "var(--text-faint)" }}>{pkg.lessonsCount} dars</div>
                       </div>
                       <div style={{ fontWeight: 800, fontSize: 15, color: pay.packageId === pkg.id ? "var(--accent)" : "var(--text)" }}>
-                        {pkg.price.toLocaleString()} so'm
+                        {fmtSom(pkg.price)} so'm
                       </div>
                     </button>
                   ))}
@@ -512,9 +520,8 @@ export default function StudentDetailPage() {
               </FieldWrap>
 
               <FieldWrap label="MUDDATI (ixtiyoriy)">
-                <input className="inp" style={{ width: "100%" }} type="date"
-                  value={pay.expiresAt} min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => setPay({ ...pay, expiresAt: e.target.value })} />
+                <DateField value={pay.expiresAt} min={new Date().toISOString().slice(0, 10)}
+                  onChange={(v) => setPay({ ...pay, expiresAt: v })} />
               </FieldWrap>
 
               <div style={{ display: "flex", gap: 10 }}>

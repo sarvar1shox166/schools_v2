@@ -1,21 +1,16 @@
 import { Avatar, Card, Icon, PageHead } from "@chess-school/ui";
-import { useMyProfile } from "../../lib/queries.js";
-
-const RATINGS = [
-  { l: "Dars sifati", v: 4.9 },
-  { l: "O'quvchilar natijasi", v: 4.7 },
-  { l: "Vaqtga rioya", v: 5.0 },
-  { l: "Muloqot madaniyati", v: 4.8 },
-];
-
-const ACHIEVEMENTS = [
-  { icon: "crown", t: "Yil eng yaxshi o'qituvchisi", d: "2025" },
-  { icon: "target", t: "100 ta o'quvchi tayyorladi", d: "2024" },
-  { icon: "flag", t: "Mintaqa turnir g'olibi", d: "2023" },
-];
+import { useMyProfile, useMyRatingBreakdown } from "../../lib/queries.js";
 
 export default function TProfilePage() {
   const { data: profile } = useMyProfile();
+  const { data: ratingBreakdown } = useMyRatingBreakdown();
+
+  const RATINGS = ratingBreakdown ? [
+    { l: "Dars sifati", v: ratingBreakdown.lessonQuality },
+    { l: "O'quvchilar natijasi", v: ratingBreakdown.studentResults },
+    { l: "Vaqtga rioya", v: ratingBreakdown.punctuality },
+    { l: "Muloqot madaniyati", v: ratingBreakdown.communication },
+  ].filter((r) => r.v != null) as { l: string; v: number }[] : [];
 
   return (
     <div>
@@ -67,36 +62,15 @@ export default function TProfilePage() {
             <div style={{ fontWeight: 750, fontSize: 15, marginBottom: 14, display: "flex", alignItems: "center", gap: 9 }}>
               <Icon name="star" size={17} style={{ color: "var(--warn)" }} /> Baholar
             </div>
-            {RATINGS.map((r) => (
+            {RATINGS.length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--text-faint)" }}>Hali baho berilmagan</div>
+            ) : RATINGS.map((r) => (
               <div key={r.l} style={{ marginBottom: 13 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13 }}>
                   <span style={{ color: "var(--text-dim)", fontWeight: 600 }}>{r.l}</span>
                   <span style={{ fontWeight: 750 }}>{r.v} / 5.0</span>
                 </div>
                 <div className="pbar"><span style={{ width: `${(r.v / 5) * 100}%` }} /></div>
-              </div>
-            ))}
-          </Card>
-
-          <Card className="card-pad fade-up">
-            <div style={{ fontWeight: 750, fontSize: 15, marginBottom: 14, display: "flex", alignItems: "center", gap: 9 }}>
-              <Icon name="award" size={17} style={{ color: "var(--accent-text)" }} /> Yutuqlar
-            </div>
-            {ACHIEVEMENTS.map((a, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex", alignItems: "center", gap: 13, padding: "10px 0",
-                  borderBottom: i < ACHIEVEMENTS.length - 1 ? "1px solid var(--border)" : "none",
-                }}
-              >
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--accent-soft)", display: "grid", placeItems: "center", color: "var(--accent-text)" }}>
-                  <Icon name={a.icon} size={18} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 650, fontSize: 14 }}>{a.t}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-faint)" }}>{a.d}</div>
-                </div>
               </div>
             ))}
           </Card>

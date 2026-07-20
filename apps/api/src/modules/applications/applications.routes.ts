@@ -311,43 +311,35 @@ export async function applicationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
 
-    const appRes = await pool.query(
-      `SELECT full_name, phone, age, level, converted_student_id AS "convertedStudentId"
-       FROM applications WHERE id = $1 AND tenant_id = $2`,
-      [id, tenantId]
-    );
-    if (appRes.rows.length === 0) return reply.code(404).send({ error: "Not found" });
-    const app_ = appRes.rows[0];
-
-    // Diagnostika bosqichida o'quvchi hisobi allaqachon yaratilgan bo'lishi mumkin
-    // (POST/PATCH /applications) — bunda qayta yaratmasdan faqat statusni yangilaymiz.
-    if (app_.convertedStudentId) {
-      await pool.query(
-        `UPDATE applications SET status = 'royxatdan_otdi', updated_at = now() WHERE id = $1`,
-        [id]
-      );
-      return reply.code(200).send({ studentId: app_.convertedStudentId, tempPassword: null, alreadyExisted: true });
-    }
-
-    // Import inline to avoid circular dep
-    const { hashPassword, generateTempPassword } = await import("../auth/auth.service.js");
-    const tempPassword = generateTempPassword();
-    const passwordHash = await hashPassword(tempPassword);
-
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const userRes = await client.query(
-        `INSERT INTO users (tenant_id, role, full_name, phone, password_hash, login)
-         VALUES ($1, 'student', $2, $3, $4, $3) RETURNING id`,
-        [tenantId, app_.full_name, app_.phone, passwordHash]
+
+      const appRes = await client.query(
+        `SELECT full_name, phone, age, level, converted_student_id AS "convertedStudentId"
+         FROM applications WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+        [id, tenantId]
       );
-      const userId = userRes.rows[0].id;
-      const studentRes = await client.query(
-        `INSERT INTO students (user_id, tenant_id, level, age) VALUES ($1, $2, $3, $4) RETURNING id`,
-        [userId, tenantId, app_.level ?? null, app_.age ?? null]
-      );
-      const studentId = studentRes.rows[0].id;
+      if (appRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "Not found" });
+      }
+      const app_ = appRes.rows[0];
+
+      // Diagnostika bosqichida o'quvchi hisobi allaqachon yaratilgan bo'lishi mumkin
+      // (POST/PATCH /applications) — bunda qayta yaratmasdan faqat statusni yangilaymiz.
+      if (app_.convertedStudentId) {
+        await client.query(
+          `UPDATE applications SET status = 'royxatdan_otdi', updated_at = now() WHERE id = $1`,
+          [id]
+        );
+        await client.query("COMMIT");
+        return reply.code(200).send({ studentId: app_.convertedStudentId, tempPassword: null, alreadyExisted: true });
+      }
+
+      const { studentId, tempPassword } = await createStudentAccount(client, tenantId!, {
+        fullName: app_.full_name, phone: app_.phone, age: app_.age, level: app_.level,
+      });
       await client.query(
         `UPDATE applications SET status = 'royxatdan_otdi', converted_student_id = $1, updated_at = now()
          WHERE id = $2`,
@@ -357,6 +349,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
       return reply.code(201).send({ studentId, tempPassword });
     } catch (err) {
       await client.query("ROLLBACK");
+      if (err instanceof PhoneTakenError) return reply.code(409).send({ error: "phone_taken", message: err.message });
       throw err;
     } finally {
       client.release();

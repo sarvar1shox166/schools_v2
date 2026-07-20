@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Avatar, Card, Icon, StatCard } from "@chess-school/ui";
+import { Avatar, Card, Icon, StatCard, fmtSom } from "@chess-school/ui";
 import {
   useTransactions,
   usePaymentsStats,
@@ -10,9 +10,7 @@ import {
   Transaction,
 } from "../../lib/queries.js";
 
-function fmt(n: number) {
-  return n.toLocaleString("ru-RU");
-}
+const fmt = fmtSom;
 
 type TabKey = "all" | "paid" | "pending" | "debt";
 

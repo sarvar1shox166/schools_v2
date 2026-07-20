@@ -80,7 +80,6 @@ export default function LoginPage() {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [tgChecking, setTgChecking] = useState(false);
@@ -331,24 +330,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember + Forgot */}
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:-4 }}>
-              <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, fontWeight:600, color:"#6b6480", cursor:"pointer", userSelect:"none" }}>
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={e => setRemember(e.target.checked)}
-                  style={{ width:17, height:17, accentColor:"#4f14f2", cursor:"pointer" }}
-                />
-                Meni eslab qol
-              </label>
-              <a href="#" style={{ fontSize:13, fontWeight:700, color:"#4f14f2", textDecoration:"none" }}
-                onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
-                onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
-                Parolni unutdingizmi?
-              </a>
-            </div>
-
             {/* Error */}
             {error && (
               <div style={{
@@ -387,16 +368,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Sign up link */}
-          <div style={{ textAlign:"center", fontSize:13.5, color:"#6b6480", fontWeight:500, marginTop:22 }}>
-            Hisobingiz yo'qmi?{" "}
-            <a href="#" style={{ color:"#4f14f2", fontWeight:800, textDecoration:"none" }}
-              onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
-              onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
-              Ro'yxatdan o'tish
-            </a>
-          </div>
         </div>
 
       </div>

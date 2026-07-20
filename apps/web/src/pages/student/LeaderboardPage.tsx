@@ -34,7 +34,7 @@ export default function LeaderboardPage() {
   const { data: xp } = useMyXp();
   const user = useAuthStore((s) => s.user);
 
-  const myIdx = data.findIndex((s) => s.fullName === user?.fullName);
+  const myIdx = data.findIndex((s) => s.userId === user?.id);
   const myRank = myIdx >= 0 ? myIdx + 1 : null;
   const myEntry = myIdx >= 0 ? data[myIdx] : null;
   const myElo = xp?.elo ?? myEntry?.elo ?? 1200;
@@ -80,7 +80,7 @@ export default function LeaderboardPage() {
           {podiumOrder.map((rank0) => {
             const e = top3[rank0];
             if (!e) return <div key={rank0} style={{ flex: 1 }} />;
-            const isMe = e.fullName === user?.fullName;
+            const isMe = e.userId === user?.id;
             const avSz = rank0 === 0 ? 68 : 54;
             return (
               <div key={rank0} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -156,9 +156,9 @@ export default function LeaderboardPage() {
 
           {rest.map((e, i) => {
             const rank = i + 4;
-            const isMe = e.fullName === user?.fullName;
+            const isMe = e.userId === user?.id;
             return (
-              <div key={e.fullName + i} style={{
+              <div key={e.userId} style={{
                 display: "flex", alignItems: "center", gap: 12,
                 padding: "11px 20px",
                 background: isMe ? "rgba(59,130,246,.08)" : "transparent",

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Card, Icon } from "@chess-school/ui";
+import { Avatar, Card, Icon, fmtSom } from "@chess-school/ui";
+import { DateField } from "../../components/DateField.js";
 import {
   useCreateStudent, useGroups, usePackages, useAssignPackage,
   type Package,
@@ -144,7 +145,7 @@ export default function NewStudentPage() {
               <div style={{ textAlign: "left" }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{result.packageName}</div>
                 <div style={{ fontSize: 12, color: "#059669", fontWeight: 600 }}>
-                  {result.amount?.toLocaleString()} so'm to'landi
+                  {result.amount != null ? fmtSom(result.amount) : ""} so'm to'landi
                 </div>
               </div>
             </div>
@@ -350,7 +351,7 @@ export default function NewStudentPage() {
                           fontWeight: 800, fontSize: 15,
                           color: pay.packageId === pkg.id ? "var(--accent)" : "var(--text)",
                         }}>
-                          {pkg.price.toLocaleString()} so'm
+                          {fmtSom(pkg.price)} so'm
                         </div>
                       </button>
                     ))
@@ -385,19 +386,15 @@ export default function NewStudentPage() {
               {/* Payment date + expiry date */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <Field label="TO'LOV SANASI">
-                  <input className="inp" style={{ width: "100%" }}
-                    type="date" value={pay.paidAt}
-                    max={todayLocalStr()}
-                    onChange={(e) => setPay({ ...pay, paidAt: e.target.value })} />
+                  <DateField value={pay.paidAt} max={todayLocalStr()}
+                    onChange={(v) => setPay({ ...pay, paidAt: v })} />
                   <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
                     O'tgan sanadagi to'lovni ham belgilash mumkin
                   </div>
                 </Field>
                 <Field label="MUDDATI (ixtiyoriy)">
-                  <input className="inp" style={{ width: "100%" }}
-                    type="date" value={pay.expiresAt}
-                    min={todayLocalStr()}
-                    onChange={(e) => setPay({ ...pay, expiresAt: e.target.value })} />
+                  <DateField value={pay.expiresAt} min={todayLocalStr()}
+                    onChange={(v) => setPay({ ...pay, expiresAt: v })} />
                 </Field>
               </div>
 
@@ -416,7 +413,7 @@ export default function NewStudentPage() {
                       {selectedPkg.name} · {selectedPkg.lessonsCount} dars
                     </div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: "var(--accent)" }}>
-                      {selectedPkg.price.toLocaleString()} so'm
+                      {fmtSom(selectedPkg.price)} so'm
                     </div>
                   </div>
                 </div>

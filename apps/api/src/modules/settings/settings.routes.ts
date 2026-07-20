@@ -124,6 +124,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   app.put("/settings/salary", async (request, reply) => {
     const body = salaryTypeSchema.parse(request.body);
+    const { tenantId } = request.user;
+    const teacherRes = await pool.query(`SELECT id FROM teachers WHERE id = $1 AND tenant_id = $2`, [body.teacherId, tenantId]);
+    if (!teacherRes.rows[0]) return reply.code(404).send({ error: "Not found" });
     await pool.query(
       `INSERT INTO teacher_rates
          (teacher_id, salary_type, monthly_amount, income_percent,

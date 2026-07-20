@@ -10,6 +10,7 @@ interface OnlinePlayer {
   studentId: string;
   fullName: string;
   elo: number;
+  tenantId: string;
 }
 
 interface QueuedPlayer {
@@ -17,6 +18,7 @@ interface QueuedPlayer {
   studentId: string;
   fullName: string;
   elo: number;
+  tenantId: string;
 }
 
 interface GamePlayer {
@@ -49,6 +51,11 @@ const socketGames = new Map<WebSocket, string>();
 const onlinePlayers = new Map<WebSocket, OnlinePlayer>();
 const challenges = new Map<string, Challenge>();
 
+// Har bir foydalanuvchi bir vaqtda cheklangan sondagina Stockfish jarayonini
+// ishga tushira olsin — aks holda cheksiz parallel chaqiruv orqali DoS mumkin.
+const MAX_CONCURRENT_ENGINE_CALLS_PER_USER = 3;
+const activeEngineCalls = new Map<string, number>();
+
 function send(socket: WebSocket, payload: unknown) {
   if (socket.readyState === socket.OPEN) {
     socket.send(JSON.stringify(payload));
@@ -57,16 +64,15 @@ function send(socket: WebSocket, payload: unknown) {
 
 function broadcastOnlineList() {
   const inGame = new Set([...socketGames.keys()]);
-  const list = [...onlinePlayers.values()].map((p) => ({
-    studentId: p.studentId,
-    fullName: p.fullName,
-    elo: p.elo,
-    inGame: inGame.has(p.socket),
-  }));
-  for (const p of onlinePlayers.values()) {
-    send(p.socket, {
+  const all = [...onlinePlayers.values()];
+  for (const viewer of all) {
+    send(viewer.socket, {
       type: "online_list",
-      players: list.filter((x) => x.studentId !== p.studentId),
+      // Faqat o'z maktabidagi o'quvchilarni ko'rsatamiz — turli tenant o'quvchilari
+      // bir-birining ismi/reytingini ko'rmasligi va o'ynashga taklif qila olmasligi kerak.
+      players: all
+        .filter((p) => p.tenantId === viewer.tenantId && p.studentId !== viewer.studentId)
+        .map((p) => ({ studentId: p.studentId, fullName: p.fullName, elo: p.elo, inGame: inGame.has(p.socket) })),
     });
   }
 }
@@ -155,12 +161,22 @@ function endGame(game: Game, reason: string) {
 }
 
 function tryMatch() {
-  while (queue.length >= 2) {
-    const a = queue.shift()!;
-    const b = queue.shift()!;
-    if (a.socket.readyState !== a.socket.OPEN) { queue.unshift(b); continue; }
-    if (b.socket.readyState !== b.socket.OPEN) { queue.unshift(a); continue; }
-    startGame(a, b);
+  // Faqat bitta maktab (tenant) ichidagi o'quvchilarni moslashtiramiz.
+  for (const tenantId of new Set(queue.map((p) => p.tenantId))) {
+    let bucket = queue.filter((p) => p.tenantId === tenantId);
+    while (bucket.length >= 2) {
+      const a = bucket.shift()!;
+      const b = bucket.shift()!;
+      const removeFromQueue = (p: QueuedPlayer) => {
+        const idx = queue.findIndex((q) => q.socket === p.socket);
+        if (idx !== -1) queue.splice(idx, 1);
+      };
+      if (a.socket.readyState !== a.socket.OPEN) { removeFromQueue(a); continue; }
+      if (b.socket.readyState !== b.socket.OPEN) { removeFromQueue(b); continue; }
+      removeFromQueue(a);
+      removeFromQueue(b);
+      startGame(a, b);
+    }
   }
 }
 
@@ -197,6 +213,17 @@ export async function pvpRoutes(app: FastifyInstance) {
     const studentId: string | undefined = sRows[0]?.id;
     if (!studentId) return reply.code(404).send({ error: "student not found" });
 
+    // Kunlik limit — skript orqali natijalarni takroran yuborib ELO'ni sun'iy
+    // oshirishning oldini olish uchun.
+    const DAILY_GAME_LIMIT = 40;
+    const { rows: countRows } = await pool.query(
+      `SELECT count(*)::int AS n FROM game_results WHERE student_id = $1 AND played_at >= date_trunc('day', now())`,
+      [studentId]
+    );
+    if (countRows[0].n >= DAILY_GAME_LIMIT) {
+      return reply.code(429).send({ error: "Bugungi o'yinlar limiti tugadi, ertaga qaytadan urinib ko'ring" });
+    }
+
     const { rows: xpRows } = await pool.query(
       `SELECT elo FROM student_xp WHERE student_id = $1`,
       [studentId]
@@ -225,7 +252,7 @@ export async function pvpRoutes(app: FastifyInstance) {
   });
 
   /* ── Computer move ────────────────────────────────────────────────────── */
-  app.post("/pvp/computer-move", async (request, reply) => {
+  app.post("/pvp/computer-move", { onRequest: [app.authenticate] }, async (request, reply) => {
     const { fen, difficulty, unbeatable } = request.body as {
       fen: string; difficulty: number; unbeatable?: boolean;
     };
@@ -235,10 +262,23 @@ export async function pvpRoutes(app: FastifyInstance) {
     try { chess = new Chess(fen); } catch { return reply.code(400).send({ error: "invalid fen" }); }
     if (chess.isGameOver()) return reply.send({ move: null, gameOver: true });
 
-    const skillLevel = unbeatable ? 20 : difficultyToSkill(difficulty ?? 5);
-    const movetime = unbeatable ? 3000 : Math.min(200 + difficulty * 80, 1200);
-    const move = await getComputerMove(fen, skillLevel, movetime);
-    return reply.send({ move });
+    const userId = request.user.sub;
+    const active = activeEngineCalls.get(userId) ?? 0;
+    if (active >= MAX_CONCURRENT_ENGINE_CALLS_PER_USER) {
+      return reply.code(429).send({ error: "Juda ko'p parallel so'rov, birozdan keyin urinib ko'ring" });
+    }
+    activeEngineCalls.set(userId, active + 1);
+
+    try {
+      const skillLevel = unbeatable ? 20 : difficultyToSkill(difficulty ?? 5);
+      const movetime = unbeatable ? 3000 : Math.min(200 + difficulty * 80, 1200);
+      const move = await getComputerMove(fen, skillLevel, movetime);
+      return reply.send({ move });
+    } finally {
+      const remaining = (activeEngineCalls.get(userId) ?? 1) - 1;
+      if (remaining <= 0) activeEngineCalls.delete(userId);
+      else activeEngineCalls.set(userId, remaining);
+    }
   });
 
   /* ── WebSocket PvP ────────────────────────────────────────────────────── */
@@ -275,8 +315,10 @@ export async function pvpRoutes(app: FastifyInstance) {
       }
     }
 
+    const tenantId = payload.tenantId!;
+
     // Add to lobby (not queue)
-    onlinePlayers.set(socket, { socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo });
+    onlinePlayers.set(socket, { socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo, tenantId });
     send(socket, { type: "connected", myElo: student.elo });
     broadcastOnlineList();
 
@@ -294,7 +336,7 @@ export async function pvpRoutes(app: FastifyInstance) {
       if (msg.type === "join_queue") {
         const alreadyInQueue = queue.some((p) => p.studentId === student.studentId);
         if (!alreadyInQueue) {
-          queue.push({ socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo });
+          queue.push({ socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo, tenantId });
           send(socket, { type: "queued" });
           tryMatch();
         }
@@ -313,7 +355,7 @@ export async function pvpRoutes(app: FastifyInstance) {
       if (msg.type === "challenge" && msg.targetStudentId) {
         const me = onlinePlayers.get(socket);
         const target = [...onlinePlayers.values()].find((p) => p.studentId === msg.targetStudentId);
-        if (!target || !me || socketGames.has(target.socket) || socketGames.has(socket)) return;
+        if (!target || !me || target.tenantId !== me.tenantId || socketGames.has(target.socket) || socketGames.has(socket)) return;
 
         const key = `${student.studentId}-${msg.targetStudentId}`;
         challenges.set(key, {

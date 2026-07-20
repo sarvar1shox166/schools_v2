@@ -1,6 +1,8 @@
 import { Avatar, Card, CardHead, Delta, Icon, StatCard, StatusBadge } from "@chess-school/ui";
 import { useApplications, useGroupFillRate, useReportsOverview, useStudentGrowth, useTodaySchedule } from "../../lib/queries.js";
 
+const MONTH_SHORT = ["Yan","Fev","Mar","Apr","May","Iyu","Iyl","Avg","Sen","Okt","Noy","Dek"];
+
 function formatRelativeDate(iso: string): string {
   const d = new Date(iso);
   const diffDays = Math.floor((Date.now() - d.getTime()) / 86400000);
@@ -10,32 +12,6 @@ function formatRelativeDate(iso: string): string {
   return `${diffDays} kun oldin`;
 }
 
-const MOCK_SCHEDULE = [
-  { id: "1", time: "09:00", name: "Boshlang'ich — A guruh", teacher: "Alisher K.", students: 12, room: "1-zal", color: "#3F8CFF" },
-  { id: "2", time: "11:00", name: "Taktika — B guruh",      teacher: "Malika Y.",  students: 8,  room: "2-zal", color: "#10b981" },
-  { id: "3", time: "14:00", name: "Bolalar kursi — C guruh",teacher: "Bobur R.",   students: 15, room: "1-zal", color: "#f59e0b" },
-  { id: "4", time: "16:00", name: "Pozitsion — D guruh",    teacher: "Dilnoza E.", students: 10, room: "3-zal", color: "#3F8CFF" },
-  { id: "5", time: "18:00", name: "Blitz klub — F guruh",   teacher: "Jasur T.",   students: 11, room: "2-zal", color: "#10b981" },
-];
-
-const MOCK_GROWTH = [
-  { month: "Yan", count: 180 },
-  { month: "Fev", count: 192 },
-  { month: "Mar", count: 210 },
-  { month: "Apr", count: 221 },
-  { month: "May", count: 236 },
-  { month: "Iyu", count: 248 },
-];
-
-const MOCK_GROUPS = [
-  { id: "1", name: "Boshlang'ich — A", count: 12, capacity: 14, color: "#3F8CFF" },
-  { id: "2", name: "Taktika — B",      count: 8,  capacity: 12, color: "#10b981" },
-  { id: "3", name: "Bolalar kursi — C",count: 15, capacity: 16, color: "#f59e0b" },
-  { id: "4", name: "Pozitsion — D",    count: 10, capacity: 12, color: "#ec4899" },
-  { id: "5", name: "Pro Trening",      count: 6,  capacity: 8,  color: "#06b6d4" },
-  { id: "6", name: "Blitz klub — F",   count: 11, capacity: 14, color: "#22c55e" },
-];
-
 function formatMoney(val: number): string {
   if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
   if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`;
@@ -43,28 +19,27 @@ function formatMoney(val: number): string {
 }
 
 export default function AdminDashboard() {
-  const { data: overview } = useReportsOverview();
-  const { data: todaySchedule } = useTodaySchedule();
-  const { data: growth } = useStudentGrowth();
-  const { data: fillRate } = useGroupFillRate();
+  const { data: overview, isLoading: overviewLoading } = useReportsOverview();
+  const { data: todaySchedule, isLoading: scheduleLoading } = useTodaySchedule();
+  const { data: growth, isLoading: growthLoading } = useStudentGrowth();
+  const { data: fillRate, isLoading: fillRateLoading } = useGroupFillRate();
   const { data: applications } = useApplications("diagnostika");
 
-  const growthData = (growth && growth.length > 0) ? growth.map((g, i) => ({
-    month: ["Yan","Fev","Mar","Apr","May","Iyu","Iyl","Avg","Sen","Okt","Noy","Dek"][Number(g.month.slice(5)) - 1] ?? g.month.slice(5),
+  const groupsData = fillRate ?? [];
+  const growthData = (growth ?? []).map((g, i, arr) => ({
+    month: MONTH_SHORT[Number(g.month.slice(5)) - 1] ?? g.month.slice(5),
     count: g.count,
-    last: i === growth.length - 1,
-  })) : MOCK_GROWTH.map((g, i) => ({ ...g, last: i === MOCK_GROWTH.length - 1 }));
-
-  const groupsData = fillRate && fillRate.length > 0 ? fillRate : MOCK_GROUPS;
-  const scheduleData = todaySchedule && todaySchedule.length > 0 ? todaySchedule.map((l) => ({
+    last: i === arr.length - 1,
+  }));
+  const scheduleData = (todaySchedule ?? []).map((l) => ({
     id: l.id,
     time: l.startTime?.slice(0, 5) ?? "",
     name: l.groupName,
-    teacher: l.roomName ?? "",
-    students: 0,
-    room: "",
+    teacher: l.teacherName ?? "—",
+    students: groupsData.find((g) => g.id === l.groupId)?.count ?? null,
+    room: l.roomName ?? "",
     color: l.color ?? "var(--accent)",
-  })) : MOCK_SCHEDULE;
+  }));
 
   const maxCount = Math.max(1, ...growthData.map((g) => g.count));
 
@@ -75,27 +50,24 @@ export default function AdminDashboard() {
       <div className="grid cols-4">
         <StatCard
           icon="students" tone="i"
-          value={String(overview?.studentsCount ?? 248)}
+          value={overviewLoading ? "…" : String(overview?.studentsCount ?? 0)}
           label="Jami o'quvchilar"
-          delta={<Delta dir="up">+12 bu oy</Delta>}
         />
         <StatCard
           icon="teacher" tone="s"
-          value={String(overview?.teachersCount ?? 8)}
+          value={overviewLoading ? "…" : String(overview?.teachersCount ?? 0)}
           label="O'qituvchilar"
-          delta={<Delta dir="up">+1 yangi</Delta>}
         />
         <StatCard
           icon="income" tone="s"
-          value={formatMoney(overview?.monthIncome ?? 18_400_000)}
+          value={overviewLoading ? "…" : formatMoney(overview?.monthIncome ?? 0)}
           label="Bu oy to'lov"
-          delta={<Delta dir="up">+8% o'sish</Delta>}
         />
         <StatCard
           icon="alert" tone="d"
-          value={String(overview?.groupsCount ?? 3)}
+          value={overviewLoading ? "…" : String(overview?.pendingPayments ?? 0)}
           label="To'liqsiz to'lov"
-          delta={<Delta dir="bad">e'tibor bering</Delta>}
+          delta={overview && overview.pendingPayments > 0 ? <Delta dir="bad">e'tibor bering</Delta> : undefined}
         />
       </div>
 
@@ -156,7 +128,11 @@ export default function AdminDashboard() {
             }
           />
           <div className="card-pad" style={{ paddingTop: 8, paddingBottom: 12 }}>
-            {scheduleData.map((l) => (
+            {scheduleLoading ? (
+              <div style={{ textAlign: "center", padding: 24, color: "var(--text-faint)", fontSize: 13 }}>Yuklanmoqda...</div>
+            ) : scheduleData.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 24, color: "var(--text-faint)", fontSize: 13 }}>Bugun dars yo'q</div>
+            ) : scheduleData.map((l) => (
               <div className="tl-item" key={l.id}>
                 <div className="tl-time">{l.time}</div>
                 <div className="tl-card" style={{ borderLeftColor: l.color }}>
@@ -164,7 +140,7 @@ export default function AdminDashboard() {
                   <div className="ln-sub">
                     <Icon name="teacher" size={12} />
                     {l.teacher}
-                    {l.students > 0 && <> &middot; {l.students} o'q</>}
+                    {l.students != null && l.students > 0 && <> &middot; {l.students} o'q</>}
                     {l.room && <> &middot; {l.room}</>}
                   </div>
                 </div>
@@ -181,38 +157,43 @@ export default function AdminDashboard() {
             icon="trendingUp"
             title="O'quvchilar o'sishi"
             sub="Oxirgi 6 oy"
-            right={
-              <span className="badge suc">
-                <Icon name="trendingUp" size={12} /> +37.8%
-              </span>
-            }
           />
           <div className="card-pad">
-            <div className="bars">
-              {growthData.map((g) => (
-                <div className="bar-col" key={g.month}>
-                  <div
-                    className="bar"
-                    style={{
-                      height: `${(g.count / maxCount) * 100}%`,
-                      background: g.last
-                        ? "linear-gradient(180deg,#6aa8ff,#3F8CFF)"
-                        : "linear-gradient(180deg,#93c5fd,#60a5fa)",
-                    }}
-                  >
-                    <span className="cap tnum" style={{ fontWeight: g.last ? 900 : 700 }}>{g.count}</span>
+            {growthLoading ? (
+              <div style={{ textAlign: "center", padding: 24, color: "var(--text-faint)", fontSize: 13 }}>Yuklanmoqda...</div>
+            ) : growthData.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 24, color: "var(--text-faint)", fontSize: 13 }}>Hali ma'lumot yo'q</div>
+            ) : (
+              <div className="bars">
+                {growthData.map((g) => (
+                  <div className="bar-col" key={g.month}>
+                    <div
+                      className="bar"
+                      style={{
+                        height: `${(g.count / maxCount) * 100}%`,
+                        background: g.last
+                          ? "linear-gradient(180deg,#6aa8ff,#3F8CFF)"
+                          : "linear-gradient(180deg,#93c5fd,#60a5fa)",
+                      }}
+                    >
+                      <span className="cap tnum" style={{ fontWeight: g.last ? 900 : 700 }}>{g.count}</span>
+                    </div>
+                    <div className="bar-x">{g.month}</div>
                   </div>
-                  <div className="bar-x">{g.month}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
 
         <Card>
           <CardHead icon="groups" title="Guruh to'ldirilishi" />
           <div className="card-pad" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {groupsData.map((g) => (
+            {fillRateLoading ? (
+              <div style={{ textAlign: "center", padding: 24, color: "var(--text-faint)", fontSize: 13 }}>Yuklanmoqda...</div>
+            ) : groupsData.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 24, color: "var(--text-faint)", fontSize: 13 }}>Guruhlar yo'q</div>
+            ) : groupsData.map((g) => (
               <div key={g.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 13 }}>
                   <span style={{ fontWeight: 650, display: "flex", alignItems: "center", gap: 8 }}>

@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 export interface TelegramInitDataUser {
   id: number;
@@ -30,7 +30,9 @@ export function verifyTelegramInitData(initData: string, botToken: string, maxAg
   const secretKey = createHmac("sha256", "WebAppData").update(botToken).digest();
   const computedHash = createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
 
-  if (computedHash !== hash) return null;
+  const computedBuf = Buffer.from(computedHash, "hex");
+  const hashBuf = Buffer.from(hash, "hex");
+  if (computedBuf.length !== hashBuf.length || !timingSafeEqual(computedBuf, hashBuf)) return null;
 
   const authDate = Number(params.get("auth_date"));
   if (!authDate || Date.now() / 1000 - authDate > maxAgeSeconds) return null;

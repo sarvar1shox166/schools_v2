@@ -6,6 +6,8 @@ import { useAuthStore } from "../lib/auth-store.js";
 import { useMyXp, usePendingLessonReviews, useUnreadNotifications } from "../lib/queries.js";
 import { Sidebar, type NavSection } from "./Sidebar.js";
 import { LessonReviewModal } from "../components/LessonReviewModal.js";
+import { StreakModal } from "../components/StreakModal.js";
+import { VideoUploadToast } from "../components/VideoUploadToast.js";
 
 function AutoLessonReviewPrompt() {
   const { data: pending = [] } = usePendingLessonReviews();
@@ -57,17 +59,6 @@ const TEACHER_PAGE_META: Record<string, { title: string; sub: string }> = {
   "/teacher/profile":       { title: "Mening profilim",  sub: "Shaxsiy ma'lumotlar" },
   "/teacher/income":        { title: "Daromad",           sub: "Oylik hisob-kitob" },
   "/teacher/puzzles/new":  { title: "Yangi boshqotirma", sub: "Pozitsiya va yechim kiriting" },
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Bosh admin",
-  admin: "Administrator",
-  teacher: "O'qituvchi",
-  student: "O'quvchi",
-  operator: "Operator",
-  accountant: "Buxgalter",
-  moderator: "Moderator",
-  assistant_admin: "Yordamchi admin",
 };
 
 const NOTIFICATIONS_ROUTE: Record<string, string> = {
@@ -127,6 +118,7 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
     () => localStorage.getItem("chess_sb_collapsed") === "1"
   );
   const [mobOpen, setMobOpen] = useState(false);
+  const [streakModalOpen, setStreakModalOpen] = useState(false);
   // Close mobile sidebar on route change
   useEffect(() => { setMobOpen(false); }, [location.pathname]);
 
@@ -164,6 +156,7 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   return (
     <div className={"app" + (isStudent ? " kid-theme" : "") + (!isStudent && collapsed ? " collapsed" : "") + (isStudent && mobOpen ? " mob-open" : "")}>
       <XpToastHost />
+      <VideoUploadToast />
       {isStudent && <AutoLessonReviewPrompt />}
       {/* Mobile backdrop — clicks close the sidebar */}
       <div className="mob-backdrop" onClick={() => isStudent ? setMobOpen(false) : setCollapsed(true)} />
@@ -194,7 +187,7 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                   <span className="lv-bar"><span style={{ width: `${xpPct}%` }} /></span>
                 </span>
                 <span className="kid-tb-xp-txt">{xpVal} XP</span>
-                <span className="pill pill-streak">
+                <span className="pill pill-streak" onClick={() => setStreakModalOpen(true)} style={{ cursor: "pointer" }} title="Kunlik streak bonusi">
                   <span className="kid-fire">🔥</span>{xpData?.streak ?? 0} kun
                 </span>
                 <Link to="/student/pvp" className="tb-btn" title="Jonli o'yin">
@@ -210,6 +203,21 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                 <Icon name="bell" size={17} />
                 {!!unread?.count && <span className="dot" />}
               </button>
+              <button className="tb-btn" onClick={() => navigate("/student/profile")} title="Sozlamalar">
+                <Icon name="settings" size={17} />
+              </button>
+              <div
+                onClick={() => navigate("/student/profile")}
+                title="Mening profilim"
+                style={{
+                  width: 34, height: 34, borderRadius: 10, flexShrink: 0, cursor: "pointer",
+                  background: "linear-gradient(135deg,#8b5cf6,#6366f1)", display: "flex", alignItems: "center",
+                  justifyContent: "center", color: "#fff", fontSize: 12.5, fontWeight: 700,
+                  boxShadow: "0 4px 12px rgba(139,92,246,.3)",
+                }}
+              >
+                {(user?.fullName ?? "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
+              </div>
             </>
           ) : (
             <>
@@ -239,7 +247,6 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                 <label className="search">
                   <Icon name="search" size={17} />
                   <input placeholder="Qidirish..." />
-                  <kbd>⌘K</kbd>
                 </label>
               )}
               <button className="iconbtn" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} title="Mavzu">
@@ -254,22 +261,6 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                 <Icon name="bell" size={18} />
                 {!!unread?.count && <span className="dot" />}
               </button>
-              {user?.role === "teacher" ? (
-                <button className="btn primary" style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 18px" }}>
-                  <Icon name="plus" size={14}/> Dars yaratish
-                </button>
-              ) : (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "5px 12px", borderRadius: 8,
-                  border: "1px solid var(--border)", background: "var(--surface-2)",
-                  fontSize: 13, fontWeight: 600, color: "var(--text-dim)",
-                  whiteSpace: "nowrap",
-                }}>
-                  <Icon name="user" size={14} />
-                  {ROLE_LABELS[user?.role ?? ""] ?? user?.role}
-                </div>
-              )}
               {/* Avatar */}
               <div style={{
                 width: 36, height: 36, borderRadius: 10, flexShrink: 0,
@@ -288,6 +279,7 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
           </div>
         </main>
       </div>
+      {isStudent && streakModalOpen && <StreakModal onClose={() => setStreakModalOpen(false)} />}
     </div>
   );
 }

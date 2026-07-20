@@ -71,6 +71,8 @@ export interface ScheduleSlot {
   isStarted?: boolean;
   /** /schedule/today ga xos: bu dars boshqa kundan bugunga ko'chirilganmi. */
   isRescheduled?: boolean;
+  /** Bugun uchun o'qituvchi tomonidan allaqachon yakunlangan darsmi (lessons jadvali orqali). */
+  endedToday?: boolean;
 }
 
 export function useTeachers() {
@@ -423,11 +425,16 @@ export function useGroupStudents(groupId: string | null) {
 }
 
 export function useAwardXp() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ studentId, amount, note }: { studentId: string; amount: number; note?: string }) =>
       (await api.post<{ xp: number; level: number; streak: number; xpAwarded: number }>(
         `/teacher/students/${studentId}/xp`, { amount, note }
       )).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["myStudentsProgress"] });
+      qc.invalidateQueries({ queryKey: ["myStudents"] });
+    },
   });
 }
 
@@ -813,6 +820,7 @@ export interface AttemptResult {
 }
 
 export interface LeaderboardEntry {
+  userId: string;
   fullName: string;
   xp: number;
   level: number;
@@ -911,6 +919,40 @@ export function useMyXp(enabled = true) {
     queryKey: ["myXp"],
     queryFn: async () => (await api.get<MyXp>("/me/xp")).data,
     enabled,
+  });
+}
+
+export interface StreakState {
+  streak: number;
+  currentDay: number;
+  claimedToday: boolean;
+  claimedDays: number[];
+}
+
+export function useMyStreak() {
+  return useQuery({
+    queryKey: ["myStreak"],
+    queryFn: async () => (await api.get<StreakState>("/me/streak")).data,
+  });
+}
+
+export interface StreakClaimResult {
+  cycleDay: number;
+  xpAwarded: number;
+  xp: number;
+  level: number;
+  streak: number;
+  newAchievements: { code: string; name: string; description: string; icon: string }[];
+}
+
+export function useClaimStreak() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await api.post<StreakClaimResult>("/me/streak/claim")).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["myStreak"] });
+      qc.invalidateQueries({ queryKey: ["myXp"] });
+    },
   });
 }
 
@@ -1236,6 +1278,21 @@ export function useMyProfile() {
   });
 }
 
+export interface MyRatingBreakdown {
+  reviewCount: number;
+  lessonQuality: number | null;
+  studentResults: number | null;
+  punctuality: number | null;
+  communication: number | null;
+}
+
+export function useMyRatingBreakdown() {
+  return useQuery({
+    queryKey: ["myRatingBreakdown"],
+    queryFn: async () => (await api.get<MyRatingBreakdown>("/me/rating-breakdown")).data,
+  });
+}
+
 export interface TeacherScheduleSlot {
   id: string;
   groupId: string;
@@ -1361,54 +1418,108 @@ export function useSendMessage() {
   });
 }
 
-export interface VideoLesson {
+export interface VideoCourse {
   id: string;
   title: string;
   category: "zoom" | "debyut" | "taktika" | "endshpil" | "strategiya";
-  videoUrl: string;
-  durationSeconds: number | null;
   thumbnailUrl: string | null;
   thumbnailColor: string | null;
   thumbnailIcon: string | null;
+  videoCount: number;
+  watchedCount: number;
+}
+
+export interface VideoLessonItem {
+  id: string;
+  title: string;
+  videoUrl: string;
+  durationSeconds: number | null;
   progressPct: number;
 }
 
-export function useVideos(category?: string) {
+export interface VideoCourseDetail extends VideoCourse {
+  lessons: VideoLessonItem[];
+}
+
+export function useVideoCourses(category?: string) {
   return useQuery({
-    queryKey: ["videos", category],
-    queryFn: async () => (await api.get<VideoLesson[]>("/videos", { params: category ? { category } : {} })).data,
+    queryKey: ["video-courses", category],
+    queryFn: async () => (await api.get<VideoCourse[]>("/video-courses", { params: category ? { category } : {} })).data,
   });
 }
 
-export function useCreateVideo() {
+export function useVideoCourseDetail(courseId: string | undefined) {
+  return useQuery({
+    queryKey: ["video-course", courseId],
+    enabled: !!courseId,
+    queryFn: async () => (await api.get<VideoCourseDetail>(`/video-courses/${courseId}`)).data,
+  });
+}
+
+export function useCreateVideoCourse() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
-      title: string; category: string; videoUrl: string;
-      durationSeconds?: number; thumbnailUrl?: string;
-      thumbnailColor?: string; thumbnailIcon?: string;
-    }) => (await api.post("/videos", payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
+      title: string; category: string;
+      thumbnailUrl?: string; thumbnailColor?: string; thumbnailIcon?: string;
+    }) => (await api.post<{ id: string }>("/video-courses", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["video-courses"] }),
   });
 }
 
-export function useDeleteVideo() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/videos/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
-  });
-}
-
-export function useUpdateVideo() {
+export function useUpdateVideoCourse() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...payload }: {
-      id: string; title?: string; category?: string; videoUrl?: string;
-      durationSeconds?: number; thumbnailUrl?: string;
-      thumbnailColor?: string; thumbnailIcon?: string;
+      id: string; title?: string; category?: string;
+      thumbnailUrl?: string; thumbnailColor?: string; thumbnailIcon?: string;
+    }) => (await api.patch(`/video-courses/${id}`, payload)).data,
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["video-courses"] });
+      qc.invalidateQueries({ queryKey: ["video-course", vars.id] });
+    },
+  });
+}
+
+export function useDeleteVideoCourse() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/video-courses/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["video-courses"] }),
+  });
+}
+
+export function useAddVideoLesson() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ courseId, ...payload }: {
+      courseId: string; title: string; videoUrl: string; durationSeconds?: number;
+    }) => (await api.post<{ id: string }>(`/video-courses/${courseId}/videos`, payload)).data,
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["video-course", vars.courseId] });
+      qc.invalidateQueries({ queryKey: ["video-courses"] });
+    },
+  });
+}
+
+export function useUpdateVideoLesson() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, courseId, ...payload }: {
+      id: string; courseId: string; title?: string; videoUrl?: string; durationSeconds?: number;
     }) => (await api.patch(`/videos/${id}`, payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["video-course", vars.courseId] }),
+  });
+}
+
+export function useDeleteVideoLesson() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; courseId: string }) => (await api.delete(`/videos/${id}`)).data,
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["video-course", vars.courseId] });
+      qc.invalidateQueries({ queryKey: ["video-courses"] });
+    },
   });
 }
 
@@ -1499,6 +1610,9 @@ export interface NextLesson {
   nextAt: string;
   endsAt: string;
   isLive: boolean;
+  endedToday: boolean;
+  teacherRating: number | null;
+  teacherStudentsCount: number;
 }
 
 export function useNextLesson() {
@@ -1543,7 +1657,14 @@ export interface Homework {
   description: string | null;
   dueDate: string | null;
   xpReward: number;
-  done: boolean;
+  /** O'quvchi ko'rinishiga xos. */
+  done?: boolean;
+  /** O'qituvchi/admin ko'rinishiga xos. */
+  groupId?: string;
+  groupName?: string;
+  groupColor?: string | null;
+  completionCount?: number;
+  totalStudents?: number;
 }
 
 export function useHomework(groupId?: string) {
@@ -1567,6 +1688,41 @@ export function useCreateHomework() {
     mutationFn: async (payload: { groupId: string; title: string; description?: string; dueDate?: string; xpReward?: number }) =>
       (await api.post("/homework", payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["homework"] }),
+  });
+}
+
+export function useUpdateHomework() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; title?: string; description?: string | null; dueDate?: string | null; xpReward?: number }) =>
+      (await api.patch(`/homework/${id}`, body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["homework"] }),
+  });
+}
+
+export interface HomeworkCompletion {
+  studentId: string;
+  fullName: string;
+  done: boolean;
+}
+
+export function useHomeworkCompletions(homeworkId: string | null) {
+  return useQuery({
+    queryKey: ["homeworkCompletions", homeworkId],
+    queryFn: async () => (await api.get<HomeworkCompletion[]>(`/homework/${homeworkId}/completions`)).data,
+    enabled: !!homeworkId,
+  });
+}
+
+export function useMarkHomeworkDoneByTeacher() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ homeworkId, studentId }: { homeworkId: string; studentId: string }) =>
+      (await api.post(`/homework/${homeworkId}/complete/${studentId}`)).data,
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["homeworkCompletions", vars.homeworkId] });
+      qc.invalidateQueries({ queryKey: ["homework"] });
+    },
   });
 }
 
@@ -1798,7 +1954,28 @@ export function useUpdateStudent() {
   return useMutation({
     mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; level?: string; age?: number; status?: string; avatarUrl?: string }) =>
       (await api.patch(`/students/${id}`, body)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["students"] }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["students"] });
+      qc.invalidateQueries({ queryKey: ["student", vars.id] });
+    },
+  });
+}
+
+export function useSetStudentGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ studentId, oldGroupId, newGroupId }: { studentId: string; oldGroupId: string | null; newGroupId: string | null }) => {
+      if (oldGroupId && oldGroupId !== newGroupId) {
+        await api.delete(`/students/${studentId}/groups/${oldGroupId}`);
+      }
+      if (newGroupId && newGroupId !== oldGroupId) {
+        await api.post(`/students/${studentId}/groups/${newGroupId}`);
+      }
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["student", vars.studentId] });
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
   });
 }
 

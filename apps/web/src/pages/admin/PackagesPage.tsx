@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Card, Icon } from "@chess-school/ui";
+import { Card, Icon, fmtSom } from "@chess-school/ui";
 import {
   usePackages, useCreatePackage, useUpdatePackage, useDeletePackage,
   type Package,
@@ -30,9 +30,7 @@ const EMPTY_FORM = {
 };
 type Form = typeof EMPTY_FORM;
 
-function fmt(n: number) {
-  return n.toLocaleString("uz-UZ");
-}
+const fmt = fmtSom;
 
 const labelSt: React.CSSProperties = {
   display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",

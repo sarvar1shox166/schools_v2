@@ -17,7 +17,7 @@ async function seed() {
     // ── Clean previous seed data (order matters for FK cascades) ─────────────
     await client.query(`DELETE FROM puzzles`);                                        // cascades: puzzle_attempts
     await client.query(`DELETE FROM notifications WHERE tenant_id = $1`, [tenantId]);
-    await client.query(`DELETE FROM video_lessons WHERE tenant_id = $1`, [tenantId]); // cascades: video_progress
+    await client.query(`DELETE FROM video_courses WHERE tenant_id = $1`, [tenantId]); // cascades: video_lessons→video_progress
     await client.query(`DELETE FROM teacher_reviews WHERE tenant_id = $1`, [tenantId]);
     await client.query(`DELETE FROM groups WHERE tenant_id = $1`, [tenantId]);        // cascades: group_members, schedule_slots→attendance_records, lesson_sessions; SET NULL on lessons
     await client.query(`DELETE FROM users WHERE tenant_id = $1 AND role != 'super_admin'`, [tenantId]); // cascades: teachers→teacher_rates,lessons; students→student_packages,student_xp
@@ -315,17 +315,29 @@ async function seed() {
       [tenantId, teacher1Id, adminId, teacher2Id]
     );
 
-    // ── Video lessons ──────────────────────────────────────────────────────────
-    const videosRes = await client.query(
-      `INSERT INTO video_lessons (tenant_id, teacher_id, title, category, video_url, duration_seconds, thumbnail_color, thumbnail_icon) VALUES
-         ($1,$2, 'Rux bilan shoh berish usullari',          'endshpil',  'https://youtu.be/example1', 720,  '#6366f1', '♜'),
-         ($1,$2, 'Siciliya mudofaasi — kirish qo''llanmasi', 'debyut',    'https://youtu.be/example2', 1080, '#10b981', '♟'),
-         ($1,$3, 'Vilka taktikasi — amaliy mashqlar',       'taktika',   'https://youtu.be/example3', 900,  '#f59e0b', '⚡'),
-         ($1,$3, 'Pozitsion o''yin asoslari',                'strategiya','https://youtu.be/example4', 1200, '#3b82f6', '♛'),
-         ($1,$2, 'Zoom yozuvi — ruh va fil koordinatsiyasi','zoom',       'https://youtu.be/example5', 5400, '#8b5cf6', '🎥'),
-         ($1,$3, 'Piyoda tuzilishi va zaifliklari',         'strategiya','https://youtu.be/example6', 960,  '#ef4444', '♟')
+    // ── Video kurslar va darslar ────────────────────────────────────────────────
+    const coursesRes = await client.query(
+      `INSERT INTO video_courses (tenant_id, teacher_id, title, category, thumbnail_color, thumbnail_icon) VALUES
+         ($1,$2, 'Endshpil asoslari',      'endshpil',  '#6366f1', '♜'),
+         ($1,$2, 'Debyut nazariyasi',      'debyut',    '#10b981', '♟'),
+         ($1,$3, 'Taktik mashqlar',        'taktika',   '#f59e0b', '⚡'),
+         ($1,$3, 'Strategik o''yin',        'strategiya','#3b82f6', '♛'),
+         ($1,$2, 'Zoom darslar yozuvlari', 'zoom',      '#8b5cf6', '🎥')
        RETURNING id`,
       [tenantId, teacher1Id, teacher2Id]
+    );
+    const courseIds = coursesRes.rows.map((r: { id: string }) => r.id);
+
+    const videosRes = await client.query(
+      `INSERT INTO video_lessons (tenant_id, course_id, title, video_url, duration_seconds) VALUES
+         ($1,$2, 'Rux bilan shoh berish usullari',          'https://youtu.be/example1', 720),
+         ($1,$3, 'Siciliya mudofaasi — kirish qo''llanmasi', 'https://youtu.be/example2', 1080),
+         ($1,$4, 'Vilka taktikasi — amaliy mashqlar',       'https://youtu.be/example3', 900),
+         ($1,$5, 'Pozitsion o''yin asoslari',                'https://youtu.be/example4', 1200),
+         ($1,$6, 'Zoom yozuvi — ruh va fil koordinatsiyasi','https://youtu.be/example5', 5400),
+         ($1,$5, 'Piyoda tuzilishi va zaifliklari',         'https://youtu.be/example6', 960)
+       RETURNING id`,
+      [tenantId, courseIds[0], courseIds[1], courseIds[2], courseIds[3], courseIds[4]]
     );
     const videoIds = videosRes.rows.map((r: { id: string }) => r.id);
 

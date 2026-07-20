@@ -47,11 +47,6 @@ export default function TLiveLessonPage() {
   const [saved, setSaved] = useState(false);
   const [xpAmounts, setXpAmounts] = useState<Record<string, string>>({});
 
-  const [topic, setTopic] = useState("");
-  const [hwTitle, setHwTitle] = useState("");
-  const [hwDescription, setHwDescription] = useState("");
-  const [hwDueDate, setHwDueDate] = useState("");
-  const [hwXp, setHwXp] = useState(30);
   const [ending, setEnding] = useState(false);
   const [err, setErr] = useState("");
 
@@ -119,16 +114,7 @@ export default function TLiveLessonPage() {
     setErr("");
     setEnding(true);
     try {
-      await endLesson.mutateAsync({
-        scheduleSlotId,
-        topic: topic.trim() || undefined,
-        homework: hwTitle.trim() ? {
-          title: hwTitle.trim(),
-          description: hwDescription.trim() || undefined,
-          dueDate: hwDueDate || undefined,
-          xpReward: hwXp,
-        } : undefined,
-      });
+      await endLesson.mutateAsync({ scheduleSlotId });
       navigate("/teacher");
     } catch {
       setErr("Darsni tugatishda xatolik yuz berdi");
@@ -136,7 +122,6 @@ export default function TLiveLessonPage() {
     }
   }
 
-  const showHomework = slot?.lessonType === "guruh";
   const displayName = slot ? (slot.lessonType !== "guruh" ? (slot.customName ?? "Dars") : (slot.groupName ?? "Dars")) : "";
 
   if (schedLoading) {
@@ -183,7 +168,7 @@ export default function TLiveLessonPage() {
           {slot.isOnline && slot.meetingUrl && (
             <button className="btn" style={{ background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.35)", color: "#fff" }}
               onClick={() => window.open(slot.meetingUrl!, "_blank", "noreferrer")}>
-              {slot.meetingPlatform === "meet" ? "🟢 Google Meet ga kirish" : "📹 Zoom ga kirish"}
+              🎥 Darsga kirish
             </button>
           )}
           <button className="btn primary" style={{ background: canEnd ? "#fff" : "rgba(255,255,255,.3)", color: "#065f46", cursor: canEnd ? "pointer" : "not-allowed" }}
@@ -201,7 +186,7 @@ export default function TLiveLessonPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 20, alignItems: "start" }}>
+      <div style={{ maxWidth: 760 }}>
         {/* Attendance + XP */}
         <Card style={{ borderRadius: 16, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "18px 22px 14px", borderBottom: "1px solid var(--border)" }}>
@@ -309,72 +294,6 @@ export default function TLiveLessonPage() {
               </button>
             </div>
           )}
-        </Card>
-
-        {/* Topic + homework */}
-        <Card style={{ borderRadius: 16, overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "18px 22px 14px", borderBottom: "1px solid var(--border)" }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: "#8b5cf6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="bookOpen" size={18} style={{ color: "#fff" }} />
-            </div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Mavzu va uy vazifasi</div>
-          </div>
-
-          <div style={{ padding: "16px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-faint)", marginBottom: 6, textTransform: "uppercase" }}>
-                Dars mavzusi (ixtiyoriy)
-              </label>
-              <input className="inp" style={{ width: "100%" }} value={topic} onChange={(e) => setTopic(e.target.value)}
-                placeholder="Masalan: Ochilish nazariyasi" />
-            </div>
-
-            {showHomework ? (
-              <>
-                <div style={{ height: 1, background: "var(--border)" }} />
-                <div>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-faint)", marginBottom: 6, textTransform: "uppercase" }}>
-                    Uy vazifasi nomi (ixtiyoriy)
-                  </label>
-                  <input className="inp" style={{ width: "100%" }} value={hwTitle} onChange={(e) => setHwTitle(e.target.value)}
-                    placeholder="Masalan: 5 ta mashq yeching" />
-                </div>
-                {hwTitle.trim() && (
-                  <>
-                    <div>
-                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-faint)", marginBottom: 6, textTransform: "uppercase" }}>
-                        Tavsif (ixtiyoriy)
-                      </label>
-                      <textarea className="inp" style={{ width: "100%", minHeight: 70, resize: "vertical" }}
-                        value={hwDescription} onChange={(e) => setHwDescription(e.target.value)} />
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-faint)", marginBottom: 6, textTransform: "uppercase" }}>
-                          Muddat
-                        </label>
-                        <input className="inp" type="date" style={{ width: "100%" }} value={hwDueDate} onChange={(e) => setHwDueDate(e.target.value)} />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-faint)", marginBottom: 6, textTransform: "uppercase" }}>
-                          XP mukofoti
-                        </label>
-                        <input className="inp" type="number" min={0} style={{ width: "100%" }} value={hwXp}
-                          onChange={(e) => setHwXp(Number(e.target.value))} />
-                      </div>
-                    </div>
-                  </>
-                )}
-                <div style={{ fontSize: 11.5, color: "var(--text-faint)" }}>
-                  Uy vazifasi "Darsni tugatish" bosilganda birga saqlanadi.
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
-                Individual/diagnostika darslarda uy vazifasi berilmaydi.
-              </div>
-            )}
-          </div>
         </Card>
       </div>
     </div>

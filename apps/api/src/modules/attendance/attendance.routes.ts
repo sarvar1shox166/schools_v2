@@ -53,13 +53,15 @@ const isCounted = (s: string) => s !== "ae";
 export async function attendanceRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
-  app.get("/attendance", async (request) => {
+  app.get("/attendance", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] }, async (request) => {
     const { scheduleSlotId, date } = querySchema.parse(request.query);
+    const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT student_id AS "studentId", status, reason, lesson_counted AS "lessonCounted"
-       FROM attendance_records
-       WHERE schedule_slot_id = $1 AND date = $2`,
-      [scheduleSlotId, date]
+      `SELECT ar.student_id AS "studentId", ar.status, ar.reason, ar.lesson_counted AS "lessonCounted"
+       FROM attendance_records ar
+       JOIN schedule_slots sl ON sl.id = ar.schedule_slot_id
+       WHERE ar.schedule_slot_id = $1 AND ar.date = $2 AND sl.tenant_id = $3`,
+      [scheduleSlotId, date, tenantId]
     );
     return rows;
   });
@@ -219,6 +221,12 @@ export async function attendanceRoutes(app: FastifyInstance) {
       try {
         await client.query("BEGIN");
         for (const r of body.records) {
+          // Bir xil student/slot/sana uchun parallel so'rovlarni serializatsiya qilamiz —
+          // aks holda ikkita bir vaqtdagi chaqiruv dars kreditini ikki marta yechishi mumkin.
+          await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint)`, [
+            `attendance:${r.studentId}:${body.scheduleSlotId}:${body.date}`,
+          ]);
+
           const existing = await client.query(
             `SELECT status, student_package_id AS "studentPackageId" FROM attendance_records
              WHERE student_id = $1 AND schedule_slot_id = $2 AND date = $3`,
@@ -498,6 +506,14 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const studentId = studentRes.rows[0]?.id;
     if (!studentId) return { ok: false };
 
+    const slotCheck = await pool.query(
+      `SELECT sl.id FROM schedule_slots sl
+       LEFT JOIN group_members gm ON gm.group_id = sl.group_id AND gm.student_id = $1
+       WHERE sl.id = $2 AND sl.tenant_id = $3 AND (gm.student_id IS NOT NULL OR sl.student_id = $1)`,
+      [studentId, body.scheduleSlotId, tenantId]
+    );
+    if (!slotCheck.rows[0]) return { ok: false };
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -557,7 +573,12 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const teacherId = teacherRes.rows[0]?.id;
     if (!teacherId) return { ok: false };
 
-    const slotRes = await pool.query(`SELECT lesson_type FROM schedule_slots WHERE id = $1`, [body.scheduleSlotId]);
+    const slotRes = await pool.query(
+      `SELECT sl.lesson_type FROM schedule_slots sl LEFT JOIN groups g ON g.id = sl.group_id
+       WHERE sl.id = $1 AND sl.tenant_id = $2 AND COALESCE(sl.teacher_id, g.teacher_id) = $3`,
+      [body.scheduleSlotId, tenantId, teacherId]
+    );
+    if (!slotRes.rows[0]) return { ok: false };
     const lessonType = slotRes.rows[0]?.lesson_type as string | undefined;
 
     const client = await pool.connect();

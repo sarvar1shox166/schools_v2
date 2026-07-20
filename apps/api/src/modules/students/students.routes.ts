@@ -28,7 +28,7 @@ const updateSchema = z.object({
 export async function studentsRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
-  app.get("/students", async (request) => {
+  app.get("/students", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request) => {
     const { tenantId } = request.user;
     const { page, pageSize } = listQuerySchema.parse(request.query);
 
@@ -113,7 +113,7 @@ export async function studentsRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get("/students/:id", async (request, reply) => {
+  app.get("/students/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     const { rows } = await pool.query(

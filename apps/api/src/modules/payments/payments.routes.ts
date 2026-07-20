@@ -121,17 +121,19 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
   // ---- Student packages ----
 
-  app.get("/students/:id/packages", async (request) => {
+  app.get("/students/:id/packages", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "teacher")] }, async (request) => {
     const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT sp.id, sp.total_lessons AS "totalLessons", sp.used_lessons AS "usedLessons",
               sp.status, sp.purchased_at AS "purchasedAt", sp.expires_at AS "expiresAt",
               p.name AS "packageName", p.price
        FROM student_packages sp
        JOIN packages p ON p.id = sp.package_id
-       WHERE sp.student_id = $1
+       JOIN students s ON s.id = sp.student_id
+       WHERE sp.student_id = $1 AND s.tenant_id = $2
        ORDER BY sp.purchased_at DESC`,
-      [id]
+      [id, tenantId]
     );
     return rows;
   });
@@ -391,18 +393,29 @@ export async function paymentWebhookRoutes(app: FastifyInstance) {
     }
 
     if (method === "PerformTransaction") {
-      const txRes = await pool.query(`SELECT id, amount, status, student_id AS "studentId" FROM transactions WHERE provider_ref = $1`, [String(params.id)]);
+      const txRes = await pool.query(
+        `SELECT id, amount, status, student_id AS "studentId", paid_at AS "paidAt" FROM transactions WHERE provider_ref = $1`,
+        [String(params.id)]
+      );
       if (txRes.rows.length === 0) {
         return reply.send({ error: { code: -31003, message: "Transaction not found" }, id: rpcId });
       }
       const tx = txRes.rows[0];
-      await pool.query(`UPDATE transactions SET status = 'paid' WHERE id = $1`, [tx.id]);
+
+      // Payme qayta chaqirsa (retry) — allaqachon to'langan bo'lsa, qayta yangilamasdan
+      // va bildirishnomani qayta yubormasdan, dastlabki natijani qaytaramiz.
+      if (tx.status === "paid" && tx.paidAt) {
+        return reply.send({ result: { transaction: tx.id, state: 2, perform_time: new Date(tx.paidAt).getTime() }, id: rpcId });
+      }
+
+      const paidAt = new Date();
+      await pool.query(`UPDATE transactions SET status = 'paid', paid_at = $2 WHERE id = $1`, [tx.id, paidAt]);
       await notifyStudent(
-      pool, tx.studentId,
-      `To'lovingiz qabul qilindi: ${Number(tx.amount).toLocaleString("uz-UZ")} so'm. Rahmat!`,
-      { title: "To'lov qabul qilindi", type: "payment", icon: "wallet" }
-    );
-      return reply.send({ result: { transaction: tx.id, state: 2, perform_time: Date.now() }, id: rpcId });
+        pool, tx.studentId,
+        `To'lovingiz qabul qilindi: ${Number(tx.amount).toLocaleString("uz-UZ")} so'm. Rahmat!`,
+        { title: "To'lov qabul qilindi", type: "payment", icon: "wallet" }
+      );
+      return reply.send({ result: { transaction: tx.id, state: 2, perform_time: paidAt.getTime() }, id: rpcId });
     }
 
     if (method === "CancelTransaction") {

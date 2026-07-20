@@ -1,5 +1,14 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { pool } from "../../db/pool.js";
+
+const broadcastSchema = z.object({
+  title: z.string().min(1),
+  body: z.string().min(1),
+  icon: z.string().optional(),
+  type: z.string().optional(),
+  targetRole: z.enum(["teacher", "student", "all"]).optional(),
+});
 
 export async function notificationsRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
@@ -67,13 +76,7 @@ export async function notificationsRoutes(app: FastifyInstance) {
   // Broadcast: send notification to a group of users (admin only)
   app.post("/notifications/broadcast", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { tenantId } = request.user;
-    const { title, body: msgBody, icon = "bell", type = "broadcast",
-            targetRole } = request.body as {
-      title: string; body: string; icon?: string; type?: string;
-      targetRole?: "teacher" | "student" | "all";
-    };
-
-    if (!title || !msgBody) return reply.code(400).send({ error: "title and body required" });
+    const { title, body: msgBody, icon = "bell", type = "broadcast", targetRole } = broadcastSchema.parse(request.body);
 
     let roleFilter = "";
     const params: unknown[] = [tenantId, title, msgBody, icon, type];

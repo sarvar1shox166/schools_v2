@@ -190,6 +190,9 @@ export default function NotificationsPage() {
                 </button>
               </div>
             ))}
+            <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 4 }}>
+              Bu sozlamalar hozircha faqat shu brauzerda saqlanadi — boshqa qurilma yoki brauzerga o'tganda qayta sozlash kerak bo'ladi.
+            </div>
           </div>
         </Card>
       </div>

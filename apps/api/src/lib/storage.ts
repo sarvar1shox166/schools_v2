@@ -135,3 +135,47 @@ export function assertAllowedMimeType(
     throw new UploadValidationError(`Fayl turi qo'llab-quvvatlanmaydi: ${mimetype}`);
   }
 }
+
+// ── Content sniffing (defense-in-depth against a spoofed Content-Type) ────────
+// The client-declared MIME type above is trivially spoofable. This checks the
+// actual file bytes against the declared type once the buffer is in memory.
+function looksLikeTextMarkup(buffer: Buffer): boolean {
+  const head = buffer.subarray(0, 512).toString("utf8").trimStart().toLowerCase();
+  return (
+    head.startsWith("<!doctype") || head.startsWith("<html") ||
+    head.startsWith("<?xml") || head.startsWith("<svg") || head.includes("<script")
+  );
+}
+
+function sniffCategory(buffer: Buffer): "image" | "video" | "audio" | "pdf" | "zip" | "ole" | null {
+  const b = buffer;
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image"; // JPEG
+  if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image"; // PNG
+  if (b.length >= 6 && ["GIF87a", "GIF89a"].includes(b.toString("ascii", 0, 6))) return "image";
+  if (b.length >= 12 && b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WEBP") return "image";
+  if (b.length >= 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return "pdf"; // %PDF
+  if (b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b && (b[2] === 0x03 || b[2] === 0x05 || b[2] === 0x07)) return "zip"; // docx/pptx/xlsx/zip
+  if (b.length >= 4 && b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x11 && b[3] === 0xe0) return "ole"; // legacy doc/xls/ppt
+  if (b.length >= 12 && b.toString("ascii", 4, 8) === "ftyp") return "video"; // mp4/mov
+  if (b.length >= 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return "video"; // webm/mkv
+  if (b.length >= 3 && b.toString("ascii", 0, 3) === "ID3") return "audio";
+  if (b.length >= 2 && b[0] === 0xff && (b[1] & 0xe0) === 0xe0) return "audio"; // mp3 frame sync
+  return null;
+}
+
+export function assertContentMatchesMimeType(declaredMime: string, buffer: Buffer): void {
+  if (declaredMime !== "text/plain" && looksLikeTextMarkup(buffer)) {
+    throw new UploadValidationError("Fayl mazmuni e'lon qilingan turga mos kelmadi");
+  }
+  const sniffed = sniffCategory(buffer);
+  if (!sniffed) return; // formatni aniqlay olmadik — boshqa (kamdan-kam) turlarni bloklamaymiz
+  const declaredCategory = declaredMime.split("/")[0];
+  const compatible =
+    (declaredCategory === "image" && sniffed === "image") ||
+    (declaredCategory === "video" && sniffed === "video") ||
+    (declaredCategory === "audio" && sniffed === "audio") ||
+    (declaredCategory === "application" && (sniffed === "pdf" || sniffed === "zip" || sniffed === "ole"));
+  if (!compatible) {
+    throw new UploadValidationError("Fayl mazmuni e'lon qilingan turga mos kelmadi");
+  }
+}

@@ -205,7 +205,7 @@ function GroupCard({ group: g, menuOpen, onMenuToggle, onEdit, onDelete }: {
       {/* Info rows */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
         <InfoRow icon="teacher" text={g.teacherName ?? "O'qituvchi yo'q"} />
-        <InfoRow icon="mapPin" text={g.roomName ?? "Xona belgilanmagan"} />
+        {g.roomName && <InfoRow icon="mapPin" text={g.roomName} />}
         <InfoRow icon="users" text={`${g.studentsCount} o'quvchi · ${g.capacity} joy`} />
         {g.totalLessons != null && (
           <InfoRow icon="calendar" text={`${g.completedLessons}/${g.totalLessons} dars o'tildi`} />

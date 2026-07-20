@@ -16,6 +16,9 @@ const envSchema = z.object({
   PAYME_SECRET_KEY: z.string().default("dev-payme-secret"),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   REDIS_URL: z.string().url().optional(),
+  // Bo'sh qoldirilsa Sentry hech narsa yubormaydi (xavfsiz no-op) — DSN production'ga
+  // deploy qilinganda qo'shiladi.
+  SENTRY_DSN: z.string().optional(),
   // Comma-separated allowlist for cross-origin requests (e.g. a separate marketing site or mobile app).
   // The web app itself is served same-origin via nginx and doesn't need this.
   CORS_ORIGINS: z.string().optional(),

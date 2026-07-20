@@ -313,6 +313,72 @@ export async function gamificationRoutes(app: FastifyInstance) {
     return { ...xp, achievements };
   });
 
+  // ---- Kunlik streak bonusi (12 kunlik tsikl) ----
+  function streakCycleState(total: number, lastClaimDate: string | null, today: string) {
+    const claimedToday = lastClaimDate === today;
+    const claimedCount = claimedToday ? (total % 12 === 0 ? 12 : total % 12) : total % 12;
+    const currentDay = claimedToday ? claimedCount : claimedCount + 1;
+    const claimedDays = Array.from({ length: 12 }, (_, i) => i + 1).filter((d) => d <= claimedCount);
+    return { claimedToday, currentDay, claimedDays };
+  }
+  function xpForCycleDay(day: number) {
+    return day === 12 ? 60 : day * 5;
+  }
+
+  app.get("/me/streak", { onRequest: [app.requireRole("student")] }, async (request) => {
+    const studentId = await getStudentIdForUser(request.user.sub);
+    if (!studentId) return { streak: 0, currentDay: 1, claimedToday: false, claimedDays: [] };
+
+    const { rows } = await pool.query(
+      `SELECT streak, total_streak_claims AS "total", last_streak_claim_date AS "lastClaimDate"
+       FROM student_xp WHERE student_id = $1`,
+      [studentId]
+    );
+    const row = rows[0] ?? { streak: 0, total: 0, lastClaimDate: null };
+    const today = new Date().toISOString().slice(0, 10);
+    const state = streakCycleState(row.total, row.lastClaimDate, today);
+    return { streak: row.streak, ...state };
+  });
+
+  app.post("/me/streak/claim", { onRequest: [app.requireRole("student")] }, async (request, reply) => {
+    const studentId = await getStudentIdForUser(request.user.sub);
+    if (!studentId) return reply.code(404).send({ error: "Student not found" });
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO student_xp (student_id) VALUES ($1) ON CONFLICT (student_id) DO NOTHING`,
+        [studentId]
+      );
+      const { rows } = await client.query(
+        `SELECT total_streak_claims AS "total", last_streak_claim_date AS "lastClaimDate"
+         FROM student_xp WHERE student_id = $1 FOR UPDATE`,
+        [studentId]
+      );
+      const today = new Date().toISOString().slice(0, 10);
+      const { claimedToday, currentDay } = streakCycleState(rows[0].total, rows[0].lastClaimDate, today);
+      if (claimedToday) {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({ error: "already_claimed", message: "Bugungi mukofot allaqachon olingan" });
+      }
+
+      const xpAmount = xpForCycleDay(currentDay);
+      const result = await awardXp(client, studentId, xpAmount);
+      await client.query(
+        `UPDATE student_xp SET total_streak_claims = total_streak_claims + 1, last_streak_claim_date = $2 WHERE student_id = $1`,
+        [studentId, today]
+      );
+      await client.query("COMMIT");
+      return { cycleDay: currentDay, xpAwarded: xpAmount, ...result };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  });
+
   app.get("/me/puzzle-stats", { onRequest: [app.requireRole("student")] }, async (request) => {
     const studentId = await getStudentIdForUser(request.user.sub);
     if (!studentId) return { correct: 0, incorrect: 0, accuracyPct: 0, byDifficulty: [] };
@@ -387,7 +453,7 @@ export async function gamificationRoutes(app: FastifyInstance) {
   app.get("/leaderboard", async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT u.full_name AS "fullName", sx.xp, sx.level, sx.streak, sx.elo
+      `SELECT u.id AS "userId", u.full_name AS "fullName", sx.xp, sx.level, sx.streak, sx.elo
        FROM student_xp sx
        JOIN students s ON s.id = sx.student_id
        JOIN users u ON u.id = s.user_id

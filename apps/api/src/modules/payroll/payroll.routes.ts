@@ -23,8 +23,11 @@ export async function payrollRoutes(app: FastifyInstance) {
 
   // ---- Teacher rates ----
 
-  app.get("/teachers/:id/rate", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request) => {
+  app.get("/teachers/:id/rate", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+    const teacherRes = await pool.query(`SELECT id FROM teachers WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    if (!teacherRes.rows[0]) return reply.code(404).send({ error: "Not found" });
     const { rows } = await pool.query(
       `SELECT group_rate AS "groupRate", individual_rate AS "individualRate",
               diagnostic_rate AS "diagnosticRate", retention_coef AS "retentionCoef"
@@ -34,9 +37,12 @@ export async function payrollRoutes(app: FastifyInstance) {
     return rows[0] ?? { groupRate: 0, individualRate: 0, diagnosticRate: 0, retentionCoef: 1 };
   });
 
-  app.patch("/teachers/:id/rate", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
+  app.patch("/teachers/:id/rate", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = rateSchema.parse(request.body);
+    const { tenantId } = request.user;
+    const teacherRes = await pool.query(`SELECT id FROM teachers WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    if (!teacherRes.rows[0]) return reply.code(404).send({ error: "Not found" });
     await pool.query(
       `INSERT INTO teacher_rates (teacher_id, group_rate, individual_rate, diagnostic_rate, retention_coef)
        VALUES ($1, COALESCE($2, 0), COALESCE($3, 0), COALESCE($4, 0), COALESCE($5, 1))

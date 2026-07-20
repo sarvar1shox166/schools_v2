@@ -1,479 +1,354 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Avatar, Card, showXp } from "@chess-school/ui";
-import { LessonReviewModal } from "../../components/LessonReviewModal.js";
+import { useEffect, useMemo, useState } from "react";
+import { Icon, showXp } from "@chess-school/ui";
 import {
   useAttendanceHistory,
   useCompleteHomework,
   useHomework,
   useJoinLesson,
-  useMyPackages,
   useNextLesson,
-  usePendingLessonReviews,
-  useSchedule,
-  useSubmitLessonReview,
-  type Homework,
-  type PendingLessonReview,
-  type ScheduleSlot,
 } from "../../lib/queries.js";
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
-const DAY_SHORT  = ["Du","Se","Chor","Pay","Ju","Sha","Yak"]; // 0=Mon (matches DB convention)
-const UZ_MONTHS  = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
-const ATT_COLOR: Record<string,string> = { p:"#22c55e", l:"#f59e0b", a:"#ef4444" };
-const ATT_MARK:  Record<string,string> = { p:"✓", l:"—", a:"✕" };
-const ATT_LABEL: Record<string,string> = { p:"Keldi", l:"Kechikdi", a:"Kelmadi" };
-
+const DAY_SHORT = ["Du", "Se", "Chor", "Pay", "Ju", "Sha", "Yak"]; // 0=Mon (matches DB convention)
+const ATT_COLOR: Record<string, string> = { p: "#22c55e", l: "#f59e0b", a: "#ef4444" };
+const ATT_ICON: Record<string, string> = { p: "✓", l: "!", a: "−" };
+const ATT_LABEL: Record<string, string> = { p: "Darsga keldingiz", l: "Darsga kechikdingiz", a: "Darsga kelmadingiz" };
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 function fmtDueDate(due: string | null): string {
   if (!due) return "";
-  const today = new Date(); today.setHours(0,0,0,0);
-  const d = new Date(due); d.setHours(0,0,0,0);
-  const diff = Math.round((d.getTime()-today.getTime())/86400000);
-  if (diff===0) return "Bugun";
-  if (diff===1) return "Ertaga";
-  if (diff<0) return `${Math.abs(diff)} kun oldin`;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(due); d.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return "Bugun";
+  if (diff === 1) return "Ertaga";
+  if (diff < 0) return `${Math.abs(diff)} kun oldin`;
   return due;
 }
 
-function fmtDate(iso: string): string {
+function fmtDayLabel(iso: string): string {
   const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
+  return `${DAY_SHORT[(d.getDay() + 6) % 7]}, ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 }
-
-function getWeekRange(): string {
-  const today = new Date();
-  const mon = new Date(today); mon.setDate(today.getDate()-((today.getDay()+6)%7));
-  const sat = new Date(mon); sat.setDate(mon.getDate()+5);
-  return `${mon.getDate()}-${sat.getDate()} ${UZ_MONTHS[sat.getMonth()]} ${sat.getFullYear()}`;
-}
-
-function addMins(t: string, mins: number): string {
-  const [h,m] = t.split(":").map(Number);
-  const tot = h*60+m+mins;
-  return `${String(Math.floor(tot/60)).padStart(2,"0")}:${String(tot%60).padStart(2,"0")}`;
-}
-
-function getDateForDay(dow: number): Date {
-  const today = new Date();
-  const d = new Date(today); d.setDate(today.getDate()+((dow-(today.getDay()+6)%7+7)%7));
-  return d;
-}
-
-function isLiveNow(t: string, dur=90): boolean {
-  const now = new Date();
-  const [h,m] = t.split(":").map(Number);
-  const s = new Date(now); s.setHours(h,m,0,0);
-  return now>=s && now<=new Date(s.getTime()+dur*60000);
-}
-
-function slotStatus(slot: ScheduleSlot): "live"|"done"|"upcoming" {
-  const sd = getDateForDay(slot.dayOfWeek);
-  const now = new Date();
-  const t = new Date(now.getFullYear(),now.getMonth(),now.getDate());
-  const s = new Date(sd.getFullYear(),sd.getMonth(),sd.getDate());
-  if (s<t) return "done";
-  if (s.getTime()===t.getTime()) {
-    if (isLiveNow(slot.startTime)) return "live";
-    const [h,m] = slot.startTime.split(":").map(Number);
-    const st = new Date(now); st.setHours(h,m,0,0);
-    if (now>st) return "done";
-  }
-  return "upcoming";
-}
-
-/* ── Sub-components ─────────────────────────────────────────────────────── */
-function SHead({ icon, title, sub, right }: { icon:string; title:string; sub?:string; right?:ReactNode }) {
-  return (
-    <div style={{ padding:"14px 16px 12px", display:"flex", alignItems:"center", gap:12, borderBottom:"1px solid var(--border)" }}>
-      <div style={{ width:38, height:38, borderRadius:10, flexShrink:0, background:"rgba(255,255,255,.06)", display:"grid", placeItems:"center", fontSize:18 }}>
-        {icon}
-      </div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontWeight:750, fontSize:14 }}>{title}</div>
-        {sub && <div style={{ fontSize:11.5, color:"var(--text-faint)", marginTop:2 }}>{sub}</div>}
-      </div>
-      {right}
-    </div>
-  );
-}
-
 
 /* ── Page ───────────────────────────────────────────────────────────────── */
 export default function LessonsPage() {
-  const { data: nextRaw }       = useNextLesson();
-  const { data: scheduleRaw }   = useSchedule();
-  const { data: attendanceRaw } = useAttendanceHistory();
-  const { data: homeworkRaw }   = useHomework();
-  const { data: packages = [] } = useMyPackages();
-  const completeHW              = useCompleteHomework();
-  const joinLesson              = useJoinLesson();
-  const { data: pendingReviews = [] } = usePendingLessonReviews();
-  const [reviewTarget, setReviewTarget] = useState<PendingLessonReview | null>(null);
+  const { data: next } = useNextLesson();
+  const { data: attendance } = useAttendanceHistory();
+  const { data: homework = [] } = useHomework();
+  const completeHW = useCompleteHomework();
+  const joinLesson = useJoinLesson();
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  const activePkg = packages.find((p) => p.status === "active");
-  const remainingLessons = activePkg ? activePkg.totalLessons - activePkg.usedLessons : null;
-  const creditPct = activePkg ? Math.round(((activePkg.totalLessons - activePkg.usedLessons) / activePkg.totalLessons) * 100) : 0;
-  const [tick, setTick]         = useState(0);
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((v) => v + 1), 1000); return () => clearInterval(t); }, []);
 
-  useEffect(() => { const t=setInterval(()=>setTick(v=>v+1),1000); return ()=>clearInterval(t); }, []);
-
-  const next       = nextRaw ?? null;
-  const schedule   = scheduleRaw ?? [];
-  const attendance = attendanceRaw ?? null;
-  const homework   = homeworkRaw ?? [];
-
-  const countdown = useMemo(() => {
-    if (!next) return { h:0, m:0, s:0 };
-    const diff = Math.max(0, new Date(next.nextAt).getTime()-Date.now());
-    return { h:Math.floor(diff/3600000), m:Math.floor((diff%3600000)/60000), s:Math.floor((diff%60000)/1000) };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const countdownMs = useMemo(() => {
+    if (!next) return 0;
+    return Math.max(0, new Date(next.nextAt).getTime() - Date.now());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, next?.nextAt]);
 
-  async function handleComplete(id:string, xp:number) {
+  const countdown = {
+    h: Math.floor(countdownMs / 3600000), m: Math.floor((countdownMs % 3600000) / 60000), s: Math.floor((countdownMs % 60000) / 1000),
+  };
+  const canJoinNext = !!next && !next.endedToday && countdownMs <= 5 * 60 * 1000;
+  const isToday = next ? new Date(next.nextAt).toDateString() === new Date().toDateString() : false;
+
+  async function handleComplete(id: string, xp: number) {
     const res = await completeHW.mutateAsync(id);
-    if (!res.alreadyCompleted) showXp(res.xpAwarded??xp, "Uy vazifasi bajarildi!");
+    if (!res.alreadyCompleted) showXp(res.xpAwarded ?? xp, "Uy vazifasi bajarildi!");
   }
 
-  const [attPopover, setAttPopover] = useState<{date:string;status:string;note?:string|null}|null>(null);
+  const doneHWCount = homework.filter((h) => h.done).length;
+  const hwPct = homework.length > 0 ? Math.round((doneHWCount / homework.length) * 100) : 0;
 
-  const doneHWCount = homework.filter(h=>h.done).length;
-  const isToday     = next ? new Date(next.nextAt).toDateString()===new Date().toDateString() : false;
-  const todayDow = (new Date().getDay()+6)%7;
-  const sortedSched = [...schedule].sort((a,b)=>((a.dayOfWeek-todayDow+7)%7)-((b.dayOfWeek-todayDow+7)%7));
-  const liveSlot = useMemo(() => sortedSched.find(s => slotStatus(s) === "live"), [sortedSched, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const monthLabel = new Date().toLocaleDateString("uz-UZ", { month: "long" });
+  const selected = selectedDay != null ? attendance?.records[selectedDay] ?? null : null;
 
   return (
     <div>
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       {next ? (
         <div style={{
-          background:"linear-gradient(135deg,#1565c0 0%,#1976d2 60%,#1e88e5 100%)",
-          borderRadius:20, padding:"26px 28px", marginBottom:"var(--gap)",
-          display:"flex", gap:24, alignItems:"center",
-          position:"relative", overflow:"hidden",
+          position: "relative", background: "linear-gradient(120deg,#0b1226 0%,#132048 45%,#1a1440 100%)",
+          border: "1px solid #2a3560", borderRadius: 18, padding: 28, marginBottom: 16, overflow: "hidden",
         }}>
-          <div style={{ position:"absolute",right:-60,top:-60,width:280,height:280,borderRadius:"50%",background:"rgba(255,255,255,.05)",pointerEvents:"none" }}/>
-          <div style={{ position:"absolute",right:160,bottom:-80,width:180,height:180,borderRadius:"50%",background:"rgba(255,255,255,.04)",pointerEvents:"none" }}/>
+          <div style={{ position: "absolute", top: -140, right: -100, width: 420, height: 420, borderRadius: "50%", background: "radial-gradient(circle,rgba(59,130,246,.28) 0%,transparent 65%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: -160, left: "40%", width: 380, height: 380, borderRadius: "50%", background: "radial-gradient(circle,rgba(139,92,246,.2) 0%,transparent 65%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", top: 24, right: 60, fontSize: 180, lineHeight: 1, opacity: .04, color: "#fff", pointerEvents: "none" }}>♞</div>
 
-          {/* Left */}
-          <div style={{ flex:1, minWidth:0 }}>
-            {/* Pills */}
-            <div style={{ display:"flex",gap:8,marginBottom:14,flexWrap:"wrap" }}>
-              {next.isOnline && (
-                <span style={{ background:"rgba(255,255,255,.18)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
-                  📹 Zoom orqali
-                </span>
-              )}
-              <span style={{ background:"rgba(239,68,68,.3)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
-                🔴 {isToday?"Bugun":DAY_SHORT[next.dayOfWeek]} · {next.startTime.slice(0,5)}
-              </span>
-              <span style={{ background:"rgba(255,255,255,.18)",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#fff",display:"inline-flex",alignItems:"center",gap:5 }}>
-                🎓 {(next.groupName ?? next.customName ?? "Individual dars").split(" ")[0]}
-              </span>
-            </div>
-
-            {/* Title */}
-            <h2 style={{ fontSize:24,fontWeight:900,color:"#fff",margin:"0 0 20px",lineHeight:1.2 }}>
-              {next.groupName ?? next.customName ?? "Individual dars"}
-            </h2>
-
-            {/* Countdown */}
-            <div style={{ display:"flex",alignItems:"flex-end",gap:6,marginBottom:24 }}>
-              {([{v:countdown.h,l:"SOAT"},null,{v:countdown.m,l:"DAQIQA"},null,{v:countdown.s,l:"SONIYA"}] as ({v:number;l:string}|null)[]).map((item,i)=>
-                item===null
-                  ? <div key={i} style={{ fontSize:26,fontWeight:900,color:"rgba(255,255,255,.6)",paddingBottom:22,lineHeight:1 }}>:</div>
-                  : <div key={i} style={{ textAlign:"center" }}>
-                      <div style={{ background:"rgba(0,0,0,.28)",borderRadius:12,padding:"10px 14px",minWidth:58 }}>
-                        <div style={{ fontSize:28,fontWeight:900,color:"#fff",fontVariantNumeric:"tabular-nums",lineHeight:1 }}>
-                          {String(item.v).padStart(2,"0")}
-                        </div>
-                      </div>
-                      <div style={{ fontSize:10,fontWeight:700,color:"rgba(255,255,255,.55)",marginTop:5,letterSpacing:.5 }}>{item.l}</div>
-                    </div>
-              )}
-              <span style={{ fontSize:13,color:"rgba(255,255,255,.65)",marginLeft:6,paddingBottom:22 }}>qoldi</span>
-            </div>
-
-            {/* Buttons */}
-            <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
-              {next.meetingUrl && next.meetingUrl!=="null" ? (
-                <button className="btn"
-                  style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }}
-                  onClick={() => {
-                    if (isToday) joinLesson.mutate(next.id);
-                    window.open(next.meetingUrl!, "_blank", "noreferrer");
-                  }}>
-                  {next.meetingPlatform==="meet" ? "🟢 Google Meet ga kirish" : "📹 Zoom ga kirish"}
-                </button>
-              ) : (
-                <button className="btn" style={{ background:"#0d47a1",border:"1px solid rgba(255,255,255,.3)",color:"#fff",gap:6 }} disabled>
-                  {next.meetingPlatform==="meet" ? "🟢 Google Meet ga kirish" : "📹 Zoom ga kirish"}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Teacher card */}
-          {next.teacherName && (
-            <div style={{
-              background:"rgba(0,0,0,.22)",backdropFilter:"blur(12px)",borderRadius:16,padding:20,
-              minWidth:180,maxWidth:240,border:"1px solid rgba(255,255,255,.15)",flexShrink:0,position:"relative",zIndex:1,
-            }}>
-              <div style={{ display:"flex",alignItems:"center",gap:12 }}>
-                <Avatar name={next.teacherName} size="md" />
-                <div>
-                  <div style={{ fontWeight:800,fontSize:14.5,color:"#fff" }}>{next.teacherName}</div>
-                  <div style={{ fontSize:11.5,color:"rgba(255,255,255,.55)",marginTop:2 }}>O'qituvchi</div>
+          <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 32, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 8,
+                  background: next.isLive ? "rgba(239,68,68,.15)" : "rgba(96,165,250,.15)",
+                  border: `1px solid ${next.isLive ? "rgba(248,113,113,.3)" : "rgba(96,165,250,.3)"}`,
+                  color: next.isLive ? "#fca5a5" : "#93c5fd",
+                }}>
+                  <div style={{
+                    width: 7, height: 7, borderRadius: "50%", background: next.isLive ? "#ef4444" : "#60a5fa",
+                    boxShadow: next.isLive ? "0 0 8px #ef4444" : "none",
+                    animation: next.isLive ? "pulse-live 1.6s infinite" : "none",
+                  }} />
+                  {isToday ? "Bugun" : DAY_SHORT[next.dayOfWeek]} · {next.startTime.slice(0, 5)}
+                </div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(139,92,246,.15)", border: "1px solid rgba(167,139,250,.3)", color: "#c4b5fd", fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 8 }}>
+                  <Icon name="students" size={11} />
+                  {next.groupName ?? next.customName ?? "Individual dars"}
                 </div>
               </div>
+
+              <div style={{ color: "#8b93b0", fontSize: 11.5, fontWeight: 700, letterSpacing: ".08em", marginBottom: 4 }}>
+                {next.isLive ? "HOZIR DAVOM ETMOQDA" : "KEYINGI DARS"}
+              </div>
+              <div style={{ color: "#fff", fontSize: 34, fontWeight: 800, letterSpacing: "-.02em", lineHeight: 1 }}>
+                {next.groupName ?? next.customName ?? "Individual dars"}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 22, flexWrap: "wrap" }}>
+                {([{ v: countdown.h, l: "SOAT" }, null, { v: countdown.m, l: "DAQIQA" }, null, { v: countdown.s, l: "SONIYA" }] as ({ v: number; l: string } | null)[]).map((item, i) =>
+                  item === null
+                    ? <div key={i} style={{ color: "#4a5578", fontSize: 22, fontWeight: 800 }}>:</div>
+                    : <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "12px 16px", minWidth: 72 }}>
+                        <div style={{ color: "#fff", fontSize: 32, fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{String(item.v).padStart(2, "0")}</div>
+                        <div style={{ color: "#8b93b0", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", marginTop: 6 }}>{item.l}</div>
+                      </div>
+                )}
+                <div style={{ color: "#c7d0e8", fontSize: 14 }}>qoldi</div>
+              </div>
+
+              {next.meetingUrl && next.meetingUrl !== "null" && (
+                <button onClick={() => {
+                  if (!canJoinNext) { alert(next.endedToday ? "Bu dars yakunlangan" : "Dars hali boshlanmagan"); return; }
+                  if (isToday) joinLesson.mutate(next.id);
+                  window.open(next.meetingUrl!, "_blank", "noreferrer");
+                }} style={{
+                  display: "flex", alignItems: "center", gap: 6, marginTop: 22, fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer",
+                  background: canJoinNext ? "#3b82f6" : "rgba(255,255,255,.08)", color: canJoinNext ? "#fff" : "#8b93b0",
+                }}>
+                  🎥 Darsga kirish
+                </button>
+              )}
             </div>
-          )}
+
+            {next.teacherName && (
+              <div style={{
+                position: "relative", background: "linear-gradient(145deg,rgba(255,255,255,.09),rgba(255,255,255,.03))",
+                border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: "18px 20px 16px",
+                display: "flex", flexDirection: "column", gap: 14, backdropFilter: "blur(14px)", flexShrink: 0, minWidth: 240,
+                boxShadow: "0 10px 32px rgba(0,0,0,.3)", overflow: "hidden",
+              }}>
+                <div style={{ position: "absolute", top: -40, right: -40, width: 140, height: 140, background: "radial-gradient(circle,rgba(236,72,153,.35),transparent 70%)", pointerEvents: "none" }} />
+                <div style={{ position: "absolute", bottom: -30, left: -30, width: 100, height: 100, background: "radial-gradient(circle,rgba(139,92,246,.25),transparent 70%)", pointerEvents: "none" }} />
+
+                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ position: "relative" }}>
+                    <div style={{ position: "absolute", inset: -3, borderRadius: 15, background: "linear-gradient(135deg,#ec4899,#8b5cf6,#3b82f6)", opacity: .9, filter: "blur(6px)" }} />
+                    <div style={{
+                      position: "relative", width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg,#ec4899,#db2777)",
+                      color: "#fff", fontSize: 16, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: "0 6px 18px rgba(236,72,153,.5), inset 0 1px 0 rgba(255,255,255,.25)",
+                    }}>
+                      {next.teacherName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
+                    </div>
+                    <div style={{ position: "absolute", bottom: -3, right: -3, width: 16, height: 16, borderRadius: "50%", background: "#22c55e", border: "2.5px solid #1a1f3a", boxShadow: "0 0 10px rgba(34,197,94,.6)" }} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                    <div style={{
+                      display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(139,92,246,.2)", border: "1px solid rgba(167,139,250,.35)",
+                      color: "#c4b5fd", fontSize: 9.5, fontWeight: 800, letterSpacing: ".08em", padding: "3px 8px", borderRadius: 20, alignSelf: "flex-start", marginBottom: 5,
+                    }}>
+                      O'QITUVCHI
+                    </div>
+                    {next.teacherName.split(" ").map((w) => (
+                      <div key={w} style={{ color: "#fff", fontSize: 15.5, fontWeight: 800, lineHeight: 1.2, whiteSpace: "nowrap", letterSpacing: "-.01em" }}>{w}</div>
+                    ))}
+                  </div>
+                </div>
+
+                {(next.teacherRating != null || next.teacherStudentsCount > 0) && (
+                  <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.08)" }}>
+                    {next.teacherRating != null && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(251,191,36,.15)", border: "1px solid rgba(251,191,36,.3)", padding: "5px 10px", borderRadius: 20 }}>
+                        <Icon name="star" size={11} style={{ color: "#fbbf24" }} />
+                        <span style={{ color: "#fbbf24", fontSize: 12, fontWeight: 800 }}>{next.teacherRating}</span>
+                      </div>
+                    )}
+                    {next.teacherStudentsCount > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#c9cee0", fontSize: 11, fontWeight: 600 }}>
+                        <Icon name="students" size={10} />
+                        {next.teacherStudentsCount} shogird
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <style>{"@keyframes pulse-live { 0%,100% { opacity: 1; } 50% { opacity: .4; } }"}</style>
         </div>
       ) : (
         <div style={{
-          background:"var(--surface-2)",border:"1.5px solid var(--border)",borderRadius:16,
-          padding:"24px",marginBottom:"var(--gap)",textAlign:"center",color:"var(--text-faint)",fontSize:14,
+          background: "#141417", border: "1px solid #232328", borderRadius: 16,
+          padding: 24, marginBottom: 16, textAlign: "center", color: "#65666f", fontSize: 14,
         }}>
           📅 Kelgusi dars topilmadi — jadval admin tomonidan tuziladi
         </div>
       )}
 
-      {/* ── Hozir davom etayotgan dars ──────────────────────────────────── */}
-      {liveSlot && (
-        <div style={{
-          borderRadius:14, padding:"14px 18px", marginBottom:"var(--gap)",
-          background:"rgba(34,197,94,.1)", border:"1.5px solid rgba(34,197,94,.35)",
-          display:"flex", alignItems:"center", gap:14, flexWrap:"wrap",
-        }}>
-          <span style={{ position:"relative", width:10, height:10, flexShrink:0 }}>
-            <span style={{ position:"absolute", inset:0, borderRadius:"50%", background:"#22c55e", animation:"pulseDot 1.6s ease-out infinite" }} />
-            <span style={{ position:"absolute", inset:0, borderRadius:"50%", background:"#22c55e" }} />
-          </span>
-          <div style={{ flex:1, minWidth:160 }}>
-            <div style={{ fontSize:11, fontWeight:800, letterSpacing:.4, color:"#22c55e", textTransform:"uppercase" }}>
-              Hozir davom etmoqda
+      {/* ── 2-col grid ───────────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
+
+        {/* LEFT: uy vazifalari */}
+        <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(59,130,246,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon name="puzzle" size={18} style={{ color: "#60a5fa" }} />
+              </div>
+              <div>
+                <div style={{ color: "#f5f5f6", fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>Uy vazifalari</div>
+                <div style={{ color: "#65666f", fontSize: 12, lineHeight: 1.3, marginTop: 2 }}>Belgilab boring</div>
+              </div>
             </div>
-            <div style={{ fontSize:14.5, fontWeight:750, marginTop:2 }}>
-              {liveSlot.groupName} · {liveSlot.startTime.slice(0,5)}–{addMins(liveSlot.startTime, liveSlot.durationMinutes ?? 90)}
-              {liveSlot.teacherName ? ` · ${liveSlot.teacherName}` : ""}
+            {homework.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ color: "#f5f5f6", fontSize: 14, fontWeight: 800 }}>{doneHWCount} / {homework.length}</div>
+                <div style={{ position: "relative", width: 34, height: 34 }}>
+                  <svg width="34" height="34" viewBox="0 0 40 40" style={{ transform: "rotate(-90deg)" }}>
+                    <circle cx="20" cy="20" r="16" fill="none" stroke="#1e1e22" strokeWidth="4" />
+                    <circle cx="20" cy="20" r="16" fill="none" stroke="#22c55e" strokeWidth="4" strokeLinecap="round"
+                      strokeDasharray={100.5} strokeDashoffset={100.5 - (hwPct / 100) * 100.5} style={{ transition: "stroke-dashoffset .5s" }} />
+                  </svg>
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#4ade80", fontSize: 9, fontWeight: 800 }}>{hwPct}%</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {homework.length === 0 ? (
+            <div style={{ borderTop: "1px solid #1e1e22", padding: "24px 22px", color: "#65666f", fontSize: 13, textAlign: "center" }}>
+              Hali uy vazifasi yo'q
+            </div>
+          ) : homework.map((hw) => (
+            <div key={hw.id} style={{
+              borderTop: "1px solid #1e1e22", padding: "14px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+              background: hw.done ? "linear-gradient(90deg,rgba(34,197,94,.05),transparent)" : "transparent",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                <div onClick={() => !hw.done && handleComplete(hw.id, hw.xpReward)} style={{
+                  width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: hw.done ? "default" : "pointer",
+                  background: hw.done ? "linear-gradient(135deg,#22c55e,#16a34a)" : "#18181c", border: hw.done ? "none" : "1px solid #232328",
+                  boxShadow: hw.done ? "0 4px 12px rgba(34,197,94,.35)" : "none",
+                }}>
+                  {hw.done && <Icon name="check" size={16} style={{ color: "#fff" }} />}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <div style={{ color: hw.done ? "#65666f" : "#f5f5f6", fontSize: 13.5, fontWeight: 600, textDecoration: hw.done ? "line-through" : "none", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {hw.title}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, lineHeight: 1.3 }}>
+                    {hw.dueDate && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#8b8d98", fontSize: 11.5 }}>
+                        <Icon name="clock" size={11} />
+                        {fmtDueDate(hw.dueDate)}
+                      </div>
+                    )}
+                    {hw.dueDate && <div style={{ color: "#4a4b52", fontSize: 11.5 }}>·</div>}
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#fbbf24", fontSize: 11.5, fontWeight: 700 }}>
+                      +{hw.xpReward} XP
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 20, whiteSpace: "nowrap",
+                background: hw.done ? "rgba(34,197,94,.12)" : "rgba(255,255,255,.06)", color: hw.done ? "#4ade80" : "#8b8d98",
+              }}>
+                {hw.done && <Icon name="check" size={12} />}
+                {hw.done ? "Bajarildi" : "Qilinmagan"}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* RIGHT: davomat tarixi */}
+        <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, padding: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(34,197,94,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="check" size={16} style={{ color: "#4ade80" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+              <div style={{ color: "#f5f5f6", fontSize: 14.5, fontWeight: 700, lineHeight: 1.3, whiteSpace: "nowrap" }}>Davomat tarixi</div>
+              <div style={{ color: "#65666f", fontSize: 11.5, lineHeight: 1.3, marginTop: 2, whiteSpace: "nowrap", textTransform: "capitalize" }}>
+                Bu oy · {attendance?.records.length ?? 0} dars
+              </div>
             </div>
           </div>
-          {liveSlot.meetingUrl && liveSlot.meetingUrl !== "null" && (
-            <button className="btn primary" style={{ background:"#22c55e", border:"none" }}
-              onClick={() => {
-                joinLesson.mutate(liveSlot.id);
-                window.open(liveSlot.meetingUrl!, "_blank", "noreferrer");
-              }}>
-              {liveSlot.meetingPlatform === "meet" ? "🟢 Google Meet ga kirish" : "📹 Zoom ga kirish"}
-            </button>
+
+          {!attendance ? (
+            <div style={{ padding: "18px 0", color: "#65666f", fontSize: 13, textAlign: "center" }}>Yuklanmoqda...</div>
+          ) : attendance.records.length === 0 ? (
+            <div style={{ padding: "18px 0", color: "#65666f", fontSize: 13, textAlign: "center" }}>Hali davomat qayd etilmagan</div>
+          ) : (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 14 }}>
+                {[
+                  { v: attendance.totals.p, l: "Keldi", bg: "rgba(34,197,94,.12)", bg2: "rgba(34,197,94,.04)", bd: "rgba(34,197,94,.25)", clr: "#4ade80" },
+                  { v: attendance.totals.l, l: "Kechikdi", bg: "rgba(245,158,11,.1)", bg2: "rgba(245,158,11,.03)", bd: "rgba(245,158,11,.2)", clr: "#f59e0b" },
+                  { v: attendance.totals.a, l: "Kelmadi", bg: "rgba(239,68,68,.1)", bg2: "rgba(239,68,68,.03)", bd: "rgba(239,68,68,.2)", clr: "#f87171" },
+                ].map((s) => (
+                  <div key={s.l} style={{ background: `linear-gradient(135deg,${s.bg},${s.bg2})`, border: `1px solid ${s.bd}`, borderRadius: 10, padding: "12px 8px 10px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ color: s.clr, fontSize: 24, fontWeight: 800, lineHeight: 1 }}>{s.v}</div>
+                    <div style={{ color: s.clr, fontSize: 10.5, fontWeight: 600, marginTop: 5, letterSpacing: ".03em" }}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ color: "#65666f", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", marginBottom: 8 }}>DARSGA KELISH TARIXI</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {attendance.records.map((r, i) => {
+                    const active = selectedDay === i;
+                    return (
+                      <div key={i} onClick={() => setSelectedDay(active ? null : i)} title={r.date}
+                        style={{
+                          width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
+                          cursor: "pointer", flexShrink: 0, fontSize: 14, fontWeight: 800, color: "#fff",
+                          background: ATT_COLOR[r.status] ?? "#475569",
+                          boxShadow: active ? "0 0 0 2px #f5f5f6" : "none",
+                        }}>
+                        {ATT_ICON[r.status]}
+                      </div>
+                    );
+                  })}
+                </div>
+                {selected && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#18181c", border: "1px solid #232328", borderRadius: 9, padding: "8px 12px", marginTop: 10 }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <div style={{ color: ATT_COLOR[selected.status], fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>{ATT_LABEL[selected.status]}</div>
+                      <div style={{ color: "#65666f", fontSize: 11, lineHeight: 1.3, marginTop: 2 }}>{fmtDayLabel(selected.date)}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div style={{ color: "#8b8d98", fontSize: 11.5 }}>Umumiy davomat</div>
+                  <div style={{ color: "#4ade80", fontSize: 12, fontWeight: 800 }}>{attendance.percent}%</div>
+                </div>
+                <div style={{ height: 6, background: "#1e1e22", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: `${attendance.percent}%`, height: "100%", background: "linear-gradient(90deg,#22c55e,#4ade80)" }} />
+                </div>
+              </div>
+            </>
           )}
-          <style>{`@keyframes pulseDot { 0% { transform: scale(1); opacity: .6; } 70%,100% { transform: scale(2.6); opacity: 0; } }`}</style>
-        </div>
-      )}
-
-      {/* ── 2-col grid ───────────────────────────────────────────────────── */}
-      <div style={{ display:"grid",gridTemplateColumns:"1.4fr 1fr",gap:"var(--gap)",alignItems:"start" }}>
-
-        {/* LEFT: jadval + vazifalar */}
-        <div style={{ display:"flex",flexDirection:"column",gap:"var(--gap)" }}>
-
-          {/* Haftalik jadval */}
-          <Card>
-            <SHead icon="📅" title="Haftalik jadval" sub={getWeekRange()}
-              right={<span className="badge ok" style={{ fontSize:11 }}>{schedule.length} dars/hafta</span>} />
-            <div style={{ paddingBottom:6 }}>
-              {sortedSched.length === 0 && (
-                <div style={{ padding:"18px 16px",color:"var(--text-faint)",fontSize:13 }}>
-                  Jadval hali tuzilmagan
-                </div>
-              )}
-              {sortedSched.map(slot=>{
-                const st = slotStatus(slot);
-                const sd = getDateForDay(slot.dayOfWeek);
-                const sdISO = sd.toISOString().slice(0,10);
-                const pendingReview = st==="done" ? pendingReviews.find(r=>r.conductedAt.slice(0,10)===sdISO) : undefined;
-                const dotClr = st==="live"?"#ef4444":st==="done"?"#6b7280":"var(--kacc,#3F8CFF)";
-                const teacherShort = slot.teacherName
-                  ? `${slot.teacherName.split(" ")[0]} ${(slot.teacherName.split(" ")[1]??"").charAt(0)}.`
-                  : "";
-                return (
-                  <div key={slot.id} style={{ display:"flex",alignItems:"center",gap:13,padding:"11px 16px",borderBottom:"1px solid var(--border)",opacity:st==="done"&&!pendingReview?.55:1 }}>
-                    <div style={{ width:9,height:9,borderRadius:"50%",background:dotClr,flexShrink:0 }} />
-                    <div style={{ flex:1,minWidth:0 }}>
-                      <div style={{ fontWeight:700,fontSize:13.5 }}>{slot.groupName}</div>
-                      <div style={{ fontSize:11.5,color:"var(--text-faint)",marginTop:2 }}>
-                        {DAY_SHORT[slot.dayOfWeek]} {String(sd.getDate()).padStart(2,"0")}.{String(sd.getMonth()+1).padStart(2,"0")} · {slot.startTime.slice(0,5)}–{addMins(slot.startTime,90)}{teacherShort?` · ${teacherShort}`:""}
-                      </div>
-                    </div>
-                    {st==="live"     && <span className="badge dang" style={{ fontSize:11,display:"flex",alignItems:"center",gap:4 }}><span style={{ width:7,height:7,borderRadius:"50%",background:"#ef4444",display:"inline-block" }}/> LIVE</span>}
-                    {st==="done" && pendingReview && (
-                      <button className="badge" onClick={()=>setReviewTarget(pendingReview)}
-                        style={{ fontSize:11,fontWeight:700,cursor:"pointer",border:"1px solid #f59e0b",background:"rgba(245,158,11,.12)",color:"#f59e0b" }}>
-                        ★ Baholash
-                      </button>
-                    )}
-                    {st==="done" && !pendingReview && <span className="badge ok" style={{ fontSize:11 }}>✓ Bo'ldi</span>}
-                    {st==="upcoming" && <span className="badge" style={{ fontSize:11,background:"rgba(255,255,255,.06)",color:"var(--text-faint)",border:"1px solid var(--border)" }}>Kutilmoqda</span>}
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-
-          {/* Uy vazifalari */}
-          <Card>
-            <SHead icon="📋" title="Uy vazifalari" sub="Belgilab boring"
-              right={<span className="badge ok" style={{ fontSize:11 }}>{doneHWCount}/{homework.length}</span>} />
-            <div>
-              {homework.length === 0 && (
-                <div style={{ padding:"18px 16px",color:"var(--text-faint)",fontSize:13 }}>
-                  Hali uy vazifasi yo'q
-                </div>
-              )}
-              {homework.map(hw=>(
-                <div key={hw.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"11px 16px",borderBottom:"1px solid var(--border)" }}>
-                  <div
-                    onClick={()=>!hw.done&&handleComplete(hw.id,hw.xpReward)}
-                    style={{ width:22,height:22,borderRadius:6,flexShrink:0,border:`2px solid ${hw.done?"#22c55e":"var(--border-strong,var(--border))"}`,background:hw.done?"#22c55e":"transparent",display:"grid",placeItems:"center",cursor:hw.done?"default":"pointer" }}
-                  >
-                    {hw.done&&<span style={{ color:"#fff",fontSize:13,fontWeight:900 }}>✓</span>}
-                  </div>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontWeight:650,fontSize:13,textDecoration:hw.done?"line-through":"none",color:hw.done?"var(--text-faint)":"inherit",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
-                      {hw.title}
-                    </div>
-                    <div style={{ fontSize:11.5,color:"var(--text-faint)",marginTop:2,display:"flex",alignItems:"center",gap:5 }}>
-                      <span style={{ display:"inline-block",width:10,height:10,borderRadius:3,background:"var(--kacc,#3F8CFF)",flexShrink:0 }}/>
-                      {hw.dueDate&&<>{fmtDueDate(hw.dueDate)} · </>}
-                      <span style={{ color:"#f59e0b" }}>+{hw.xpReward} XP</span>
-                    </div>
-                  </div>
-                  <span className={`badge ${hw.done?"ok":"dang"}`} style={{ fontSize:11,flexShrink:0 }}>
-                    {hw.done?"✓ Bajarildi":"Qilinmagan"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-
-        {/* RIGHT: dars krediti + davomat */}
-        <div style={{ display:"flex",flexDirection:"column",gap:"var(--gap)" }}>
-
-          {/* Dars krediti */}
-          <Card>
-            <SHead icon="🎫" title="Dars krediti" sub={activePkg ? activePkg.packageName : "Aktiv paket yo'q"} />
-            <div style={{ padding:"14px 16px 18px" }}>
-              {activePkg ? (
-                <>
-                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12 }}>
-                    <div>
-                      <span style={{ fontSize:42,fontWeight:900,lineHeight:1,color:creditPct>30?"var(--kacc,#3F8CFF)":"#ef4444" }}>
-                        {remainingLessons}
-                      </span>
-                      <span style={{ fontSize:14,color:"var(--text-faint)",marginLeft:7 }}>dars qoldi</span>
-                    </div>
-                    <div style={{ textAlign:"right" }}>
-                      <div style={{ fontSize:12,color:"var(--text-faint)" }}>Jami</div>
-                      <div style={{ fontSize:18,fontWeight:800 }}>{activePkg.totalLessons}</div>
-                    </div>
-                  </div>
-                  <div style={{ height:12,borderRadius:99,background:"rgba(255,255,255,.08)",overflow:"hidden",marginBottom:10 }}>
-                    <div style={{
-                      height:"100%",borderRadius:99,transition:"width 0.7s ease",
-                      width:`${creditPct}%`,
-                      background:creditPct>30?"linear-gradient(90deg,var(--kacc,#3F8CFF),#60a5fa)":"linear-gradient(90deg,#ef4444,#f87171)",
-                    }}/>
-                  </div>
-                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--text-faint)" }}>
-                    <span>{activePkg.usedLessons} dars ishlatildi</span>
-                    <span style={{ color:creditPct>30?"var(--kacc,#3F8CFF)":"#ef4444",fontWeight:700 }}>{creditPct}%</span>
-                  </div>
-                  {creditPct<=30 && (
-                    <div style={{ marginTop:12,padding:"10px 13px",borderRadius:10,background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.25)",fontSize:12,color:"#f87171" }}>
-                      ⚠ Dars krediti tugayapti. Admin bilan bog'laning.
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ textAlign:"center",padding:"18px 0",color:"var(--text-faint)" }}>
-                  <div style={{ fontSize:32,marginBottom:8 }}>🎫</div>
-                  <div style={{ fontSize:13,fontWeight:600 }}>Aktiv paket topilmadi</div>
-                  <div style={{ fontSize:12,marginTop:4 }}>Admin orqali paket sotib oling</div>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Davomat tarixi */}
-          <Card>
-            <SHead icon="✅" title="Davomat tarixi" />
-            <div style={{ padding:"0 16px 16px" }}>
-              {!attendance ? (
-                <div style={{ padding:"18px 0",color:"var(--text-faint)",fontSize:13,textAlign:"center" }}>
-                  Davomat ma'lumotlari yuklanmoqda...
-                </div>
-              ) : attendance.records.length === 0 ? (
-                <div style={{ padding:"18px 0",color:"var(--text-faint)",fontSize:13,textAlign:"center" }}>
-                  Hali davomat qayd etilmagan
-                </div>
-              ) : (
-                <>
-                  <div style={{ display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,position:"relative" }}
-                    onClick={e=>{ if((e.target as HTMLElement).dataset.attIdx===undefined) setAttPopover(null); }}>
-                    {attendance.records.map((r,i)=>{
-                      const isActive = attPopover?.date===r.date;
-                      return (
-                        <div key={i}
-                          data-att-idx={i}
-                          onClick={e=>{ e.stopPropagation(); setAttPopover(isActive?null:{date:r.date,status:r.status,note:(r as any).note}); }}
-                          style={{ width:30,height:30,borderRadius:7,background:ATT_COLOR[r.status]??"#475569",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",fontWeight:800,cursor:"pointer",outline:isActive?"2px solid #fff":"none",outlineOffset:1 }}>
-                          {ATT_MARK[r.status]}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {attPopover && (
-                    <div style={{ marginBottom:12,background:"var(--kb2,rgba(255,255,255,.06))",border:`1px solid ${ATT_COLOR[attPopover.status]??"#475569"}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:12 }}>
-                      <div style={{ width:10,height:10,borderRadius:"50%",background:ATT_COLOR[attPopover.status]??"#475569",flexShrink:0 }}/>
-                      <div style={{ flex:1,minWidth:0 }}>
-                        <div style={{ fontWeight:700,fontSize:13 }}>
-                          {(()=>{ const d=new Date(attPopover.date); return `${DAY_SHORT[(d.getDay()+6)%7]}, ${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`; })()}
-                        </div>
-                        {attPopover.note && <div style={{ fontSize:12,color:"var(--text-faint)",marginTop:2 }}>{attPopover.note}</div>}
-                      </div>
-                      <span style={{ fontSize:12,fontWeight:700,color:ATT_COLOR[attPopover.status]??"#fff",flexShrink:0 }}>
-                        {ATT_LABEL[attPopover.status]}
-                      </span>
-                    </div>
-                  )}
-                  <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14 }}>
-                    {[
-                      { v:attendance.totals.p, l:"Keldi",    bg:"rgba(34,197,94,.12)",  clr:"#22c55e" },
-                      { v:attendance.totals.l, l:"Kechikdi", bg:"rgba(245,158,11,.12)", clr:"#f59e0b" },
-                      { v:attendance.totals.a, l:"Kelmadi",  bg:"rgba(239,68,68,.12)",  clr:"#ef4444" },
-                    ].map(s=>(
-                      <div key={s.l} style={{ background:s.bg,border:"1px solid var(--border)",borderRadius:10,padding:"10px 8px",textAlign:"center" }}>
-                        <div style={{ fontSize:22,fontWeight:900,color:s.clr }}>{s.v}</div>
-                        <div style={{ fontSize:11,color:"var(--text-faint)",marginTop:2 }}>{s.l}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display:"flex",justifyContent:"space-between",marginBottom:7,fontSize:12.5 }}>
-                    <span style={{ color:"var(--text-faint)" }}>Umumiy davomat</span>
-                    <b style={{ color:"#22c55e" }}>{attendance.percent}%</b>
-                  </div>
-                  <div className="pbar flat"><span style={{ width:`${attendance.percent}%`,background:"#22c55e" }}/></div>
-                </>
-              )}
-            </div>
-          </Card>
-
         </div>
       </div>
 
-      {reviewTarget && <LessonReviewModal review={reviewTarget} onClose={() => setReviewTarget(null)} />}
     </div>
   );
 }

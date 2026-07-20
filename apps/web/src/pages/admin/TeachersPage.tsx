@@ -226,7 +226,7 @@ function TeacherCard({ teacher: t, onEdit, onDelete }: { teacher: Teacher; onEdi
         <button className="btn sm" style={{ flex: 1, justifyContent: "center" }} onClick={onEdit}>
           <Icon name="edit" size={13} /> Tahrirlash
         </button>
-        <button className="btn sm" style={{ flex: 1, justifyContent: "center" }}>
+        <button className="btn sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => { window.location.href = `tel:${t.phone}`; }}>
           <Icon name="phone" size={13} /> {t.phone}
         </button>
       </div>

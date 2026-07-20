@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Card, Icon } from "@chess-school/ui";
+import { Card, Icon, fmtSom } from "@chess-school/ui";
 import {
   useBrandSettings, useUpdateBrandSettings,
   useSystemSettings, useUpdateSystemSettings,
@@ -40,7 +40,7 @@ const PERM_COLS: { key: PermKey; label: string }[] = [
 
 /* ─── helpers ─────────────────────────────────────────────── */
 function fmt(n: number) {
-  return n.toLocaleString("ru-RU") + " so'm";
+  return fmtSom(n) + " so'm";
 }
 
 function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {

@@ -1,14 +1,18 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardHead } from "@chess-school/ui";
-import { ChessBoard } from "../../components/ChessBoard.js";
+import { Icon } from "@chess-school/ui";
+import { LessonReviewModal } from "../../components/LessonReviewModal.js";
+import { StreakModal } from "../../components/StreakModal.js";
 import { useAuthStore } from "../../lib/auth-store.js";
 import {
-  type ScheduleSlot, useAttendanceHistory, useDailyPuzzle, useJoinLesson, useMyPackages, useMyXp, useNextLesson, useSchedule,
+  type ScheduleSlot, useAttendanceHistory, useJoinLesson, useMyPackages, useMyXp, useNextLesson,
+  usePendingLessonReviews, useSchedule,
 } from "../../lib/queries.js";
 
 const LEVEL_NAMES = ["Yangi boshlovchi", "Boshlang'ich", "O'rta", "Ilg'or", "Usta"];
 const DAY_SHORT = ["Du", "Se", "Chor", "Pay", "Ju", "Sha", "Yak"]; // 0=Mon (matches DB convention)
+const MONTH_UP = ["YAN", "FEV", "MAR", "APR", "MAY", "IYUN", "IYUL", "AVG", "SEN", "OKT", "NOY", "DEK"];
+const MONTH_FULL = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"];
 
 function xpForLevel(level: number) { return level * 200; }
 
@@ -27,8 +31,17 @@ function getDateForDay(dayOfWeek: number): Date {
   return d;
 }
 
-function fmtDate(d: Date) {
-  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
+function mondayOfThisWeek(): Date {
+  const today = new Date();
+  const d = new Date(today);
+  d.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  return d;
+}
+
+function addMins(t: string, mins: number): string {
+  const [h, m] = t.split(":").map(Number);
+  const tot = h * 60 + m + mins;
+  return `${String(Math.floor(tot / 60) % 24).padStart(2, "0")}:${String(tot % 60).padStart(2, "0")}`;
 }
 
 function slotStatus(slot: ScheduleSlot): "live" | "done" | "upcoming" {
@@ -38,6 +51,7 @@ function slotStatus(slot: ScheduleSlot): "live" | "done" | "upcoming" {
   const slotOnly = new Date(slotDate.getFullYear(), slotDate.getMonth(), slotDate.getDate());
   if (slotOnly < todayOnly) return "done";
   if (slotOnly.getTime() === todayOnly.getTime()) {
+    if (slot.endedToday) return "done";
     if (isLessonLiveNow(slot.startTime)) return "live";
     const [h, m] = slot.startTime.split(":").map(Number);
     const start = new Date(now); start.setHours(h, m, 0, 0);
@@ -46,57 +60,60 @@ function slotStatus(slot: ScheduleSlot): "live" | "done" | "upcoming" {
   return "upcoming";
 }
 
-function KidStatCard({ emoji, value, label, delta, deltaUp, ghost, valueColor }: {
-  emoji: string; value: string; label: string; delta: string;
-  deltaUp?: boolean; ghost: string; valueColor?: string;
+/** aylana progress halqasi */
+function RingProgress({ pct, size = 40, stroke = 5, color = "#3b82f6", track = "#1e1e22" }: {
+  pct: number; size?: number; stroke?: number; color?: string; track?: string;
+}) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - (Math.max(0, Math.min(100, pct)) / 100) * c;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset} style={{ transition: "stroke-dashoffset .6s ease" }} />
+    </svg>
+  );
+}
+
+function StatCard({ iconBg, icon, value, label, sub, ghost }: {
+  iconBg: string; icon: React.ReactNode; value: React.ReactNode; label: string; sub?: React.ReactNode; ghost: string;
 }) {
   return (
     <div style={{
-      background: "var(--kcard, var(--surface))",
-      border: "1px solid var(--kborder, var(--border))",
-      borderRadius: 16, padding: 18,
-      position: "relative", overflow: "hidden",
-      transition: "transform .18s",
+      position: "relative", background: "#141417", border: "1px solid #232328",
+      borderRadius: 14, padding: 18, overflow: "hidden",
     }}>
-      <div style={{ width: 44, height: 44, borderRadius: 13, background: "rgba(255,255,255,.08)", display: "grid", placeItems: "center", fontSize: 22, marginBottom: 12 }}>
-        {emoji}
+      <div style={{ position: "absolute", top: -30, right: -30, width: 110, height: 110, borderRadius: "50%", background: `radial-gradient(circle, ${iconBg}33, transparent 70%)` }} />
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 12px ${iconBg}59` }}>
+          {icon}
+        </div>
       </div>
-      <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, letterSpacing: "-.02em", color: valueColor ?? "var(--ktext, var(--text))" }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 12.5, color: "var(--kdim, var(--text-faint))", marginTop: 4 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 11.5, fontWeight: 700, marginTop: 7, color: deltaUp ? "var(--ksuc, #10B981)" : "var(--kwarn, #F59E0B)" }}>
-        {delta}
-      </div>
-      <div style={{ position: "absolute", right: -6, bottom: -14, fontSize: 70, opacity: .06, pointerEvents: "none", lineHeight: 1, userSelect: "none" }}>
+      <div style={{ position: "relative", color: "#f5f5f6", fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{value}</div>
+      <div style={{ position: "relative", color: "#a3a4ad", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{label}</div>
+      {sub && <div style={{ position: "relative", marginTop: 10 }}>{sub}</div>}
+      <div style={{ position: "absolute", right: -6, bottom: -14, fontSize: 70, opacity: .05, pointerEvents: "none", lineHeight: 1, userSelect: "none", color: "#fff" }}>
         {ghost}
       </div>
     </div>
   );
 }
 
-const ACHIEVEMENT_EMOJIS: Record<string, string> = {
-  first_win: "⭐",
-  streak_7: "🔥",
-  streak_30: "🔥",
-  tournament_winner: "🏆",
-  puzzles_10: "🧩",
-  puzzles_50: "🎯",
-};
-const FALLBACK_EMOJIS = ["⭐", "🔥", "🏆", "🎯", "💎", "🏅"];
-
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { data: xpData } = useMyXp();
-  const { data: dailyPuzzle } = useDailyPuzzle();
   const { data: nextLesson, isLoading: nextLessonLoading } = useNextLesson();
   const { data: attendance } = useAttendanceHistory();
   const { data: schedule } = useSchedule();
   const { data: packages = [] } = useMyPackages();
+  const { data: pendingReviews = [] } = usePendingLessonReviews();
   const joinLesson = useJoinLesson();
+  const [reviewTarget, setReviewTarget] = useState<typeof pendingReviews[number] | null>(null);
+  const [streakModalOpen, setStreakModalOpen] = useState(false);
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((v) => v + 1), 1000); return () => clearInterval(t); }, []);
 
   const activePkg = packages.find((p) => p.status === "active");
   const remainingLessons = activePkg ? activePkg.totalLessons - activePkg.usedLessons : null;
@@ -116,312 +133,409 @@ export default function StudentDashboard() {
     ?? 0;
 
   const attendancePercent = attendance?.percent ?? 0;
-  const earnedAchievements = (xpData?.achievements ?? []).filter((a) => a.earned);
-  const liveNow = nextLesson && isLessonLiveNow(nextLesson.startTime);
+  const liveNow = nextLesson?.isLive ?? false;
   const isNextLessonToday = nextLesson ? new Date(nextLesson.nextAt).toDateString() === new Date().toDateString() : false;
-  const noLessonToday = !nextLessonLoading && !liveNow && !isNextLessonToday;
+  const pendingReview = pendingReviews[0] ?? null;
+  const upcomingToday = isNextLessonToday && !liveNow && !pendingReview;
+  const noLessonToday = !nextLessonLoading && !liveNow && !isNextLessonToday && !pendingReview;
+
+  const countdownMs = useMemo(() => {
+    if (!nextLesson) return 0;
+    return Math.max(0, new Date(nextLesson.nextAt).getTime() - Date.now());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, nextLesson?.nextAt]);
+  const canJoinNext = !!nextLesson && !nextLesson.endedToday && countdownMs <= 5 * 60 * 1000;
 
   const today = (new Date().getDay() + 6) % 7; // 0=Mon
   const weekSchedule = [...(schedule ?? [])]
     .sort((a, b) => ((a.dayOfWeek - today + 7) % 7) - ((b.dayOfWeek - today + 7) % 7))
     .slice(0, 5);
 
+  const dayStrip = useMemo(() => {
+    const monday = mondayOfThisWeek();
+    const daysWithLesson = new Set((schedule ?? []).map((s) => s.dayOfWeek));
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday); d.setDate(monday.getDate() + i);
+      return { dow: i, date: d, hasLesson: daysWithLesson.has(i), isToday: i === today };
+    });
+  }, [schedule, today]);
+
+  const streakBars = useMemo(() => Array.from({ length: 7 }, (_, i) => i < Math.min(streak, 7)), [streak]);
+
   return (
-    <div>
+    <div style={{ fontFamily: "inherit" }}>
+
       {/* HERO */}
-      <div className="kids-hero" style={{ marginBottom: "var(--gap)" }}>
-        <div className="kids-hero-content">
-          <h1>
-            Salom, {user?.fullName?.split(" ")[0] ?? "do'stim"}! 👋
-            <br />
-            Bugun shaxmat o'rganamizmi? 🏆
-          </h1>
-          <p>
-            Shaxmat Online maktabida <b>{streak} kunlik streak!</b> ♟ Davom ettir!
-          </p>
-          <div className="hrow">
-            <div className="hri"><div className="v">{elo}</div><div className="l">ELO</div></div>
-            <div className="hri"><div className="v">{solvedCount}</div><div className="l">Masala</div></div>
-            <div className="hri"><div className="v">{attendancePercent}%</div><div className="l">Davomat</div></div>
-            <div className="hri"><div className="v">🔥{streak}</div><div className="l">Streak</div></div>
+      <div style={{
+        position: "relative", background: "linear-gradient(120deg,#0f1220 0%,#151a2e 50%,#1a1530 100%)",
+        border: "1px solid #232840", borderRadius: 18, padding: "26px 30px", marginBottom: 16, overflow: "hidden",
+      }}>
+        <div style={{ position: "absolute", top: -80, right: -60, width: 340, height: 340, borderRadius: "50%", background: "radial-gradient(circle, rgba(99,102,241,.22) 0%, transparent 65%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: -120, left: "20%", width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, rgba(59,130,246,.15) 0%, transparent 65%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: 20, right: 40, fontSize: 120, lineHeight: 1, opacity: .05, color: "#fff", pointerEvents: "none" }}>♞</div>
+        <div style={{ position: "absolute", bottom: 10, right: 180, fontSize: 70, lineHeight: 1, opacity: .04, color: "#fff", pointerEvents: "none" }}>♛</div>
+
+        <div style={{ position: "relative", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            {streak > 0 && (
+              <div onClick={() => setStreakModalOpen(true)} style={{
+                display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
+                background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)",
+                color: "#a5b4fc", fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: 20, marginBottom: 14,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", boxShadow: "0 0 8px #f97316" }} />
+                {streak} kunlik streak · Davom ettir
+              </div>
+            )}
+            <div style={{ color: "#f5f5f6", fontSize: 26, fontWeight: 800, lineHeight: 1.15, letterSpacing: "-.01em" }}>
+              Salom, {user?.fullName?.split(" ")[0] ?? "do'stim"} 👋
+            </div>
+            <div style={{ color: "#c7d0e8", fontSize: 15, fontWeight: 500, marginTop: 6, lineHeight: 1.4 }}>Bugun shaxmat o'rganamizmi?</div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
+              <button onClick={() => navigate("/student/pvp")} style={{
+                display: "flex", alignItems: "center", gap: 7, background: "#fff", color: "#0a0a0c",
+                fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 10, cursor: "pointer",
+                border: "none", boxShadow: "0 4px 14px rgba(255,255,255,.12)",
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="6 4 20 12 6 20 6 4" /></svg>
+                O'ynash
+              </button>
+              <button onClick={() => navigate("/student/videos")} style={{
+                display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.1)",
+                color: "#f5f5f6", fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10, cursor: "pointer",
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10l5-3v10l-5-3z" /></svg>
+                Video dars
+              </button>
+              <button onClick={() => navigate("/student/puzzles")} style={{
+                display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.1)",
+                color: "#f5f5f6", fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10, cursor: "pointer",
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M9 10l3 3 6-6" /></svg>
+                Masala
+              </button>
+            </div>
           </div>
-          <div className="hbtns" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="btn bw" onClick={() => navigate("/student/pvp")}>♟ O'ynash</button>
-            <button className="btn bt" onClick={() => navigate("/student/videos")}>🎬 Video dars</button>
-            <button className="btn bt" onClick={() => navigate("/student/puzzles")}>🧩 Masala</button>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,auto)", gap: 10, flexShrink: 0 }}>
+            {[
+              { v: elo, l: "ELO" },
+              { v: solvedCount, l: "MASALA" },
+              { v: `${attendancePercent}%`, l: "DAVOMAT" },
+            ].map((s) => (
+              <div key={s.l} style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 12, padding: "12px 16px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 78 }}>
+                <div style={{ color: "#f5f5f6", fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{s.v}</div>
+                <div style={{ color: "#8b8d98", fontSize: 10.5, fontWeight: 600, marginTop: 4, letterSpacing: ".04em" }}>{s.l}</div>
+              </div>
+            ))}
+            <div style={{ background: "rgba(249,115,22,.1)", border: "1px solid rgba(249,115,22,.25)", borderRadius: 12, padding: "12px 16px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 78 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#f97316" stroke="none"><path d="M12 2c1 4-3 5-3 9a3 3 0 006 0c0-1.5-1-2.5-1-2.5 1.5 1 3 3 3 5.5a5 5 0 01-10 0c0-5 5-6 5-12z" /></svg>
+                <div style={{ color: "#fb923c", fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{streak}</div>
+              </div>
+              <div style={{ color: "#fb923c", fontSize: 10.5, fontWeight: 600, marginTop: 4, letterSpacing: ".04em" }}>STREAK</div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* 4 STAT CARDS */}
-      <div className="grid cols-4" style={{ marginBottom: "var(--gap)" }}>
-        <KidStatCard emoji="♛" value={String(elo)} label="ELO Reyting" delta="PvP o'yinlardan" deltaUp ghost="♛" valueColor="var(--kacc, #3F8CFF)" />
-        <KidStatCard emoji="🔥" value={String(streak)} label="Kun streak" delta={streak > 0 ? "Davom etmoqda!" : "Bugun mashq qil"} deltaUp={streak > 0} ghost="♞" valueColor="var(--kwarn, #F59E0B)" />
-        <KidStatCard emoji="🎯" value={String(solvedCount)} label="Masalalar" delta="Jami yechilgan" deltaUp ghost="♝" valueColor="var(--ksuc, #10B981)" />
-        <KidStatCard emoji="🏆" value={`${level}-daraja`} label={levelName} delta={`${levelPct}% → keyingi`} ghost="♚" />
+      <div className="grid cols-4" style={{ gap: 16, marginBottom: 16 }}>
+        <StatCard
+          iconBg="#3b82f6" ghost="♛"
+          icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M5 20l2-8-4-3h5l2-6 2 6h5l-4 3 2 8-5-3z" /></svg>}
+          value={elo} label="ELO Reyting"
+          sub={<div style={{ color: "#65666f", fontSize: 10.5 }}>PvP o'yinlardan</div>}
+        />
+        <StatCard
+          iconBg="#f97316" ghost="♞"
+          icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M12 2c1 4-3 5-3 9a3 3 0 006 0c0-1.5-1-2.5-1-2.5 1.5 1 3 3 3 5.5a5 5 0 01-10 0c0-5 5-6 5-12z" /></svg>}
+          value={<span style={{ display: "flex", alignItems: "baseline", gap: 4 }}>{streak}<span style={{ color: "#65666f", fontSize: 12, fontWeight: 600 }}>kun</span></span>}
+          label="Kun streak"
+          sub={
+            <div style={{ display: "flex", gap: 3 }}>
+              {streakBars.map((on, i) => (
+                <div key={i} style={{ flex: 1, height: 14, borderRadius: 3, background: on ? "#22c55e" : "#1e1e22" }} />
+              ))}
+            </div>
+          }
+        />
+        <StatCard
+          iconBg="#22c55e" ghost="♝"
+          icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></svg>}
+          value={solvedCount} label="Masalalar"
+          sub={<div style={{ color: "#4ade80", fontSize: 10.5, fontWeight: 600 }}>Jami yechilgan</div>}
+        />
+        <StatCard
+          iconBg="#eab308" ghost="♚"
+          icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M8 21h8M12 17v4" /><path d="M6 4h12v3a6 6 0 01-12 0V4z" /><path d="M6 5H3v1a4 4 0 004 4M18 5h3v1a4 4 0 01-4 4" /></svg>}
+          value={`${level}-daraja`} label={levelName}
+          sub={
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ position: "relative", width: 32, height: 32, flexShrink: 0 }}>
+                <RingProgress pct={levelPct} size={32} stroke={4} color="#eab308" />
+                <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", fontSize: 8.5, fontWeight: 800, color: "#eab308" }}>{levelPct}%</div>
+              </div>
+              <div style={{ color: "#eab308", fontSize: 10.5, fontWeight: 700 }}>Keyingi: {level + 1}-daraja</div>
+            </div>
+          }
+        />
       </div>
 
-      {/* 2-col grid */}
-      <div className="grid l-2-1" style={{ marginBottom: "var(--gap)" }}>
-        {/* Left col */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-          {/* LIVE banner */}
-          {liveNow && nextLesson && (
-            <Card style={{ borderColor: "rgba(239,68,68,.3)" }}>
-              <div style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 14, background: "linear-gradient(90deg, rgba(239,68,68,.12), transparent)" }}>
-                <svg width="40" height="40" viewBox="0 0 40 40">
-                  <circle cx="20" cy="20" r="18" fill="rgba(239,68,68,.15)" stroke="rgba(239,68,68,.4)" strokeWidth="1.5" />
-                  <circle cx="20" cy="20" r="6" fill="#ef4444">
-                    <animate attributeName="r" values="6;10;6" dur="1.5s" repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="1;0.4;1" dur="1.5s" repeatCount="indefinite" />
-                  </circle>
-                </svg>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                    <span className="badge dang" style={{ fontSize: 11 }}>🔴 LIVE hozir</span>
-                    <span style={{ color: "var(--text-faint)", fontSize: 12 }}>{nextLesson.startTime.slice(0, 5)}</span>
-                  </div>
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>{nextLesson.groupName}</div>
-                  {nextLesson.teacherName && <div style={{ color: "var(--text-faint)", fontSize: 13, marginTop: 3 }}>{nextLesson.teacherName}</div>}
-                </div>
-                {nextLesson.meetingUrl && (
-                  <button className="btn primary" onClick={() => {
-                    joinLesson.mutate(nextLesson.id);
-                    window.open(nextLesson.meetingUrl!, "_blank", "noreferrer");
-                  }}>{nextLesson.meetingPlatform === "meet" ? "🟢 Meet ga kirish →" : "📹 Zoom ga kirish →"}</button>
-                )}
-              </div>
-            </Card>
-          )}
+      {/* 2-COL GRID */}
+      <div className="grid l-2-1" style={{ gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* No lesson today */}
-          {noLessonToday && (
-            <Card>
-              <div style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-                  background: "rgba(63,140,255,.1)", display: "grid", placeItems: "center", fontSize: 18,
-                }}>
-                  📅
+          {/* LIVE / rate lesson card */}
+          {liveNow && nextLesson && (
+            <div style={{
+              background: "linear-gradient(135deg,rgba(239,68,68,.08),rgba(20,20,23,1))",
+              border: "1px solid #2a1f1f", borderRadius: 14, padding: "18px 20px",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(239,68,68,.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444" }} />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>Bugun dars yo'q</div>
-                  <div style={{ color: "var(--text-faint)", fontSize: 13, marginTop: 3 }}>
-                    Guruhingiz uchun bugunga rejalashtirilgan dars mavjud emas
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ background: "rgba(239,68,68,.15)", color: "#f87171", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 8 }}>● LIVE hozir</div>
+                    <div style={{ color: "#8b8d98", fontSize: 12.5 }}>{nextLesson.startTime.slice(0, 5)}</div>
                   </div>
+                  <div style={{ color: "#f5f5f6", fontSize: 15, fontWeight: 700, marginTop: 4 }}>{nextLesson.groupName ?? nextLesson.customName ?? "Dars"}</div>
+                  {nextLesson.teacherName && <div style={{ color: "#65666f", fontSize: 12.5, marginTop: 2 }}>{nextLesson.teacherName}</div>}
                 </div>
               </div>
-            </Card>
+              {nextLesson.meetingUrl && (
+                <button onClick={() => { joinLesson.mutate(nextLesson.id); window.open(nextLesson.meetingUrl!, "_blank", "noreferrer"); }}
+                  disabled={joinLesson.isPending}
+                  style={{ display: "flex", alignItems: "center", gap: 6, background: "#22c55e", color: "#fff", fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 9, border: "none", cursor: joinLesson.isPending ? "default" : "pointer", opacity: joinLesson.isPending ? 0.7 : 1 }}>
+                  ● Darsga kirish →
+                </button>
+              )}
+            </div>
+          )}
+
+          {!liveNow && pendingReview && (
+            <div onClick={() => setReviewTarget(pendingReview)} style={{
+              background: "linear-gradient(135deg,rgba(234,179,8,.1),rgba(20,20,23,1))",
+              border: "1px solid #3a3320", borderRadius: 14, padding: "18px 20px",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, cursor: "pointer", flexWrap: "wrap",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(234,179,8,.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Icon name="star" size={18} style={{ color: "#eab308" }} />
+                </div>
+                <div>
+                  <div style={{ background: "rgba(107,114,128,.2)", color: "#9ca3af", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 8, display: "inline-block" }}>DARS TUGADI</div>
+                  <div style={{ color: "#f5f5f6", fontSize: 15, fontWeight: 700, marginTop: 4 }}>{pendingReview.topic ?? "Dars"}</div>
+                  <div style={{ color: "#65666f", fontSize: 12.5, marginTop: 2 }}>{pendingReview.teacherName}</div>
+                </div>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); setReviewTarget(pendingReview); }}
+                style={{ display: "flex", alignItems: "center", gap: 6, background: "#eab308", color: "#1a1305", fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 9, border: "none", cursor: "pointer" }}>
+                ★ Baho berish
+              </button>
+            </div>
+          )}
+
+          {upcomingToday && nextLesson && (
+            <div style={{
+              background: "linear-gradient(135deg,rgba(59,130,246,.08),rgba(20,20,23,1))",
+              border: "1px solid #1f2a3a", borderRadius: 14, padding: "18px 20px",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(59,130,246,.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+                </div>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ background: "rgba(59,130,246,.15)", color: "#60a5fa", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 8 }}>BUGUNGI DARS</div>
+                    <div style={{ color: "#8b8d98", fontSize: 12.5 }}>{nextLesson.startTime.slice(0, 5)}</div>
+                  </div>
+                  <div style={{ color: "#f5f5f6", fontSize: 15, fontWeight: 700, marginTop: 4 }}>{nextLesson.groupName ?? nextLesson.customName ?? "Dars"}</div>
+                  {nextLesson.teacherName && <div style={{ color: "#65666f", fontSize: 12.5, marginTop: 2 }}>{nextLesson.teacherName}</div>}
+                </div>
+              </div>
+              {nextLesson.meetingUrl && (
+                <button onClick={() => {
+                  if (!canJoinNext) { alert("Dars hali boshlanmagan"); return; }
+                  joinLesson.mutate(nextLesson.id);
+                  window.open(nextLesson.meetingUrl!, "_blank", "noreferrer");
+                }}
+                  disabled={joinLesson.isPending}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 9, border: "none", cursor: joinLesson.isPending ? "default" : "pointer",
+                    background: canJoinNext ? "#3b82f6" : "rgba(255,255,255,.08)", color: canJoinNext ? "#fff" : "#65666f",
+                    opacity: joinLesson.isPending ? 0.7 : 1,
+                  }}>
+                  🎥 Darsga kirish
+                </button>
+              )}
+            </div>
+          )}
+
+          {noLessonToday && !pendingReview && (
+            <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", flexShrink: 0, background: "rgba(63,140,255,.1)", display: "grid", placeItems: "center", fontSize: 18 }}>📅</div>
+              <div>
+                <div style={{ color: "#f5f5f6", fontWeight: 800, fontSize: 15 }}>Bugun dars yo'q</div>
+                <div style={{ color: "#65666f", fontSize: 13, marginTop: 3 }}>Guruhingiz uchun bugunga rejalashtirilgan dars mavjud emas</div>
+              </div>
+            </div>
           )}
 
           {/* Haftalik jadval */}
-          <Card>
-            <CardHead
-              icon="calendarCheck"
-              title="Haftalik jadval"
-              right={<button className="btn sm" onClick={() => navigate("/student/lessons")}>Barchasi →</button>}
-            />
-            <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column" }}>
+          <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(59,130,246,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 3v4M16 3v4" /></svg>
+                </div>
+                <div>
+                  <div style={{ color: "#f5f5f6", fontSize: 14.5, fontWeight: 700, lineHeight: 1.3 }}>Haftalik jadval</div>
+                  <div style={{ color: "#65666f", fontSize: 11.5, lineHeight: 1.3, marginTop: 2 }}>
+                    {dayStrip[0].date.getDate()}–{dayStrip[6].date.getDate()} {MONTH_FULL[dayStrip[6].date.getMonth()]} {dayStrip[6].date.getFullYear()}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => navigate("/student/lessons")} style={{ background: "transparent", border: "none", color: "#d4d4d8", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                {schedule?.length ?? 0} dars/hafta
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, marginBottom: 18, paddingBottom: 16, borderBottom: "1px solid #1e1e22" }}>
+              {dayStrip.map((d) => (
+                <div key={d.dow} style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "8px 4px", borderRadius: 9,
+                  background: d.isToday ? "linear-gradient(135deg,#3b82f6,#2563eb)" : "#18181c",
+                  boxShadow: d.isToday ? "0 4px 14px rgba(59,130,246,.35)" : "none",
+                }}>
+                  <div style={{ color: d.isToday ? "#dbeafe" : "#65666f", fontSize: 10.5, fontWeight: d.isToday ? 700 : 600 }}>{DAY_SHORT[d.dow]}</div>
+                  <div style={{ color: d.isToday ? "#fff" : "#d4d4d8", fontSize: 13, fontWeight: d.isToday ? 800 : 700 }}>{d.date.getDate()}</div>
+                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: d.isToday ? "#fff" : d.hasLesson ? "#3b82f6" : "transparent" }} />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {weekSchedule.length === 0 && (
-                <div style={{ color: "var(--text-faint)", fontSize: 13, padding: "10px 0" }}>Darslar topilmadi</div>
+                <div style={{ color: "#65666f", fontSize: 13, padding: "8px 0" }}>Darslar topilmadi</div>
               )}
               {weekSchedule.map((slot) => {
                 const st = slotStatus(slot);
                 const slotDate = getDateForDay(slot.dayOfWeek);
+                const isLive = st === "live";
                 return (
-                  <div key={slot.id} style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    padding: "9px 0", borderBottom: "1px solid var(--border)",
-                    opacity: st === "done" ? 0.5 : 1,
-                  }}>
+                  <div key={slot.id} style={{ display: "flex", gap: 14, alignItems: "stretch" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 56, flexShrink: 0 }}>
+                      <div style={{ color: "#65666f", fontSize: 10.5, fontWeight: 600, letterSpacing: ".05em" }}>{MONTH_UP[slotDate.getMonth()]}</div>
+                      <div style={{ color: isLive ? "#f87171" : "#d4d4d8", fontSize: 20, fontWeight: 800, lineHeight: 1, marginTop: 2 }}>{slotDate.getDate()}</div>
+                      <div style={{ color: isLive ? "#f87171" : "#65666f", fontSize: 10.5, fontWeight: 700, marginTop: 2 }}>{DAY_SHORT[slot.dayOfWeek].toUpperCase()}</div>
+                    </div>
+                    <div style={{ width: 2, background: isLive ? "linear-gradient(180deg,#ef4444,rgba(239,68,68,.1))" : "#232328", borderRadius: 2 }} />
                     <div style={{
-                      width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                      background: st === "live" ? "rgba(239,68,68,.15)" : st === "done" ? "rgba(255,255,255,.04)" : "rgba(63,140,255,.1)",
-                      display: "grid", placeItems: "center",
-                      fontSize: 11, fontWeight: 700,
-                      color: st === "live" ? "#ef4444" : st === "done" ? "var(--text-faint)" : "var(--kacc, #3F8CFF)",
+                      flex: 1, borderRadius: 10, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                      background: isLive ? "linear-gradient(135deg,rgba(239,68,68,.1),transparent)" : "#18181c",
+                      border: isLive ? "1px solid rgba(239,68,68,.25)" : "1px solid #232328",
+                      opacity: st === "done" ? 0.55 : 1,
                     }}>
-                      {DAY_SHORT[slot.dayOfWeek]}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {slot.groupName}
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, lineHeight: 1.3 }}>
+                          <div style={{ color: "#f5f5f6", fontSize: 13.5, fontWeight: 700 }}>{slot.groupName ?? slot.customName ?? "Dars"}</div>
+                          {isLive && <div style={{ background: "rgba(239,68,68,.2)", color: "#f87171", fontSize: 9.5, fontWeight: 800, padding: "2px 6px", borderRadius: 5, letterSpacing: ".04em" }}>LIVE</div>}
+                          {st === "done" && <Icon name="check" size={12} style={{ color: "#65666f" }} />}
+                        </div>
+                        <div style={{ color: "#8b8d98", fontSize: 11.5, lineHeight: 1.3, marginTop: 3 }}>{slot.teacherName ?? "—"}</div>
                       </div>
-                      <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 2 }}>
-                        {fmtDate(slotDate)} · {slot.startTime.slice(0, 5)}{slot.teacherName ? ` · ${slot.teacherName}` : ""}
+                      <div style={{ display: "flex", flexDirection: "column", textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ color: "#f5f5f6", fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>{slot.startTime.slice(0, 5)}</div>
+                        <div style={{ color: "#65666f", fontSize: 10.5, lineHeight: 1.3 }}>{addMins(slot.startTime, slot.durationMinutes ?? 90)}</div>
                       </div>
                     </div>
-                    {st === "live"     && <span className="badge dang" style={{ fontSize: 10, flexShrink: 0 }}>● LIVE</span>}
-                    {st === "done"     && <span style={{ fontSize: 11, color: "var(--text-faint)", flexShrink: 0 }}>✓ Bo'ldi</span>}
-                    {st === "upcoming" && <span style={{ fontSize: 11, color: "var(--kacc, #3F8CFF)", flexShrink: 0 }}>● Kutilmoqda</span>}
                   </div>
                 );
               })}
             </div>
-          </Card>
+          </div>
         </div>
 
-        {/* Right col */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+        {/* RIGHT: Dars krediti */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {activePkg ? (
+            <div style={{ background: "linear-gradient(135deg,#141417 0%,#161620 100%)", border: "1px solid #232328", borderRadius: 14, padding: 20, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: -40, right: -40, width: 180, height: 180, borderRadius: "50%", background: "radial-gradient(circle, rgba(59,130,246,.12) 0%, transparent 70%)", pointerEvents: "none" }} />
 
-          {/* Dars krediti */}
-          {activePkg && (
-            <Card>
-              <CardHead icon="calendarCheck" title="Dars krediti" sub={activePkg.packageName} />
-              <div style={{ padding: "14px 20px 18px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
+              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(59,130,246,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 3v4M16 3v4" /></svg>
+                  </div>
                   <div>
-                    <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1, color: creditPct > 30 ? "var(--kacc,#3F8CFF)" : "#ef4444" }}>
-                      {remainingLessons}
-                    </span>
-                    <span style={{ fontSize: 14, color: "var(--text-faint)", marginLeft: 6 }}>/ {activePkg.totalLessons} dars</span>
+                    <div style={{ color: "#f5f5f6", fontSize: 14.5, fontWeight: 700 }}>Dars krediti</div>
+                    <div style={{ color: "#65666f", fontSize: 11.5, marginTop: 2 }}>{activePkg.packageName}</div>
                   </div>
-                  <span className={`badge ${creditPct > 30 ? "ok" : "dang"}`} style={{ fontSize: 12 }}>
-                    {creditPct > 30 ? "✓ Faol" : "⚠ Kam qoldi"}
-                  </span>
                 </div>
-                <div style={{ height: 10, borderRadius: 99, background: "var(--surface-3)", overflow: "hidden", marginBottom: 10 }}>
-                  <div style={{
-                    height: "100%", borderRadius: 99, transition: "width 0.6s ease",
-                    width: `${creditPct}%`,
-                    background: creditPct > 30 ? "linear-gradient(90deg,var(--kacc,#3F8CFF),#60a5fa)" : "linear-gradient(90deg,#ef4444,#f87171)",
-                  }} />
-                </div>
-                <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
-                  {activePkg.usedLessons} dars ishlatildi · {remainingLessons} dars qoldi
+                <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(34,197,94,.12)", color: "#4ade80", fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 8 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80", boxShadow: "0 0 8px #4ade80" }} />
+                  {creditPct > 30 ? "Faol" : "Kam qoldi"}
                 </div>
               </div>
-            </Card>
-          )}
 
-          {dailyPuzzle && (
-            <Card>
-              <CardHead
-                icon="puzzle"
-                title="Kunlik masala"
-                sub="Oq o'ynaydi va g'alaba qozonadi"
-                right={<span className="badge warn">+{dailyPuzzle.xpReward} XP</span>}
-              />
-              <div style={{ padding: "0 16px 16px" }}>
-                <div style={{ margin: "0 auto 12px", maxWidth: 200 }}>
-                  <ChessBoard fen={dailyPuzzle.fen} onMove={() => {}} disabled />
+              <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 20, marginBottom: 16 }}>
+                <div style={{ position: "relative", width: 96, height: 96, flexShrink: 0 }}>
+                  <RingProgress pct={creditPct} size={96} stroke={9} color={creditPct > 30 ? "#60a5fa" : "#ef4444"} />
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ color: "#f5f5f6", fontSize: 24, fontWeight: 800, lineHeight: 1 }}>{remainingLessons}</div>
+                    <div style={{ color: "#65666f", fontSize: 10.5, fontWeight: 600, marginTop: 2 }}>/ {activePkg.totalLessons} dars</div>
+                  </div>
                 </div>
-                <button className="btn primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => navigate(`/student/puzzles?id=${dailyPuzzle.id}`)}>
-                  Masalani yechish ♟
-                </button>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", background: "#18181c", border: "1px solid #232328", borderRadius: 9 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6" }} />
+                      <div style={{ color: "#a3a4ad", fontSize: 11.5, fontWeight: 600 }}>Qoldi</div>
+                    </div>
+                    <div style={{ color: "#f5f5f6", fontSize: 14, fontWeight: 800 }}>{remainingLessons}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", background: "#18181c", border: "1px solid #232328", borderRadius: 9 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4a4b52" }} />
+                      <div style={{ color: "#a3a4ad", fontSize: 11.5, fontWeight: 600 }}>Ishlatildi</div>
+                    </div>
+                    <div style={{ color: "#f5f5f6", fontSize: 14, fontWeight: 800 }}>{activePkg.usedLessons}</div>
+                  </div>
+                </div>
               </div>
-            </Card>
-          )}
 
-          <Card>
-            <div style={{ padding: 16 }}>
-              <div style={{ fontWeight: 750, fontSize: 14, marginBottom: 10 }}>📦 Faol paket</div>
-              {activePkg ? (
-                <>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{activePkg.packageName}</div>
-                  <div style={{ height: 8, borderRadius: 99, background: "var(--surface-3)", overflow: "hidden", marginBottom: 8 }}>
-                    <div style={{
-                      height: "100%", borderRadius: 99,
-                      width: `${creditPct}%`,
-                      background: creditPct > 30 ? "linear-gradient(90deg,var(--kacc,#3F8CFF),#60a5fa)" : "linear-gradient(90deg,#ef4444,#f87171)",
-                      transition: "width .6s",
-                    }} />
+              {activePkg.expiresAt && (
+                <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 13px", background: "rgba(59,130,246,.06)", border: "1px solid rgba(59,130,246,.15)", borderRadius: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+                    <div>
+                      <div style={{ color: "#d4d4d8", fontSize: 11.5, fontWeight: 600 }}>Paket muddati</div>
+                      <div style={{ color: "#65666f", fontSize: 10.5, marginTop: 1 }}>
+                        {(() => { const d = new Date(activePkg.expiresAt!); return `${d.getDate()} ${MONTH_FULL[d.getMonth()]} ${d.getFullYear()}`; })()}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text-faint)", display: "flex", justifyContent: "space-between" }}>
-                    <span>{activePkg.usedLessons} ishlatildi</span>
-                    <span style={{ fontWeight: 700, color: creditPct > 30 ? "var(--kacc,#3F8CFF)" : "#ef4444" }}>
-                      {remainingLessons} dars qoldi
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontSize: 13, color: "var(--text-faint)", textAlign: "center", padding: "12px 0" }}>
-                  Aktiv paket topilmadi
                 </div>
               )}
             </div>
-          </Card>
-        </div>
-      </div>
-
-      {/* So'nggi yutuqlar */}
-      <Card style={{ marginBottom: "var(--gap)" }}>
-        <CardHead
-          icon="award"
-          title="So'nggi yutuqlar"
-          right={<button className="btn sm" onClick={() => navigate("/student/profile")}>Barchasi →</button>}
-        />
-        <div style={{ padding: "14px 20px", display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {earnedAchievements.length === 0 && (
-            <div style={{ color: "var(--text-faint)", fontSize: 13, padding: "4px 0" }}>Hali yutuqlar yo'q. Mashq qil! 💪</div>
+          ) : (
+            <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, padding: "28px 16px", textAlign: "center" }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>🎫</div>
+              <div style={{ color: "#f5f5f6", fontSize: 13, fontWeight: 700 }}>Aktiv paket topilmadi</div>
+              <div style={{ color: "#65666f", fontSize: 12, marginTop: 4 }}>Admin orqali paket sotib oling</div>
+            </div>
           )}
-          {earnedAchievements.slice(0, 4).map((a, i) => {
-            const emoji = ACHIEVEMENT_EMOJIS[a.code] ?? FALLBACK_EMOJIS[i % FALLBACK_EMOJIS.length];
-            return (
-              <div key={a.code} style={{
-                display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 160,
-                background: "var(--kcard2, var(--surface-2, rgba(255,255,255,.04)))",
-                borderRadius: 12, padding: "10px 13px",
-                border: "1px solid var(--kborder, var(--border))",
-              }}>
-                <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(255,255,255,.07)", display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0 }}>
-                  {emoji}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{a.description}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Shaxmat Online maktabi promo */}
-      <div style={{
-        borderRadius: 18,
-        background: "linear-gradient(135deg, #14532d 0%, #166534 60%, #15803d 100%)",
-        border: "1px solid rgba(255,255,255,.1)",
-        padding: "22px 24px",
-        display: "flex",
-        alignItems: "center",
-        gap: 20,
-        overflow: "hidden",
-        position: "relative",
-      }}>
-        <div style={{ fontSize: 60, flexShrink: 0, filter: "drop-shadow(0 4px 14px rgba(0,0,0,.45))", lineHeight: 1 }}>♞</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "#fff", marginBottom: 6 }}>♟ Shaxmat Online maktabi</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", marginBottom: 14, lineHeight: 1.55, maxWidth: 480 }}>
-            Siz bilan birga 7 dan 17 yoshgacha <b style={{ color: "#fff" }}>250+ o'quvchi</b> shaxmat o'rganmoqda!
-            Har kuni mashq qil, reyting oshir, turnirda g'olib chiq! 🏆
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {[
-              { icon: "☀️", text: "250+ o'quvchi" },
-              { icon: "👥", text: "8 ta murabbiy" },
-              { icon: "🏆", text: "Oylik turnirlar" },
-            ].map((pill) => (
-              <div key={pill.text} style={{
-                display: "flex", alignItems: "center", gap: 6,
-                background: "rgba(255,255,255,.15)", borderRadius: 99,
-                padding: "5px 13px", fontSize: 12.5, fontWeight: 600, color: "#fff",
-                border: "1px solid rgba(255,255,255,.2)",
-              }}>
-                <span>{pill.icon}</span><span>{pill.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div style={{
-          position: "absolute", right: 20, top: "50%", transform: "translateY(-50%)",
-          display: "flex", gap: 4, opacity: 0.65,
-        }}>
-          <span style={{ fontSize: 40, display: "inline-block", animation: "kFloat 2.5s ease-in-out infinite" }}>👦</span>
-          <span style={{ fontSize: 40, display: "inline-block", animation: "kFloat 3s .3s ease-in-out infinite" }}>👧</span>
-          <span style={{ fontSize: 40, display: "inline-block", animation: "kFloat 3.5s .6s ease-in-out infinite" }}>👦</span>
         </div>
       </div>
+
+      {reviewTarget && <LessonReviewModal review={reviewTarget} onClose={() => setReviewTarget(null)} />}
+      {streakModalOpen && <StreakModal onClose={() => setStreakModalOpen(false)} />}
     </div>
   );
 }

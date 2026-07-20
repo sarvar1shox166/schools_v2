@@ -26,6 +26,9 @@ const STATUS_LABEL: Record<LessonStatus, string> = {
   done: "Tugadi",
 };
 
+const MONTH_FULL = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
+const DAY_FULL = ["Yakshanba","Dushanba","Seshanba","Chorshanba","Payshanba","Juma","Shanba"];
+
 export default function ModeratorDashboard() {
   const user = useAuthStore((s) => s.user);
   const { data: todaySchedule, isLoading } = useTodaySchedule();
@@ -45,7 +48,8 @@ export default function ModeratorDashboard() {
   }, [todaySchedule, tick]);
 
   const liveCount = lessons.filter((l) => l.status === "live").length;
-  const todayLabel = new Date().toLocaleDateString("uz-UZ", { day: "numeric", month: "long", weekday: "long" });
+  const todayDate = new Date();
+  const todayLabel = `${DAY_FULL[todayDate.getDay()]}, ${todayDate.getDate()} ${MONTH_FULL[todayDate.getMonth()]}`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -113,7 +117,7 @@ export default function ModeratorDashboard() {
                 <button className="btn primary" style={{ background: "#22c55e", border: "none", flexShrink: 0 }}
                   onClick={() => window.open(l.meetingUrl!, "_blank", "noreferrer")}>
                   <Icon name="video" size={14} />
-                  {l.meetingPlatform === "meet" ? "Meet ga kirish" : "Zoom ga kirish"}
+                  Darsga kirish
                 </button>
               )}
             </div>

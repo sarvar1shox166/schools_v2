@@ -143,7 +143,7 @@ function LessonCard({ lesson }: { lesson: Lesson }) {
   const isActive = lesson.state === "active";
 
   return (
-    <div style={cardStyle(lesson.state)} onClick={()=>navigate(`/student/learn/${lesson.id}`)}>
+    <div style={cardStyle(lesson.state)} onClick={() => { if (lesson.state !== "locked") navigate(`/student/learn/${lesson.id}`); }}>
       {/* top-right counter or sparkle */}
       {isActive ? (
         <div style={{ position:"absolute", top:12, right:14, fontSize:14 }}>✨</div>

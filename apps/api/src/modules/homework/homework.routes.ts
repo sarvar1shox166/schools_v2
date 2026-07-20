@@ -11,6 +11,18 @@ const createSchema = z.object({
   xpReward: z.number().int().nonnegative().default(30),
 });
 
+const updateSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  xpReward: z.number().int().nonnegative().optional(),
+});
+
+async function getTeacherIdForUser(userId: string): Promise<string | null> {
+  const { rows } = await pool.query(`SELECT id FROM teachers WHERE user_id = $1`, [userId]);
+  return rows[0]?.id ?? null;
+}
+
 export async function homeworkRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
@@ -34,7 +46,8 @@ export async function homeworkRoutes(app: FastifyInstance) {
         `SELECT h.id, h.title, h.description, h.due_date AS "dueDate", h.xp_reward AS "xpReward",
                 h.created_at AS "createdAt", g.name AS "groupName", g.color AS "groupColor",
                 h.group_id AS "groupId",
-                COUNT(hc.student_id)::int AS "completionCount"
+                COUNT(DISTINCT hc.student_id)::int AS "completionCount",
+                (SELECT COUNT(*)::int FROM group_members gm WHERE gm.group_id = h.group_id) AS "totalStudents"
          FROM homework h
          JOIN groups g ON g.id = h.group_id
          LEFT JOIN homework_completions hc ON hc.homework_id = h.id
@@ -118,6 +131,89 @@ export async function homeworkRoutes(app: FastifyInstance) {
     return reply.code(201).send({ id: rows[0].id });
   });
 
+  // Update homework (teacher only)
+  app.patch("/homework/:id", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = updateSchema.parse(request.body);
+    const teacherId = await getTeacherIdForUser(request.user.sub);
+    if (!teacherId) return reply.code(403).send({ error: "Forbidden" });
+
+    const { rowCount } = await pool.query(
+      `UPDATE homework h SET
+         title = COALESCE($1, h.title),
+         description = CASE WHEN $2::text IS NOT NULL THEN NULLIF($2, '') ELSE h.description END,
+         due_date = CASE WHEN $3::text IS NOT NULL THEN NULLIF($3, '')::date ELSE h.due_date END,
+         xp_reward = COALESCE($4, h.xp_reward)
+       FROM groups g
+       WHERE h.id = $5 AND h.group_id = g.id AND g.teacher_id = $6`,
+      [body.title ?? null, body.description ?? null, body.dueDate ?? null, body.xpReward ?? null, id, teacherId]
+    );
+    if (!rowCount) return reply.code(404).send({ error: "Not found" });
+    return { ok: true };
+  });
+
+  // Per-student completion breakdown for one homework (teacher only)
+  app.get("/homework/:id/completions", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const teacherId = await getTeacherIdForUser(request.user.sub);
+    if (!teacherId) return reply.code(403).send({ error: "Forbidden" });
+
+    const hwRes = await pool.query(
+      `SELECT h.group_id AS "groupId" FROM homework h
+       JOIN groups g ON g.id = h.group_id
+       WHERE h.id = $1 AND g.teacher_id = $2`,
+      [id, teacherId]
+    );
+    if (hwRes.rows.length === 0) return reply.code(404).send({ error: "Not found" });
+
+    const { rows } = await pool.query(
+      `SELECT s.id AS "studentId", u.full_name AS "fullName",
+              (hc.student_id IS NOT NULL) AS done
+       FROM group_members gm
+       JOIN students s ON s.id = gm.student_id
+       JOIN users u ON u.id = s.user_id
+       LEFT JOIN homework_completions hc ON hc.homework_id = $1 AND hc.student_id = s.id
+       WHERE gm.group_id = $2
+       ORDER BY u.full_name`,
+      [id, hwRes.rows[0].groupId]
+    );
+    return rows;
+  });
+
+  // Teacher marks a specific student's homework as done (one-way — cannot un-mark, to avoid XP-revocation edge cases)
+  app.post("/homework/:id/complete/:studentId", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {
+    const { id, studentId } = request.params as { id: string; studentId: string };
+    const teacherId = await getTeacherIdForUser(request.user.sub);
+    if (!teacherId) return reply.code(403).send({ error: "Forbidden" });
+
+    const hwRow = await pool.query(
+      `SELECT h.xp_reward AS "xpReward" FROM homework h
+       JOIN groups g ON g.id = h.group_id
+       JOIN group_members gm ON gm.group_id = h.group_id AND gm.student_id = $2
+       WHERE h.id = $1 AND g.teacher_id = $3`,
+      [id, studentId, teacherId]
+    );
+    if (hwRow.rows.length === 0) return reply.code(404).send({ error: "Not found" });
+
+    const inserted = await pool.query(
+      `INSERT INTO homework_completions (student_id, homework_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING RETURNING student_id`,
+      [studentId, id]
+    );
+
+    if (inserted.rows.length > 0 && hwRow.rows[0].xpReward > 0) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await awardXp(client, studentId, hwRow.rows[0].xpReward);
+        await client.query("COMMIT");
+      } catch { await client.query("ROLLBACK"); }
+      finally { client.release(); }
+    }
+
+    return { ok: true };
+  });
+
   // Delete homework (teacher only)
   app.delete("/homework/:id", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -158,14 +254,14 @@ export async function homeworkRoutes(app: FastifyInstance) {
     );
     if (hwRow.rows.length === 0) return reply.code(404).send({ error: "Not found" });
 
-    await pool.query(
+    const inserted = await pool.query(
       `INSERT INTO homework_completions (student_id, homework_id) VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT DO NOTHING RETURNING student_id`,
       [studentId, id]
     );
 
     const hw = hwRow.rows[0];
-    if (hw.xp_reward > 0) {
+    if (inserted.rows.length > 0 && hw.xp_reward > 0) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
