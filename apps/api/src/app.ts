@@ -79,7 +79,7 @@ export async function buildApp() {
   app.register(cors, { origin: allowedOrigins.length > 0 ? allowedOrigins : false });
   app.register(rateLimit, { global: true, max: 300, timeWindow: "1 minute" });
   // Outer safety net — actual per-endpoint caps are tighter (see lib/storage.ts UPLOAD_LIMITS).
-  app.register(multipart, { limits: { fileSize: 1024 * 1024 * 1024 } }); // 1 GB
+  app.register(multipart, { limits: { fileSize: 4 * 1024 * 1024 * 1024 } }); // 4 GB
   app.register(websocket);
   // Faqat ochiq bo'lishi kerak papkalar (video/rasm — <video>/<img> to'g'ridan-to'g'ri
   // shu URL'larni ishlatadi, Authorization header yubora olmaydi). "materials/" ataylab

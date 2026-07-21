@@ -158,11 +158,11 @@ export function localReadStream(key: string) {
 export { USE_S3 };
 
 // ── Upload validation (MIME allowlist + per-kind size caps) ───────────────────
-// Defense-in-depth: the global multipart plugin only caps at 2 GB — these enforce
+// Defense-in-depth: the global multipart plugin only caps at 4 GB — these enforce
 // tighter, purpose-specific limits per endpoint and reject unexpected file types.
 export const UPLOAD_LIMITS = {
   image: { maxBytes: 10 * 1024 * 1024, mimePrefixes: ["image/"] },       // 10 MB
-  video: { maxBytes: 1024 * 1024 * 1024, mimePrefixes: ["video/"] },      // 1 GB
+  video: { maxBytes: 3 * 1024 * 1024 * 1024, mimePrefixes: ["video/"] }, // 3 GB
   material: {
     maxBytes: 200 * 1024 * 1024, // 200 MB
     mimePrefixes: ["image/", "video/", "audio/"],
