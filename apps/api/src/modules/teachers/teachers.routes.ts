@@ -23,7 +23,7 @@ export async function teachersRoutes(app: FastifyInstance) {
               t.exp_years AS "expYears", t.joined_at AS "joinedAt",
               (SELECT count(*) FROM groups g WHERE g.teacher_id = t.id) AS "groupsCount",
               (SELECT ROUND(AVG(rating)::numeric, 1)
-               FROM teacher_reviews WHERE teacher_id = t.id) AS "rating"
+               FROM lesson_student_reviews WHERE teacher_id = t.id) AS "rating"
        FROM teachers t
        JOIN users u ON u.id = t.user_id
        WHERE t.tenant_id = $1
@@ -111,7 +111,7 @@ export async function teachersRoutes(app: FastifyInstance) {
     return { tempPassword: newPassword };
   });
 
-  // Teacher rankings: real attendance + review data
+  // Teacher rankings: real attendance + real student lesson-ratings
   app.get("/teachers/rankings", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
@@ -126,7 +126,7 @@ export async function teachersRoutes(app: FastifyInstance) {
          SELECT teacher_id,
                 ROUND(AVG(rating)::numeric, 1) AS avg_rating,
                 COUNT(*)::int AS review_count
-         FROM teacher_reviews
+         FROM lesson_student_reviews
          GROUP BY teacher_id
        ) rev ON rev.teacher_id = t.id
        WHERE t.tenant_id = $1
@@ -139,25 +139,35 @@ export async function teachersRoutes(app: FastifyInstance) {
     }));
   });
 
-  // Get reviews for all teachers (admin view)
+  // Get admin performance evaluations for all teachers (internal HR-style review, separate from student ratings)
   app.get("/teachers/reviews", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT tr.id, tr.rating, tr.comment, tr.period, tr.created_at AS "createdAt",
               tu.full_name AS "teacherName",
-              ru.full_name AS "reviewerName",
-              g.name AS "groupName", g.color AS "groupColor"
+              ru.full_name AS "reviewerName"
        FROM teacher_reviews tr
        JOIN teachers t ON t.id = tr.teacher_id
        JOIN users tu ON tu.id = t.user_id
        JOIN users ru ON ru.id = tr.reviewer_id
-       LEFT JOIN groups g ON g.teacher_id = tr.teacher_id
        WHERE t.tenant_id = $1
        ORDER BY tr.created_at DESC
        LIMIT 50`,
       [tenantId]
     );
     return rows;
+  });
+
+  // Delete an admin performance evaluation
+  app.delete("/teachers/reviews/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+    const { rowCount } = await pool.query(
+      `DELETE FROM teacher_reviews WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (!rowCount) return reply.code(404).send({ error: "Not found" });
+    return { ok: true };
   });
 
   // Add a review (admin only)

@@ -100,8 +100,6 @@ export interface TeacherReview {
   createdAt: string;
   teacherName: string;
   reviewerName: string;
-  groupName: string | null;
-  groupColor: string | null;
 }
 
 export function useTeacherRankings() {
@@ -127,6 +125,14 @@ export function useAddTeacherReview() {
       qc.invalidateQueries({ queryKey: ["teacherRankings"] });
       qc.invalidateQueries({ queryKey: ["teacherReviews"] });
     },
+  });
+}
+
+export function useDeleteTeacherReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/teachers/reviews/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["teacherReviews"] }),
   });
 }
 
