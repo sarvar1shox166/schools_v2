@@ -1434,6 +1434,7 @@ export interface VideoLessonItem {
   title: string;
   videoUrl: string;
   durationSeconds: number | null;
+  thumbnailUrl: string | null;
   progressPct: number;
 }
 
@@ -1493,7 +1494,7 @@ export function useAddVideoLesson() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ courseId, ...payload }: {
-      courseId: string; title: string; videoUrl: string; durationSeconds?: number;
+      courseId: string; title: string; videoUrl: string; durationSeconds?: number; thumbnailUrl?: string;
     }) => (await api.post<{ id: string }>(`/video-courses/${courseId}/videos`, payload)).data,
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["video-course", vars.courseId] });
@@ -1506,7 +1507,7 @@ export function useUpdateVideoLesson() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, courseId, ...payload }: {
-      id: string; courseId: string; title?: string; videoUrl?: string; durationSeconds?: number;
+      id: string; courseId: string; title?: string; videoUrl?: string; durationSeconds?: number; thumbnailUrl?: string;
     }) => (await api.patch(`/videos/${id}`, payload)).data,
     onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["video-course", vars.courseId] }),
   });
@@ -1546,9 +1547,12 @@ export function useUploadImage() {
 export function useUpdateVideoProgress() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ videoId, progressPct }: { videoId: string; progressPct: number }) =>
-      (await api.post(`/videos/${videoId}/progress`, { progressPct })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
+    mutationFn: async ({ videoId, progressPct }: { videoId: string; progressPct: number; courseId?: string }) =>
+      (await api.post<{ xp?: number; level?: number; streak?: number; xpAwarded?: number }>(`/videos/${videoId}/progress`, { progressPct })).data,
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["video-courses"] });
+      if (vars.courseId) qc.invalidateQueries({ queryKey: ["video-course", vars.courseId] });
+    },
   });
 }
 

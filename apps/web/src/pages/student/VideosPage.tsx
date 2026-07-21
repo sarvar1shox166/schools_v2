@@ -44,7 +44,9 @@ function LessonCard({ lesson, idx, course }: { lesson: VideoLessonItem; idx: num
     const state: VideoWatchState = {
       title: lesson.title,
       courseTitle: course.title,
+      courseId: course.id,
       videoUrl: lesson.videoUrl,
+      thumbnailUrl: lesson.thumbnailUrl ?? course.thumbnailUrl ?? undefined,
       gradient: grad,
       duration: fmtSec(lesson.durationSeconds),
       watched,
@@ -55,6 +57,9 @@ function LessonCard({ lesson, idx, course }: { lesson: VideoLessonItem; idx: num
   return (
     <div style={{ cursor: "pointer" }} onClick={handleClick}>
       <div style={{ borderRadius: 14, overflow: "hidden", background: grad, aspectRatio: "16/9", position: "relative", marginBottom: 10 }}>
+        {lesson.thumbnailUrl && (
+          <img src={lesson.thumbnailUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        )}
         {watched && (
           <div style={{ position: "absolute", top: 10, left: 10, background: "#22c55e", borderRadius: 99, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>
             ✓ Ko'rildi

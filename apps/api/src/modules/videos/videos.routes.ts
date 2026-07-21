@@ -24,6 +24,7 @@ const createLessonSchema = z.object({
   title: z.string().min(1),
   videoUrl: z.string().min(1),
   durationSeconds: z.number().int().positive().optional(),
+  thumbnailUrl: z.string().optional(),
 });
 
 const updateLessonSchema = createLessonSchema.partial();
@@ -121,6 +122,7 @@ export async function videosRoutes(app: FastifyInstance) {
 
     const lessonsRes = await pool.query(
       `SELECT v.id, v.title, v.video_url AS "videoUrl", v.duration_seconds AS "durationSeconds",
+              v.thumbnail_url AS "thumbnailUrl",
               ${progressSelect} AS "progressPct"
        FROM video_lessons v
        ${progressJoin}
@@ -177,7 +179,10 @@ export async function videosRoutes(app: FastifyInstance) {
       [id, tenantId]
     );
     if (!courseRes.rows[0]) return reply.code(404).send({ error: "Not found" });
-    const lessonsRes = await pool.query(`SELECT video_url AS "videoUrl" FROM video_lessons WHERE course_id = $1`, [id]);
+    const lessonsRes = await pool.query(
+      `SELECT video_url AS "videoUrl", thumbnail_url AS "thumbnailUrl" FROM video_lessons WHERE course_id = $1`,
+      [id]
+    );
 
     const { rowCount } = await pool.query(
       `DELETE FROM video_courses WHERE id = $1 AND tenant_id = $2`, [id, tenantId]
@@ -186,7 +191,10 @@ export async function videosRoutes(app: FastifyInstance) {
 
     // Kursning o'zi (cascade orqali darslari ham) DB'dan o'chdi — endi S3/diskdagi
     // haqiqiy fayllarni ham tozalaymiz, aks holda orfan fayllar qolib ketadi.
-    const urls = [courseRes.rows[0].thumbnailUrl, ...lessonsRes.rows.map((r) => r.videoUrl)].filter(Boolean) as string[];
+    const urls = [
+      courseRes.rows[0].thumbnailUrl,
+      ...lessonsRes.rows.flatMap((r) => [r.videoUrl, r.thumbnailUrl]),
+    ].filter(Boolean) as string[];
     for (const url of urls) {
       const key = keyFromUrl(url);
       if (key) await deleteFile(key).catch(() => {});
@@ -205,9 +213,9 @@ export async function videosRoutes(app: FastifyInstance) {
     if (!courseRes.rows[0]) return reply.code(404).send({ error: "Kurs topilmadi" });
 
     const { rows } = await pool.query(
-      `INSERT INTO video_lessons (tenant_id, course_id, title, video_url, duration_seconds)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [tenantId, courseId, body.title, body.videoUrl, body.durationSeconds ?? null]
+      `INSERT INTO video_lessons (tenant_id, course_id, title, video_url, duration_seconds, thumbnail_url)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [tenantId, courseId, body.title, body.videoUrl, body.durationSeconds ?? null, body.thumbnailUrl ?? null]
     );
     return reply.code(201).send({ id: rows[0].id });
   });
@@ -308,25 +316,31 @@ export async function videosRoutes(app: FastifyInstance) {
     const { tenantId } = request.user;
 
     const prevRes = await pool.query(
-      `SELECT video_url AS "videoUrl" FROM video_lessons WHERE id = $1 AND tenant_id = $2`,
+      `SELECT video_url AS "videoUrl", thumbnail_url AS "thumbnailUrl" FROM video_lessons WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
     );
     if (!prevRes.rows[0]) return reply.code(404).send({ error: "Not found" });
     const previousVideoUrl = prevRes.rows[0].videoUrl as string;
+    const previousThumbnailUrl = prevRes.rows[0].thumbnailUrl as string | null;
 
     const { rowCount } = await pool.query(
       `UPDATE video_lessons SET
          title = COALESCE($1, title),
          video_url = COALESCE($2, video_url),
-         duration_seconds = COALESCE($3, duration_seconds)
-       WHERE id = $4 AND tenant_id = $5`,
-      [body.title ?? null, body.videoUrl ?? null, body.durationSeconds ?? null, id, tenantId]
+         duration_seconds = COALESCE($3, duration_seconds),
+         thumbnail_url = COALESCE($4, thumbnail_url)
+       WHERE id = $5 AND tenant_id = $6`,
+      [body.title ?? null, body.videoUrl ?? null, body.durationSeconds ?? null, body.thumbnailUrl ?? null, id, tenantId]
     );
     if (!rowCount) return reply.code(404).send({ error: "Not found" });
 
-    // Video fayl almashtirilgan bo'lsa — eski faylni S3/diskdan ham o'chiramiz.
+    // Video/muqova fayli almashtirilgan bo'lsa — eskisini S3/diskdan ham o'chiramiz.
     if (body.videoUrl && body.videoUrl !== previousVideoUrl) {
       const oldKey = keyFromUrl(previousVideoUrl);
+      if (oldKey) await deleteFile(oldKey).catch(() => {});
+    }
+    if (body.thumbnailUrl && body.thumbnailUrl !== previousThumbnailUrl) {
+      const oldKey = keyFromUrl(previousThumbnailUrl ?? "");
       if (oldKey) await deleteFile(oldKey).catch(() => {});
     }
     return { ok: true };
@@ -336,7 +350,7 @@ export async function videosRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
     const videoRes = await pool.query(
-      `SELECT video_url AS "videoUrl" FROM video_lessons WHERE id = $1 AND tenant_id = $2`,
+      `SELECT video_url AS "videoUrl", thumbnail_url AS "thumbnailUrl" FROM video_lessons WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
     );
     if (!videoRes.rows[0]) return reply.code(404).send({ error: "Not found" });
@@ -346,8 +360,10 @@ export async function videosRoutes(app: FastifyInstance) {
     );
     if (!rowCount) return reply.code(404).send({ error: "Not found" });
 
-    const key = keyFromUrl(videoRes.rows[0].videoUrl);
-    if (key) await deleteFile(key).catch(() => {});
+    for (const url of [videoRes.rows[0].videoUrl, videoRes.rows[0].thumbnailUrl].filter(Boolean)) {
+      const key = keyFromUrl(url);
+      if (key) await deleteFile(key).catch(() => {});
+    }
     return { ok: true };
   });
 

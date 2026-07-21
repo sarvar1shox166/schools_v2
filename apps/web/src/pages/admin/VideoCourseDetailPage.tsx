@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Card, Icon } from "@chess-school/ui";
 import {
   useVideoCourseDetail, useDeleteVideoCourse, useUpdateVideoLesson, useDeleteVideoLesson,
-  useVideoQuiz, useAddQuizQuestion, useDeleteQuizQuestion,
+  useVideoQuiz, useAddQuizQuestion, useDeleteQuizQuestion, useUploadImage,
   type VideoCourse, type VideoLessonItem,
 } from "../../lib/queries.js";
 import { startLessonUpload } from "../../lib/videoUpload.js";
@@ -69,21 +69,27 @@ function QuizSection({ videoId }: { videoId: string }) {
 function AddLessonModal({ courseId, lesson, onClose }: { courseId: string; lesson?: VideoLessonItem; onClose: () => void }) {
   const isEdit = !!lesson;
   const updateLesson = useUpdateVideoLesson();
+  const uploadImage = useUploadImage();
   const videoRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(lesson?.title ?? "");
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [thumbFile, setThumbFile] = useState<File | null>(null);
+  const [thumbPreview, setThumbPreview] = useState(lesson?.thumbnailUrl ?? "");
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     if (!title.trim() || (!isEdit && !videoFile)) return;
     if (videoFile) {
-      startLessonUpload({ courseId, title: title.trim(), videoFile, isEdit, editLessonId: lesson?.id });
+      startLessonUpload({ courseId, title: title.trim(), videoFile, thumbnailFile: thumbFile ?? undefined, isEdit, editLessonId: lesson?.id });
       onClose();
       return;
     }
     setSaving(true);
     try {
-      await updateLesson.mutateAsync({ id: lesson!.id, courseId, title: title.trim() });
+      let thumbnailUrl: string | undefined;
+      if (thumbFile) thumbnailUrl = (await uploadImage.mutateAsync(thumbFile)).url;
+      await updateLesson.mutateAsync({ id: lesson!.id, courseId, title: title.trim(), thumbnailUrl });
       onClose();
     } finally {
       setSaving(false);
@@ -130,6 +136,28 @@ function AddLessonModal({ courseId, lesson, onClose }: { courseId: string; lesso
           </div>
 
           <div>
+            <label style={labelSt}>MUQOVA RASMI (IXTIYORIY)</label>
+            <div onClick={() => imgRef.current?.click()} style={{
+              border: "2px dashed var(--border)", borderRadius: 10, padding: thumbPreview ? "8px" : "16px 12px",
+              textAlign: "center", cursor: "pointer", background: "var(--surface-2)",
+            }}>
+              {thumbPreview ? (
+                <img src={thumbPreview} alt="" style={{ maxHeight: 80, borderRadius: 6, objectFit: "cover" }} />
+              ) : (
+                <div style={{ color: "var(--text-faint)" }}>
+                  <div style={{ fontSize: 24, marginBottom: 4 }}>🖼</div>
+                  <div style={{ fontSize: 12 }}>Muqova rasm (JPG/PNG)</div>
+                </div>
+              )}
+            </div>
+            <input ref={imgRef} type="file" accept="image/*" style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { setThumbFile(f); setThumbPreview(URL.createObjectURL(f)); }
+              }} />
+          </div>
+
+          <div>
             <label style={labelSt}>DARS NOMI</label>
             <input className="inp" style={{ width: "100%" }} placeholder="Masalan: 1-dars — Kirish" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
@@ -166,6 +194,16 @@ function LessonRow({ lesson, courseId, index }: { lesson: VideoLessonItem; cours
         <span style={{ width: 26, height: 26, borderRadius: 8, background: "var(--surface-2)", display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700, color: "var(--text-faint)", flexShrink: 0 }}>
           {index + 1}
         </span>
+        <div style={{
+          width: 52, height: 34, borderRadius: 6, flexShrink: 0, overflow: "hidden",
+          background: "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {lesson.thumbnailUrl ? (
+            <img src={lesson.thumbnailUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <span style={{ fontSize: 16, opacity: 0.5 }}>🎬</span>
+          )}
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 13.5 }}>{lesson.title}</div>
           {lesson.durationSeconds != null && (

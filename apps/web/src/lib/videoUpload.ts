@@ -51,6 +51,7 @@ export interface StartLessonUploadInput {
   courseId: string;
   title: string;
   videoFile: File;
+  thumbnailFile?: File;
   durationSeconds?: number;
   isEdit: boolean;
   editLessonId?: string;
@@ -76,6 +77,13 @@ export function startLessonUpload(input: StartLessonUploadInput) {
 
   (async () => {
     try {
+      let thumbnailUrl: string | undefined;
+      if (input.thumbnailFile) {
+        const thumbForm = new FormData();
+        thumbForm.append("file", input.thumbnailFile);
+        thumbnailUrl = (await api.post<{ url: string }>("/upload/image", thumbForm, { signal: controller.signal })).data.url;
+      }
+
       const form = new FormData();
       form.append("file", input.videoFile);
       const videoUrl = (await api.post<{ url: string }>("/videos/upload", form, {
@@ -89,11 +97,11 @@ export function startLessonUpload(input: StartLessonUploadInput) {
 
       if (input.isEdit && input.editLessonId) {
         await api.patch(`/videos/${input.editLessonId}`, {
-          title: input.title, videoUrl, durationSeconds: input.durationSeconds,
+          title: input.title, videoUrl, durationSeconds: input.durationSeconds, thumbnailUrl,
         });
       } else {
         await api.post(`/video-courses/${input.courseId}/videos`, {
-          title: input.title, videoUrl, durationSeconds: input.durationSeconds,
+          title: input.title, videoUrl, durationSeconds: input.durationSeconds, thumbnailUrl,
         });
       }
       queryClient.invalidateQueries({ queryKey: ["video-course", input.courseId] });
