@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
+import { assignedTeacherIds } from "../../lib/moderator.js";
 
 const createSchema = z.object({
   scheduleSlotId: z.string().uuid().optional(),
@@ -227,11 +228,17 @@ export async function lessonsRoutes(app: FastifyInstance) {
     const teacherId = lessonRes.rows[0]?.teacherId;
     if (!teacherId) return reply.code(404).send({ error: "Lesson not found" });
 
+    // Raqamli baho darhol hisoblanadi; izoh matni esa moderator ko'rib chiqmaguncha
+    // o'qituvchiga ko'rinmaydi (izohsiz bahoda ko'rib chiqiladigan narsa yo'q).
+    const moderationStatus = body.comment ? "pending" : "approved";
+
     await pool.query(
-      `INSERT INTO lesson_student_reviews (lesson_id, student_id, teacher_id, rating, comment)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (lesson_id, student_id) DO UPDATE SET rating = EXCLUDED.rating, comment = EXCLUDED.comment`,
-      [id, studentId, teacherId, body.rating, body.comment ?? null]
+      `INSERT INTO lesson_student_reviews (lesson_id, student_id, teacher_id, rating, comment, moderation_status)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (lesson_id, student_id) DO UPDATE
+       SET rating = EXCLUDED.rating, comment = EXCLUDED.comment,
+           moderation_status = EXCLUDED.moderation_status, moderated_by = NULL, moderated_at = NULL`,
+      [id, studentId, teacherId, body.rating, body.comment ?? null, moderationStatus]
     );
     return reply.code(201).send({ ok: true });
   });
@@ -242,6 +249,7 @@ export async function lessonsRoutes(app: FastifyInstance) {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT r.id, r.rating, r.comment, r.created_at AS "createdAt",
+              r.moderation_status AS "moderationStatus",
               su.full_name AS "studentName", l.topic, l.conducted_at AS "conductedAt"
        FROM lesson_student_reviews r
        JOIN students s ON s.id = r.student_id
@@ -255,6 +263,160 @@ export async function lessonsRoutes(app: FastifyInstance) {
     );
     return rows;
   });
+
+  // ── O'quvchi uchun: dars tarixi + tafsilot (davomat + o'zi qoldirgan baho/izoh) ──
+  app.get("/me/lessons/history", { onRequest: [app.requireRole("student")] }, async (request) => {
+    const { sub } = request.user;
+    const studentRes = await pool.query(`SELECT id FROM students WHERE user_id = $1`, [sub]);
+    const studentId = studentRes.rows[0]?.id;
+    if (!studentId) return [];
+
+    const { rows } = await pool.query(
+      `SELECT l.id AS "lessonId", l.topic, l.conducted_at AS "conductedAt",
+              tu.full_name AS "teacherName", ar.status AS "attendanceStatus", ar.reason,
+              r.rating, r.comment
+       FROM attendance_records ar
+       JOIN lessons l ON l.id = ar.lesson_id
+       JOIN teachers t ON t.id = l.teacher_id
+       JOIN users tu ON tu.id = t.user_id
+       LEFT JOIN lesson_student_reviews r ON r.lesson_id = l.id AND r.student_id = ar.student_id
+       WHERE ar.student_id = $1
+       ORDER BY l.conducted_at DESC
+       LIMIT 100`,
+      [studentId]
+    );
+    return rows;
+  });
+
+  // ── O'qituvchi uchun: dars tarixi + tafsilot (davomat + tasdiqlangan baho/izohlar) ──
+  app.get("/teachers/me/lessons/history", { onRequest: [app.requireRole("teacher")] }, async (request) => {
+    const { sub } = request.user;
+    const teacherRes = await pool.query(`SELECT id FROM teachers WHERE user_id = $1`, [sub]);
+    const teacherId = teacherRes.rows[0]?.id;
+    if (!teacherId) return [];
+
+    const { rows } = await pool.query(
+      `SELECT l.id AS "lessonId", l.topic, l.conducted_at AS "conductedAt",
+              g.name AS "groupName",
+              att."totalStudents", att."presentCount", att."lateCount", att."absentCount", att."excusedCount",
+              rev."avgRating", rev."reviewCount", rev.reviews
+       FROM lessons l
+       LEFT JOIN groups g ON g.id = l.group_id
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS "totalStudents",
+                COUNT(*) FILTER (WHERE ar.status = 'p')::int AS "presentCount",
+                COUNT(*) FILTER (WHERE ar.status = 'l')::int AS "lateCount",
+                COUNT(*) FILTER (WHERE ar.status = 'a')::int AS "absentCount",
+                COUNT(*) FILTER (WHERE ar.status = 'ae')::int AS "excusedCount"
+         FROM attendance_records ar
+         WHERE ar.lesson_id = l.id
+       ) att ON true
+       LEFT JOIN LATERAL (
+         SELECT ROUND(AVG(r.rating)::numeric, 1) AS "avgRating",
+                COUNT(*)::int AS "reviewCount",
+                COALESCE(
+                  json_agg(
+                    json_build_object(
+                      'studentName', su.full_name,
+                      'rating', r.rating,
+                      'comment', CASE WHEN r.moderation_status = 'approved' THEN r.comment ELSE NULL END
+                    ) ORDER BY r.created_at DESC
+                  ),
+                  '[]'::json
+                ) AS reviews
+         FROM lesson_student_reviews r
+         JOIN students s ON s.id = r.student_id
+         JOIN users su ON su.id = s.user_id
+         WHERE r.lesson_id = l.id
+       ) rev ON true
+       WHERE l.teacher_id = $1
+       ORDER BY l.conducted_at DESC
+       LIMIT 100`,
+      [teacherId]
+    );
+    return rows;
+  });
+
+  // ── Moderatsiya navbati: kutilayotgan (pending) o'quvchi izohlari ───────────────
+  app.get(
+    "/moderator/lesson-reviews",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "moderator")] },
+    async (request) => {
+      const { tenantId, role, sub } = request.user;
+      const params: unknown[] = [tenantId];
+      let teacherFilter = "";
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        teacherFilter = "AND r.teacher_id = ANY($2::uuid[])";
+        params.push(ids);
+      }
+      const { rows } = await pool.query(
+        `SELECT r.id, r.rating, r.comment, r.created_at AS "createdAt",
+                su.full_name AS "studentName", tu.full_name AS "teacherName",
+                l.topic, l.conducted_at AS "conductedAt"
+         FROM lesson_student_reviews r
+         JOIN teachers t ON t.id = r.teacher_id
+         JOIN users tu ON tu.id = t.user_id
+         JOIN students s ON s.id = r.student_id
+         JOIN users su ON su.id = s.user_id
+         JOIN lessons l ON l.id = r.lesson_id
+         WHERE t.tenant_id = $1 AND r.moderation_status = 'pending' ${teacherFilter}
+         ORDER BY r.created_at ASC`,
+        params
+      );
+      return rows;
+    }
+  );
+
+  // Izohni tasdiqlash — o'qituvchiga ko'rinadigan bo'ladi
+  app.post(
+    "/moderator/lesson-reviews/:id/approve",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "moderator")] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { tenantId, role, sub } = request.user;
+      let teacherFilter = "";
+      const params: unknown[] = [sub, id, tenantId];
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        teacherFilter = "AND r.teacher_id = ANY($4::uuid[])";
+        params.push(ids);
+      }
+      const { rowCount } = await pool.query(
+        `UPDATE lesson_student_reviews r SET moderation_status = 'approved', moderated_by = $1, moderated_at = now()
+         FROM teachers t
+         WHERE r.id = $2 AND r.teacher_id = t.id AND t.tenant_id = $3 ${teacherFilter}`,
+        params
+      );
+      if (!rowCount) return reply.code(404).send({ error: "Not found" });
+      return { ok: true };
+    }
+  );
+
+  // Izohni rad etish — o'qituvchiga hech qachon ko'rsatilmaydi
+  app.post(
+    "/moderator/lesson-reviews/:id/reject",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "moderator")] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { tenantId, role, sub } = request.user;
+      let teacherFilter = "";
+      const params: unknown[] = [sub, id, tenantId];
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        teacherFilter = "AND r.teacher_id = ANY($4::uuid[])";
+        params.push(ids);
+      }
+      const { rowCount } = await pool.query(
+        `UPDATE lesson_student_reviews r SET moderation_status = 'rejected', moderated_by = $1, moderated_at = now()
+         FROM teachers t
+         WHERE r.id = $2 AND r.teacher_id = t.id AND t.tenant_id = $3 ${teacherFilter}`,
+        params
+      );
+      if (!rowCount) return reply.code(404).send({ error: "Not found" });
+      return { ok: true };
+    }
+  );
 
   // ── Darsni tugatish — teacher_attendance orqali boshlangan darsni yakunlaydi ──
   // Ixtiyoriy ravishda uyga vazifa ham beriladi (faqat "guruh" turidagi darslarda)

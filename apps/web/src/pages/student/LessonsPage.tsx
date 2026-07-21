@@ -6,13 +6,24 @@ import {
   useHomework,
   useJoinLesson,
   useNextLesson,
+  useStudentLessonHistory,
 } from "../../lib/queries.js";
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 const DAY_SHORT = ["Du", "Se", "Chor", "Pay", "Ju", "Sha", "Yak"]; // 0=Mon (matches DB convention)
-const ATT_COLOR: Record<string, string> = { p: "#22c55e", l: "#f59e0b", a: "#ef4444" };
-const ATT_ICON: Record<string, string> = { p: "✓", l: "!", a: "−" };
-const ATT_LABEL: Record<string, string> = { p: "Darsga keldingiz", l: "Darsga kechikdingiz", a: "Darsga kelmadingiz" };
+const ATT_COLOR: Record<string, string> = { p: "#22c55e", l: "#f59e0b", a: "#ef4444", ae: "#8b5cf6" };
+const ATT_ICON: Record<string, string> = { p: "✓", l: "!", a: "−", ae: "•" };
+const ATT_LABEL: Record<string, string> = { p: "Darsga keldingiz", l: "Darsga kechikdingiz", a: "Darsga kelmadingiz", ae: "Sababli kelmadingiz" };
+
+function HistoryStars({ rating }: { rating: number }) {
+  return (
+    <div style={{ display: "flex", gap: 1 }}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <span key={i} style={{ fontSize: 12, color: i < rating ? "#f59e0b" : "#3a3a40" }}>★</span>
+      ))}
+    </div>
+  );
+}
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 function fmtDueDate(due: string | null): string {
@@ -35,6 +46,7 @@ function fmtDayLabel(iso: string): string {
 export default function LessonsPage() {
   const { data: next } = useNextLesson();
   const { data: attendance } = useAttendanceHistory();
+  const { data: lessonHistory = [] } = useStudentLessonHistory();
   const { data: homework = [] } = useHomework();
   const completeHW = useCompleteHomework();
   const joinLesson = useJoinLesson();
@@ -347,6 +359,43 @@ export default function LessonsPage() {
             </>
           )}
         </div>
+      </div>
+
+      {/* ── Darslar tarixi (tafsilot) ────────────────────────────────────── */}
+      <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, marginTop: 16, overflow: "hidden" }}>
+        <div style={{ padding: "18px 22px 14px", borderBottom: "1px solid #1e1e22" }}>
+          <div style={{ color: "#f5f5f6", fontSize: 15, fontWeight: 700 }}>Darslar tarixi</div>
+          <div style={{ color: "#65666f", fontSize: 12, marginTop: 2 }}>Mavzu, davomat va siz qoldirgan baho</div>
+        </div>
+        {lessonHistory.length === 0 ? (
+          <div style={{ padding: "24px 22px", textAlign: "center", color: "#65666f", fontSize: 13 }}>
+            Hali dars tarixi yo'q
+          </div>
+        ) : lessonHistory.map((l) => (
+          <div key={l.lessonId} style={{ padding: "14px 22px", borderBottom: "1px solid #1e1e22", display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <div style={{
+              width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, fontWeight: 800, color: "#fff", background: ATT_COLOR[l.attendanceStatus] ?? "#475569",
+            }}>
+              {ATT_ICON[l.attendanceStatus]}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ color: "#f5f5f6", fontSize: 13.5, fontWeight: 700 }}>{l.topic ?? "Dars"}</span>
+                {l.rating != null && <HistoryStars rating={l.rating} />}
+              </div>
+              <div style={{ color: "#65666f", fontSize: 11.5, marginTop: 3 }}>
+                {fmtDayLabel(l.conductedAt)} · {l.teacherName} · {ATT_LABEL[l.attendanceStatus] ?? l.attendanceStatus}
+                {l.reason && ` (${l.reason})`}
+              </div>
+              {l.comment && (
+                <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "#18181c", border: "1px solid #232328", fontSize: 12.5, color: "#a8a9b3" }}>
+                  «{l.comment}»
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
 
     </div>

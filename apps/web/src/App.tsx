@@ -34,6 +34,7 @@ import TPuzzlesPage from "./pages/teacher/TPuzzlesPage.js";
 import TPuzzleCreatePage from "./pages/teacher/TPuzzleCreatePage.js";
 import TSchedulePage from "./pages/teacher/TSchedulePage.js";
 import TAttendancePage from "./pages/teacher/TAttendancePage.js";
+import TLessonHistoryPage from "./pages/teacher/TLessonHistoryPage.js";
 import TLiveLessonPage from "./pages/teacher/TLiveLessonPage.js";
 import StudentDashboard from "./pages/student/StudentDashboard.js";
 import PuzzlesPage from "./pages/student/PuzzlesPage.js";
@@ -111,6 +112,7 @@ const TEACHER_NAV: NavSection[] = [
     group: "Dars",
     items: [
       { to: "/teacher/attendance", label: "Davomat belgilash", icon: "attendance" },
+      { to: "/teacher/lesson-history", label: "Darslar tarixi", icon: "book" },
       { to: "/teacher/progress",   label: "O'quvchi natijasi", icon: "target" },
       { to: "/teacher/materials",  label: "Uy vazifalari",     icon: "bookOpen" },
       { to: "/teacher/puzzles",    label: "Boshqotirmalar",    icon: "puzzle", locked: true },
@@ -196,6 +198,7 @@ export default function App() {
           <Route path="/teacher/income"         element={<TeacherIncomePage />} />
           <Route path="/teacher/schedule"       element={<TSchedulePage />} />
           <Route path="/teacher/attendance"     element={<TAttendancePage />} />
+          <Route path="/teacher/lesson-history" element={<TLessonHistoryPage />} />
           <Route path="/teacher/live-lesson/:scheduleSlotId" element={<TLiveLessonPage />} />
           <Route path="/teacher/students"       element={<TStudentsPage />} />
           <Route path="/teacher/progress"       element={<TProgressPage />} />

@@ -1,7 +1,68 @@
 import { useEffect, useMemo, useState } from "react";
 import { Avatar, Card, CardHead, Icon } from "@chess-school/ui";
-import { useTodaySchedule } from "../../lib/queries.js";
+import { useTodaySchedule, useModerationQueue, useApproveLessonReview, useRejectLessonReview } from "../../lib/queries.js";
 import { useAuthStore } from "../../lib/auth-store.js";
+
+function Stars({ rating }: { rating: number }) {
+  return (
+    <div style={{ display: "flex", gap: 1 }}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <span key={i} style={{ fontSize: 13, color: i < rating ? "#f59e0b" : "#d1d5db" }}>★</span>
+      ))}
+    </div>
+  );
+}
+
+function ModerationQueueCard() {
+  const { data: queue = [], isLoading } = useModerationQueue();
+  const approve = useApproveLessonReview();
+  const reject = useRejectLessonReview();
+
+  return (
+    <Card style={{ padding: 0 }}>
+      <CardHead icon="alert" title="Moderatsiya navbati" sub="Xavfli/nomaqbul izohlarni olib tashlang" />
+      <div style={{ padding: "6px 0" }}>
+        {isLoading ? (
+          <div style={{ padding: 24, textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>Yuklanmoqda...</div>
+        ) : queue.length === 0 ? (
+          <div style={{ padding: 32, textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>
+            Ko'rib chiqiladigan izoh yo'q 🎉
+          </div>
+        ) : queue.map((r) => (
+          <div key={r.id} style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <Avatar name={r.studentName} size="sm" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 750, fontSize: 14 }}>{r.studentName}</span>
+                  <Stars rating={r.rating} />
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
+                  → {r.teacherName} · {r.topic ?? "Dars"} · {r.conductedAt}
+                </div>
+              </div>
+            </div>
+            {r.comment && (
+              <div style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", fontSize: 13.5, marginBottom: 10 }}>
+                «{r.comment}»
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" style={{ flex: 1, background: "#fee2e2", color: "#dc2626", border: "none" }}
+                disabled={reject.isPending} onClick={() => reject.mutate(r.id)}>
+                <Icon name="x" size={13} /> Olib tashlash
+              </button>
+              <button className="btn" style={{ flex: 1, background: "#d1fae5", color: "#059669", border: "none" }}
+                disabled={approve.isPending} onClick={() => approve.mutate(r.id)}>
+                <Icon name="check" size={13} /> Tasdiqlash
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
 
 function nowMins(): number {
   const d = new Date();
@@ -124,6 +185,8 @@ export default function ModeratorDashboard() {
           ))}
         </div>
       </Card>
+
+      <ModerationQueueCard />
 
       <style>{`@keyframes modPulseDot { 0% { transform: scale(1); opacity: .6; } 70%,100% { transform: scale(2.6); opacity: 0; } }`}</style>
     </div>

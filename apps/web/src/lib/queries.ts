@@ -167,6 +167,7 @@ export interface StudentTeacherReview {
   studentName: string;
   topic: string | null;
   conductedAt: string;
+  moderationStatus: "pending" | "approved" | "rejected";
 }
 
 export function useStudentReviewsForTeacher(teacherId: string | null) {
@@ -174,6 +175,86 @@ export function useStudentReviewsForTeacher(teacherId: string | null) {
     queryKey: ["studentReviews", teacherId],
     enabled: !!teacherId,
     queryFn: async () => (await api.get<StudentTeacherReview[]>(`/teachers/${teacherId}/student-reviews`)).data,
+  });
+}
+
+export interface StudentLessonHistoryItem {
+  lessonId: string;
+  topic: string | null;
+  conductedAt: string;
+  teacherName: string;
+  attendanceStatus: "p" | "a" | "l" | "ae";
+  reason: string | null;
+  rating: number | null;
+  comment: string | null;
+}
+
+export function useStudentLessonHistory() {
+  return useQuery({
+    queryKey: ["studentLessonHistory"],
+    queryFn: async () => (await api.get<StudentLessonHistoryItem[]>("/me/lessons/history")).data,
+  });
+}
+
+export interface TeacherLessonReviewItem {
+  studentName: string;
+  rating: number;
+  comment: string | null;
+}
+
+export interface TeacherLessonHistoryItem {
+  lessonId: string;
+  topic: string | null;
+  conductedAt: string;
+  groupName: string | null;
+  totalStudents: number;
+  presentCount: number;
+  lateCount: number;
+  absentCount: number;
+  excusedCount: number;
+  avgRating: number | null;
+  reviewCount: number;
+  reviews: TeacherLessonReviewItem[];
+}
+
+export function useTeacherLessonHistory() {
+  return useQuery({
+    queryKey: ["teacherLessonHistory"],
+    queryFn: async () => (await api.get<TeacherLessonHistoryItem[]>("/teachers/me/lessons/history")).data,
+  });
+}
+
+export interface PendingModerationReview {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  studentName: string;
+  teacherName: string;
+  topic: string | null;
+  conductedAt: string;
+}
+
+export function useModerationQueue() {
+  return useQuery({
+    queryKey: ["moderationQueue"],
+    queryFn: async () => (await api.get<PendingModerationReview[]>("/moderator/lesson-reviews")).data,
+  });
+}
+
+export function useApproveLessonReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.post(`/moderator/lesson-reviews/${id}/approve`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["moderationQueue"] }),
+  });
+}
+
+export function useRejectLessonReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.post(`/moderator/lesson-reviews/${id}/reject`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["moderationQueue"] }),
   });
 }
 

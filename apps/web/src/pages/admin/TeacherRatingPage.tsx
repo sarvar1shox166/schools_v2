@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { Avatar, Card, CardHead, Icon, StatCard } from "@chess-school/ui";
 import {
   useTeacherRankings, useTeacherReviews, useAddTeacherReview, useDeleteTeacherReview, useTeachers,
-  useStudentReviewsForTeacher, type TeacherRanking,
+  useStudentReviewsForTeacher, useModerationQueue, useApproveLessonReview, useRejectLessonReview,
+  type TeacherRanking,
 } from "../../lib/queries.js";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -134,6 +135,15 @@ function StudentReviewsCard({ rankings }: { rankings: TeacherRanking[] }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontWeight: 750, fontSize: 14 }}>{r.studentName}</span>
                   <Stars rating={r.rating} size={14} />
+                  {r.comment && r.moderationStatus !== "approved" && (
+                    <span style={{
+                      fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
+                      background: r.moderationStatus === "pending" ? "#fef3c7" : "#fee2e2",
+                      color: r.moderationStatus === "pending" ? "#d97706" : "#dc2626",
+                    }}>
+                      {r.moderationStatus === "pending" ? "Kutilmoqda" : "Olib tashlangan"}
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 3 }}>
                   {r.topic ?? "Dars"} · {r.conductedAt}
@@ -145,6 +155,71 @@ function StudentReviewsCard({ rankings }: { rankings: TeacherRanking[] }) {
                 «{r.comment}»
               </div>
             )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function ModerationQueueCard() {
+  const { data: queue = [], isLoading } = useModerationQueue();
+  const approve = useApproveLessonReview();
+  const reject = useRejectLessonReview();
+
+  return (
+    <Card style={{ padding: 0 }}>
+      <div style={{ padding: "18px 22px 14px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)" }}>
+        <span style={{ fontSize: 18 }}>🚦</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800, fontSize: 15.5 }}>Moderatsiya navbati</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: 2 }}>
+            Yangi izohlar — o'qituvchiga ko'rsatishdan oldin tekshiring
+          </div>
+        </div>
+        {queue.length > 0 && (
+          <span style={{ padding: "4px 12px", borderRadius: 99, background: "#fef3c7", color: "#d97706", fontSize: 12, fontWeight: 700 }}>
+            {queue.length} ta kutilmoqda
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: "12px 22px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {isLoading ? (
+          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-faint)" }}>Yuklanmoqda...</div>
+        ) : queue.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-faint)" }}>
+            Ko'rib chiqiladigan izoh yo'q 🎉
+          </div>
+        ) : queue.map((r) => (
+          <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", background: "var(--surface-2)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <Avatar name={r.studentName} size="sm" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 750, fontSize: 14 }}>{r.studentName}</span>
+                  <Stars rating={r.rating} size={14} />
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 3 }}>
+                  → {r.teacherName} · {r.topic ?? "Dars"} · {r.conductedAt}
+                </div>
+              </div>
+            </div>
+            {r.comment && (
+              <div style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13.5, marginBottom: 10 }}>
+                «{r.comment}»
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" style={{ flex: 1, background: "#fee2e2", color: "#dc2626", border: "none" }}
+                disabled={reject.isPending} onClick={() => reject.mutate(r.id)}>
+                <Icon name="x" size={13} /> Olib tashlash
+              </button>
+              <button className="btn" style={{ flex: 1, background: "#d1fae5", color: "#059669", border: "none" }}
+                disabled={approve.isPending} onClick={() => approve.mutate(r.id)}>
+                <Icon name="check" size={13} /> Tasdiqlash
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -279,6 +354,8 @@ export default function TeacherRatingPage() {
             ))}
           </div>
         </Card>
+
+        <ModerationQueueCard />
 
         <StudentReviewsCard rankings={rankings} />
       </div>
