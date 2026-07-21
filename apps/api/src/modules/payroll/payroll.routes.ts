@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
+import { computeTeacherEarnings } from "./payroll.service.js";
 
 const rateSchema = z.object({
   groupRate: z.number().nonnegative().optional(),
@@ -129,63 +130,9 @@ export async function payrollRoutes(app: FastifyInstance) {
     const body = periodSchema.parse(request.body);
     const { tenantId } = request.user;
 
-    // Per-lesson pay, from actual conducted sessions this period.
-    const lessonRows = await pool.query(
-      `SELECT
-         ls.teacher_id AS "teacherId",
-         SUM(CASE WHEN ls.lesson_type = 'group' THEN ls.amount ELSE 0 END) AS "groupAmount",
-         SUM(CASE WHEN ls.lesson_type = 'individual' THEN ls.amount ELSE 0 END) AS "individualAmount",
-         SUM(CASE WHEN ls.lesson_type = 'diagnostic' THEN ls.amount ELSE 0 END) AS "diagnosticAmount",
-         SUM(ls.amount) AS "totalAmount"
-       FROM lesson_sessions ls
-       JOIN teachers t ON t.id = ls.teacher_id
-       WHERE t.tenant_id = $1 AND to_char(ls.date, 'YYYY-MM') = $2 AND ls.teacher_id IS NOT NULL
-       GROUP BY ls.teacher_id`,
-      [tenantId, body.period]
-    );
-    const lessonTotalsByTeacher = new Map(lessonRows.rows.map((r) => [r.teacherId as string, r]));
-
-    // Every teacher who has a salary_type configured (monthly_fixed / percent_income
-    // need a payroll row even with zero lessons this period; per_lesson teachers without
-    // any lesson_sessions this period are skipped, same as before).
-    const teachersRes = await pool.query(
-      `SELECT t.id AS "teacherId", COALESCE(tr.salary_type, 'per_lesson') AS "salaryType",
-              COALESCE(tr.monthly_amount, 0) AS "monthlyAmount",
-              COALESCE(tr.income_percent, 0) AS "incomePercent"
-       FROM teachers t
-       LEFT JOIN teacher_rates tr ON tr.teacher_id = t.id
-       WHERE t.tenant_id = $1`,
-      [tenantId]
-    );
-
+    const earnings = await computeTeacherEarnings(pool, tenantId!, body.period);
     let count = 0;
-    for (const t of teachersRes.rows) {
-      let groupAmount = 0, individualAmount = 0, diagnosticAmount = 0, totalAmount = 0;
-
-      if (t.salaryType === "monthly_fixed") {
-        totalAmount = Number(t.monthlyAmount);
-      } else if (t.salaryType === "percent_income") {
-        // Revenue from that teacher's own students' package purchases, paid within the period.
-        const revenueRes = await pool.query(
-          `SELECT COALESCE(SUM(tx.amount), 0) AS revenue
-           FROM transactions tx
-           JOIN student_packages sp ON sp.id = tx.student_package_id
-           JOIN group_members gm ON gm.student_id = sp.student_id
-           JOIN groups g ON g.id = gm.group_id
-           WHERE g.teacher_id = $1 AND tx.status = 'paid' AND to_char(tx.created_at, 'YYYY-MM') = $2`,
-          [t.teacherId, body.period]
-        );
-        const revenue = Number(revenueRes.rows[0].revenue);
-        totalAmount = revenue * (Number(t.incomePercent) / 100);
-      } else {
-        const ls = lessonTotalsByTeacher.get(t.teacherId);
-        if (!ls) continue; // per_lesson, no sessions this period — nothing to record
-        groupAmount = Number(ls.groupAmount);
-        individualAmount = Number(ls.individualAmount);
-        diagnosticAmount = Number(ls.diagnosticAmount);
-        totalAmount = Number(ls.totalAmount);
-      }
-
+    for (const e of earnings) {
       await pool.query(
         `INSERT INTO payroll_records (teacher_id, period, group_amount, individual_amount, diagnostic_amount, total_amount)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -193,11 +140,118 @@ export async function payrollRoutes(app: FastifyInstance) {
            group_amount = EXCLUDED.group_amount, individual_amount = EXCLUDED.individual_amount,
            diagnostic_amount = EXCLUDED.diagnostic_amount, total_amount = EXCLUDED.total_amount,
            generated_at = now()`,
-        [t.teacherId, body.period, groupAmount, individualAmount, diagnosticAmount, totalAmount]
+        [e.teacherId, body.period, e.groupAmount, e.individualAmount, e.diagnosticAmount, e.totalAmount]
       );
       count++;
     }
 
     return reply.code(201).send({ ok: true, count });
   });
+
+  // ---- Manual payouts (admin qo'lda o'qituvchi kartasiga tashlab bergan pul) ----
+
+  app.get(
+    "/payroll/summary",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] },
+    async (request) => {
+      const { period } = periodSchema.parse(request.query);
+      const { tenantId } = request.user;
+
+      const earnings = await computeTeacherEarnings(pool, tenantId!, period);
+      const earningsByTeacher = new Map(earnings.map((e) => [e.teacherId, e.totalAmount]));
+
+      const { rows } = await pool.query(
+        `SELECT t.id AS "teacherId", u.full_name AS "teacherName",
+                COALESCE(po.total_paid, 0) AS "totalPaid"
+         FROM teachers t
+         JOIN users u ON u.id = t.user_id
+         LEFT JOIN (
+           SELECT teacher_id, SUM(amount) AS total_paid
+           FROM teacher_payouts
+           GROUP BY teacher_id
+         ) po ON po.teacher_id = t.id
+         WHERE t.tenant_id = $1
+         ORDER BY u.full_name`,
+        [tenantId]
+      );
+
+      return rows.map((r) => {
+        const earnedThisPeriod = earningsByTeacher.get(r.teacherId) ?? 0;
+        const totalPaid = Number(r.totalPaid);
+        return {
+          teacherId: r.teacherId,
+          teacherName: r.teacherName,
+          earnedThisPeriod,
+          totalPaid,
+          balance: earnedThisPeriod - totalPaid,
+        };
+      });
+    }
+  );
+
+  app.get(
+    "/teachers/:id/payouts",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { tenantId } = request.user;
+      const teacherRes = await pool.query(`SELECT id FROM teachers WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+      if (!teacherRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+
+      const { rows } = await pool.query(
+        `SELECT tp.id, tp.amount, tp.note, tp.paid_at AS "paidAt", tp.created_at AS "createdAt",
+                u.full_name AS "createdByName"
+         FROM teacher_payouts tp
+         LEFT JOIN users u ON u.id = tp.created_by
+         WHERE tp.teacher_id = $1
+         ORDER BY tp.paid_at DESC, tp.created_at DESC`,
+        [id]
+      );
+      return rows;
+    }
+  );
+
+  const payoutSchema = z.object({
+    amount: z.number().positive(),
+    note: z.string().optional(),
+    paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  });
+
+  app.post(
+    "/teachers/:id/payouts",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { tenantId, sub } = request.user;
+      const body = payoutSchema.parse(request.body);
+
+      const teacherRes = await pool.query(`SELECT id FROM teachers WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+      if (!teacherRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+
+      const { rows } = await pool.query(
+        `INSERT INTO teacher_payouts (tenant_id, teacher_id, amount, note, paid_at, created_by)
+         VALUES ($1, $2, $3, $4, COALESCE($5, CURRENT_DATE), $6)
+         RETURNING id`,
+        [tenantId, id, body.amount, body.note ?? null, body.paidAt ?? null, sub]
+      );
+      return reply.code(201).send({ id: rows[0].id });
+    }
+  );
+
+  app.delete(
+    "/teachers/:id/payouts/:payoutId",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] },
+    async (request, reply) => {
+      const { id, payoutId } = request.params as { id: string; payoutId: string };
+      const { tenantId } = request.user;
+      const { rowCount } = await pool.query(
+        `DELETE FROM teacher_payouts tp
+         USING teachers t
+         WHERE tp.id = $1 AND tp.teacher_id = $2 AND tp.teacher_id = t.id AND t.tenant_id = $3`,
+        [payoutId, id, tenantId]
+      );
+      if (!rowCount) return reply.code(404).send({ error: "Not found" });
+      return { ok: true };
+    }
+  );
 }

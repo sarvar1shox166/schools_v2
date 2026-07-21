@@ -11,6 +11,7 @@ import SchedulePage from "./pages/admin/SchedulePage.js";
 import AttendancePage from "./pages/admin/AttendancePage.js";
 import PaymentsPage from "./pages/admin/PaymentsPage.js";
 import IncomeReportPage from "./pages/admin/IncomeReportPage.js";
+import PayrollPage from "./pages/admin/PayrollPage.js";
 import NotificationsPage from "./pages/admin/NotificationsPage.js";
 import BroadcastPage from "./pages/admin/BroadcastPage.js";
 import ReportsPage from "./pages/admin/ReportsPage.js";
@@ -85,6 +86,7 @@ const ADMIN_NAV: NavSection[] = [
       { to: "/admin/packages", label: "Paketlar",   icon: "wallet" },
       { to: "/admin/payments", label: "To'lovlar",  icon: "payments", badge: 3 },
       { to: "/admin/income",   label: "Daromadlar", icon: "income" },
+      { to: "/admin/payroll",  label: "O'qituvchilarga to'lov", icon: "wallet" },
     ],
   },
   {
@@ -175,6 +177,7 @@ export default function App() {
             <Route path="/admin/packages"       element={<PackagesPage />} />
             <Route path="/admin/payments"       element={<PaymentsPage />} />
             <Route path="/admin/income"         element={<IncomeReportPage />} />
+            <Route path="/admin/payroll"        element={<PayrollPage />} />
             <Route path="/admin/teacher-rating"           element={<TeacherRatingPage />} />
             <Route path="/admin/video-courses"           element={<VideoCoursesPage />} />
             <Route path="/admin/video-courses/:courseId" element={<VideoCourseDetailPage />} />
