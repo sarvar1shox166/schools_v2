@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { api } from "./api.js";
 import { queryClient } from "../main.js";
 
+// Backend cheklovi bilan bir xil bo'lishi kerak (apps/api/src/lib/storage.ts UPLOAD_LIMITS.video).
+export const MAX_VIDEO_UPLOAD_BYTES = 3 * 1024 * 1024 * 1024; // 3 GB
+export const MAX_VIDEO_UPLOAD_GB = 3;
+
 export interface VideoUploadJob {
   id: number;
   title: string;
@@ -43,7 +47,10 @@ export function cancelVideoUpload(id: number) {
 }
 
 function extractErrorMessage(err: unknown): string {
-  const anyErr = err as { response?: { data?: { error?: string } }; message?: string };
+  const anyErr = err as { response?: { data?: { error?: string }; status?: number }; message?: string };
+  if (anyErr.response?.status === 413) {
+    return `Fayl juda katta. Maksimal video hajmi: ${MAX_VIDEO_UPLOAD_GB} GB`;
+  }
   return anyErr.response?.data?.error || "Video yuklashda xatolik yuz berdi";
 }
 
@@ -61,6 +68,22 @@ export function startLessonUpload(input: StartLessonUploadInput) {
   const id = nextId++;
   const controller = new AbortController();
   controllers.set(id, controller);
+
+  if (input.videoFile.size > MAX_VIDEO_UPLOAD_BYTES) {
+    jobs = [...jobs, {
+      id, title: input.title, status: "error",
+      error: `Fayl juda katta (${(input.videoFile.size / 1024 / 1024 / 1024).toFixed(2)} GB). Maksimal video hajmi: ${MAX_VIDEO_UPLOAD_GB} GB`,
+      progressPct: 0, loadedBytes: 0, totalBytes: input.videoFile.size,
+    }];
+    emit();
+    setTimeout(() => {
+      jobs = jobs.filter((j) => j.id !== id);
+      controllers.delete(id);
+      emit();
+    }, 6000);
+    return;
+  }
+
   jobs = [...jobs, {
     id, title: input.title, status: "uploading",
     progressPct: 0, loadedBytes: 0, totalBytes: input.videoFile.size,

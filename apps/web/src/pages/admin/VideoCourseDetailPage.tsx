@@ -7,7 +7,8 @@ import {
   useVideoQuiz, useAddQuizQuestion, useDeleteQuizQuestion, useUploadImage,
   type VideoCourse, type VideoLessonItem,
 } from "../../lib/queries.js";
-import { startLessonUpload } from "../../lib/videoUpload.js";
+import { startLessonUpload, MAX_VIDEO_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_GB } from "../../lib/videoUpload.js";
+import { showError } from "../../lib/errorToast.js";
 import {
   CATEGORIES, CAT_COLORS, formatDuration, AddCourseModal, labelSt,
 } from "./VideoCoursesPage.js";
@@ -131,8 +132,20 @@ function AddLessonModal({ courseId, lesson, onClose }: { courseId: string; lesso
                 </div>
               )}
             </div>
+            <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 5 }}>
+              Maksimal video hajmi: {MAX_VIDEO_UPLOAD_GB} GB
+            </div>
             <input ref={videoRef} type="file" accept="video/*" style={{ display: "none" }}
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) setVideoFile(f); }} />
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                if (f.size > MAX_VIDEO_UPLOAD_BYTES) {
+                  showError(`Fayl juda katta (${(f.size / 1024 / 1024 / 1024).toFixed(2)} GB). Maksimal video hajmi: ${MAX_VIDEO_UPLOAD_GB} GB`);
+                  e.target.value = "";
+                  return;
+                }
+                setVideoFile(f);
+              }} />
           </div>
 
           <div>
