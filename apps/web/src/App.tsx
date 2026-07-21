@@ -92,7 +92,7 @@ const ADMIN_NAV: NavSection[] = [
     items: [
       { to: "/admin/staff",          label: "Xodimlar",         icon: "users" },
       { to: "/admin/broadcast",     label: "Ommaviy xabar",    icon: "message" },
-      { to: "/admin/notifications", label: "Bildirishnomalar", icon: "bell",    badge: 3 },
+      { to: "/admin/notifications", label: "Bildirishnomalar", icon: "bell" },
       { to: "/admin/reports",       label: "Hisobotlar",       icon: "reports" },
       { to: "/admin/settings",      label: "Sozlamalar",       icon: "settings" },
     ],
@@ -121,7 +121,7 @@ const TEACHER_NAV: NavSection[] = [
   {
     group: "Muloqot",
     items: [
-      { to: "/teacher/notifications", label: "Bildirishnomalar", icon: "bell", badge: 3 },
+      { to: "/teacher/notifications", label: "Bildirishnomalar", icon: "bell" },
     ],
   },
   {

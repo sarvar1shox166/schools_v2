@@ -1168,6 +1168,9 @@ export function useNotifications(unreadOnly = false) {
   return useQuery({
     queryKey: ["notifications", unreadOnly],
     queryFn: async () => (await api.get<AppNotification[]>("/notifications", { params: unreadOnly ? { unread: "true" } : {} })).data,
+    // WS push (useNotificationSocket) invalidates this instantly on a new notification;
+    // polling here is only a safety net for when the socket is down.
+    refetchInterval: 60000,
   });
 }
 

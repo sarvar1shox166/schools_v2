@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
+import { pushNotificationPing } from "./notifications.ws.js";
 
 const broadcastSchema = z.object({
   title: z.string().min(1),
@@ -90,9 +91,10 @@ export async function notificationsRoutes(app: FastifyInstance) {
        SELECT u.tenant_id, u.id, $5, $4, $2, $3
        FROM users u
        WHERE u.tenant_id = $1 AND u.is_active = true ${roleFilter}
-       RETURNING id`,
+       RETURNING id, user_id AS "userId"`,
       params
     );
+    for (const row of rows) pushNotificationPing(row.userId);
 
     return reply.code(201).send({ ok: true, sent: rows.length });
   });

@@ -22,6 +22,7 @@ import { payrollRoutes } from "./modules/payroll/payroll.routes.js";
 import { gamificationRoutes } from "./modules/gamification/gamification.routes.js";
 import { pvpRoutes } from "./modules/pvp/pvp.ws.js";
 import { notificationsRoutes } from "./modules/notifications/notifications.routes.js";
+import { notificationsWsRoutes } from "./modules/notifications/notifications.ws.js";
 import { reportsRoutes } from "./modules/reports/reports.routes.js";
 import { teacherPortalRoutes } from "./modules/teacher-portal/teacher-portal.routes.js";
 import { materialsRoutes } from "./modules/materials/materials.routes.js";
@@ -105,6 +106,7 @@ export async function buildApp() {
   app.register(gamificationRoutes, { prefix: "/api/v1" });
   app.register(pvpRoutes, { prefix: "/api/v1" });
   app.register(notificationsRoutes, { prefix: "/api/v1" });
+  app.register(notificationsWsRoutes, { prefix: "/api/v1" });
   app.register(reportsRoutes, { prefix: "/api/v1" });
   app.register(teacherPortalRoutes, { prefix: "/api/v1" });
   app.register(materialsRoutes, { prefix: "/api/v1" });

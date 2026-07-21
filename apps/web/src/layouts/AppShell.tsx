@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { Icon, XpToastHost } from "@chess-school/ui";
 import { useAuthStore } from "../lib/auth-store.js";
 import { useMyXp, usePendingLessonReviews, useUnreadNotifications } from "../lib/queries.js";
+import { useNotificationSocket } from "../lib/notificationSocket.js";
 import { Sidebar, type NavSection } from "./Sidebar.js";
 import { LessonReviewModal } from "../components/LessonReviewModal.js";
 import { StreakModal } from "../components/StreakModal.js";
@@ -97,6 +98,7 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   const navigate = useNavigate();
   const location = useLocation();
   const { data: unread } = useUnreadNotifications();
+  useNotificationSocket();
   const isStudent = user?.role === "student";
   const { data: xpData } = useMyXp(isStudent);
 
@@ -151,7 +153,19 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   // Faqat admin realmidagi (bir nechta xodim rollari bo'lishi mumkin) navigatsiya
   // rolga qarab filtrlanadi — teacher/student nav'lari o'zgarmaydi.
   const isAdminRealm = !!nav?.[0]?.items[0]?.to.startsWith("/admin");
-  const filteredNav = nav && isAdminRealm && user ? filterNavByRole(nav, user.role) : nav;
+  const roleFilteredNav = nav && isAdminRealm && user ? filterNavByRole(nav, user.role) : nav;
+  // "Bildirishnomalar" nav qatoridagi belgi haqiqiy o'qilmagan sonini ko'rsatishi kerak
+  // (avval qattiq kodlangan qiymat edi) — 0 bo'lsa belgi butunlay yashiriladi.
+  const filteredNav = useMemo(() => {
+    if (!roleFilteredNav) return roleFilteredNav;
+    const count = unread?.count ?? 0;
+    return roleFilteredNav.map((section) => ({
+      ...section,
+      items: section.items.map((item) =>
+        item.to.endsWith("/notifications") ? { ...item, badge: count > 0 ? count : undefined } : item
+      ),
+    }));
+  }, [roleFilteredNav, unread?.count]);
 
   return (
     <div className={"app" + (isStudent ? " kid-theme" : "") + (!isStudent && collapsed ? " collapsed" : "") + (isStudent && mobOpen ? " mob-open" : "")}>

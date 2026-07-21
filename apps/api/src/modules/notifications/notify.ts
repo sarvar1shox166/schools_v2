@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { sendTelegramMessage } from "./telegram-bot.js";
+import { pushNotificationPing } from "./notifications.ws.js";
 
 export async function notifyStudent(
   db: Pool | PoolClient,
@@ -47,4 +48,5 @@ export async function createNotification(db: Pool | PoolClient, input: CreateNot
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [input.tenantId, input.userId, input.type, input.icon ?? "bell", input.title, input.body ?? null]
   );
+  pushNotificationPing(input.userId);
 }
