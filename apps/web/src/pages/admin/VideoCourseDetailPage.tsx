@@ -4,14 +4,125 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Card, Icon } from "@chess-school/ui";
 import {
   useVideoCourseDetail, useDeleteVideoCourse, useUpdateVideoLesson, useDeleteVideoLesson,
-  useVideoQuiz, useAddQuizQuestion, useDeleteQuizQuestion, useUploadImage,
-  type VideoCourse, type VideoLessonItem,
+  useVideoQuiz, useAddQuizQuestion, useDeleteQuizQuestion, useUploadImage, useUpdateVideoCourse,
+  useCourseExam, useAddExamQuestion, useDeleteExamQuestion,
+  type VideoCourse, type VideoLessonItem, type VideoCourseDetail,
 } from "../../lib/queries.js";
 import { startLessonUpload, MAX_VIDEO_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_GB } from "../../lib/videoUpload.js";
 import { showError } from "../../lib/errorToast.js";
 import {
   CATEGORIES, CAT_COLORS, formatDuration, AddCourseModal, labelSt,
 } from "./VideoCoursesPage.js";
+
+// ---- Yakuniy test (kurs darajasida) ----
+function ExamSection({ courseId }: { courseId: string }) {
+  const { data: questions = [] } = useCourseExam(courseId);
+  const addQuestion = useAddExamQuestion();
+  const deleteQuestion = useDeleteExamQuestion();
+
+  const [q, setQ] = useState("");
+  const [opts, setOpts] = useState(["", "", "", ""]);
+  const [correctIndex, setCorrectIndex] = useState(0);
+
+  async function handleAdd() {
+    const cleanOpts = opts.map((o) => o.trim()).filter(Boolean);
+    if (!q.trim() || cleanOpts.length < 2) return;
+    await addQuestion.mutateAsync({ courseId, question: q.trim(), options: cleanOpts, correctIndex: Math.min(correctIndex, cleanOpts.length - 1) });
+    setQ(""); setOpts(["", "", "", ""]); setCorrectIndex(0);
+  }
+
+  return (
+    <Card style={{ padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <span style={{ fontSize: 18 }}>🏆</span>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>Yakuniy test</div>
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
+            Kursning barcha darslarini tugatgan o'quvchi shu testni topshiradi
+          </div>
+        </div>
+      </div>
+
+      <label style={labelSt}>SAVOLLAR ({questions.length})</label>
+      {questions.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+          {questions.map((qq, i) => (
+            <div key={qq.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: "var(--surface-2)" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{i + 1}. {qq.question}</span>
+              <button onClick={() => deleteQuestion.mutate({ questionId: qq.id, courseId })}
+                style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center" }}>
+                <Icon name="x" size={12} style={{ color: "#ef4444" }} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ border: "1px dashed var(--border)", borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        <input className="inp" style={{ width: "100%" }} placeholder="Savol matni"
+          value={q} onChange={(e) => setQ(e.target.value)} />
+        {opts.map((o, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="radio" checked={correctIndex === i} onChange={() => setCorrectIndex(i)} title="To'g'ri javob" />
+            <input className="inp" style={{ width: "100%" }} placeholder={`Variant ${i + 1}${i < 2 ? "" : " (ixtiyoriy)"}`}
+              value={o} onChange={(e) => setOpts(opts.map((v, idx) => idx === i ? e.target.value : v))} />
+          </div>
+        ))}
+        <button type="button" className="btn sm" onClick={handleAdd} disabled={addQuestion.isPending}>
+          <Icon name="plus" size={12} /> Savol qo'shish
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+// ---- Kurs sozlamalari: XP miqdorlari ----
+function CourseSettingsCard({ course }: { course: VideoCourseDetail }) {
+  const updateCourse = useUpdateVideoCourse();
+  const [lessonXp, setLessonXp] = useState(String(course.lessonCompletionXp));
+  const [courseXp, setCourseXp] = useState(String(course.courseCompletionXp));
+  const [saved, setSaved] = useState(false);
+
+  async function handleSave() {
+    await updateCourse.mutateAsync({
+      id: course.id,
+      lessonCompletionXp: Math.max(0, Number(lessonXp) || 0),
+      courseCompletionXp: Math.max(0, Number(courseXp) || 0),
+    });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  return (
+    <Card style={{ padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <span style={{ fontSize: 18 }}>⚙️</span>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>Kurs sozlamalari</div>
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
+            XP faqat video to'liq ko'rilgan VA testi (bo'lsa) muvaffaqiyatli topshirilganda beriladi
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <label style={labelSt}>HAR BIR DARSNI TUGATISH UCHUN XP</label>
+          <input className="inp" style={{ width: "100%" }} type="number" min={0} value={lessonXp}
+            onChange={(e) => setLessonXp(e.target.value)} />
+        </div>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <label style={labelSt}>KURSNI TUGATISH UCHUN XP</label>
+          <input className="inp" style={{ width: "100%" }} type="number" min={0} value={courseXp}
+            onChange={(e) => setCourseXp(e.target.value)} />
+        </div>
+      </div>
+      <button className="btn primary" style={{ marginTop: 14 }} disabled={updateCourse.isPending} onClick={handleSave}>
+        {updateCourse.isPending ? "Saqlanmoqda..." : saved ? "✓ Saqlandi" : "Saqlash"}
+      </button>
+    </Card>
+  );
+}
 
 // ---- Quiz section (per lesson) ----
 function QuizSection({ videoId }: { videoId: string }) {
@@ -318,6 +429,8 @@ export default function VideoCourseDetailPage() {
         </div>
       </Card>
 
+      <CourseSettingsCard course={course} />
+
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>Video darslar</h3>
         <button className="btn primary" onClick={() => setShowAddLesson(true)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -338,6 +451,8 @@ export default function VideoCourseDetailPage() {
           ))
         )}
       </Card>
+
+      <ExamSection courseId={course.id} />
 
       {showEditCourse && <AddCourseModal course={course} onClose={() => setShowEditCourse(false)} />}
       {showAddLesson && <AddLessonModal courseId={course.id} onClose={() => setShowAddLesson(false)} />}

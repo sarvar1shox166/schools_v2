@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { awardXp } from "../gamification/xp.js";
+import { checkLessonCompletion, checkCourseCompletion } from "./course-completion.js";
 import {
   uploadFile, uploadStream, deleteFile, keyFromUrl, looksLikeTextMarkup,
   assertAllowedMimeType, assertContentMatchesMimeType, UploadValidationError, UPLOAD_LIMITS,
@@ -16,6 +17,8 @@ const createCourseSchema = z.object({
   thumbnailUrl: z.string().optional(),
   thumbnailColor: z.string().optional(),
   thumbnailIcon: z.string().optional(),
+  lessonCompletionXp: z.number().int().min(0).optional(),
+  courseCompletionXp: z.number().int().min(0).optional(),
 });
 
 const updateCourseSchema = createCourseSchema.partial();
@@ -40,6 +43,16 @@ const quizQuestionSchema = z.object({
 });
 
 const quizSubmitSchema = z.object({
+  answers: z.array(z.number().int().min(0)),
+});
+
+const examQuestionSchema = z.object({
+  question: z.string().min(1),
+  options: z.array(z.string().min(1)).min(2),
+  correctIndex: z.number().int().min(0),
+});
+
+const examSubmitSchema = z.object({
   answers: z.array(z.number().int().min(0)),
 });
 
@@ -84,6 +97,7 @@ export async function videosRoutes(app: FastifyInstance) {
     const { rows } = await pool.query(
       `SELECT c.id, c.title, c.category, c.thumbnail_url AS "thumbnailUrl", c.thumbnail_color AS "thumbnailColor",
               c.thumbnail_icon AS "thumbnailIcon",
+              c.lesson_completion_xp AS "lessonCompletionXp", c.course_completion_xp AS "courseCompletionXp",
               COUNT(DISTINCT v.id)::int AS "videoCount",
               ${watchedSelect} AS "watchedCount"
        FROM video_courses c
@@ -103,7 +117,8 @@ export async function videosRoutes(app: FastifyInstance) {
 
     const courseRes = await pool.query(
       `SELECT id, title, category, thumbnail_url AS "thumbnailUrl", thumbnail_color AS "thumbnailColor",
-              thumbnail_icon AS "thumbnailIcon"
+              thumbnail_icon AS "thumbnailIcon",
+              lesson_completion_xp AS "lessonCompletionXp", course_completion_xp AS "courseCompletionXp"
        FROM video_courses WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId]
     );
@@ -112,18 +127,22 @@ export async function videosRoutes(app: FastifyInstance) {
 
     let progressJoin = "";
     let progressSelect = "0";
+    let lessonDoneSelect = "false";
     const params: unknown[] = [id];
+    let studentId: string | null = null;
     if (role === "student") {
-      const studentId = await getStudentIdForUser(sub);
+      studentId = await getStudentIdForUser(sub);
       params.push(studentId);
       progressJoin = `LEFT JOIN video_progress vp ON vp.video_id = v.id AND vp.student_id = $${params.length}`;
       progressSelect = "COALESCE(vp.progress_pct, 0)";
+      lessonDoneSelect = "(vp.lesson_xp_awarded_at IS NOT NULL)";
     }
 
     const lessonsRes = await pool.query(
       `SELECT v.id, v.title, v.video_url AS "videoUrl", v.duration_seconds AS "durationSeconds",
               v.thumbnail_url AS "thumbnailUrl",
-              ${progressSelect} AS "progressPct"
+              ${progressSelect} AS "progressPct",
+              ${lessonDoneSelect} AS "lessonDone"
        FROM video_lessons v
        ${progressJoin}
        WHERE v.course_id = $1
@@ -131,7 +150,22 @@ export async function videosRoutes(app: FastifyInstance) {
       params
     );
 
-    return { ...course, lessons: lessonsRes.rows };
+    let exam: { questionCount: number; completed: boolean; allLessonsDone: boolean } | undefined;
+    if (role === "student" && studentId) {
+      const examQRes = await pool.query(
+        `SELECT count(*)::int AS n FROM video_course_exam_questions WHERE course_id = $1`, [id]
+      );
+      const completedRes = await pool.query(
+        `SELECT 1 FROM video_course_completions WHERE student_id = $1 AND course_id = $2`, [studentId, id]
+      );
+      exam = {
+        questionCount: examQRes.rows[0].n,
+        completed: completedRes.rows.length > 0,
+        allLessonsDone: lessonsRes.rows.length > 0 && lessonsRes.rows.every((r) => r.lessonDone),
+      };
+    }
+
+    return { ...course, lessons: lessonsRes.rows, exam };
   });
 
   app.post("/video-courses", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
@@ -143,10 +177,11 @@ export async function videosRoutes(app: FastifyInstance) {
     if (role === "teacher") teacherId = await getTeacherIdForUser(sub);
 
     const { rows } = await pool.query(
-      `INSERT INTO video_courses (tenant_id, teacher_id, title, category, thumbnail_url, thumbnail_color, thumbnail_icon)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      `INSERT INTO video_courses (tenant_id, teacher_id, title, category, thumbnail_url, thumbnail_color, thumbnail_icon, lesson_completion_xp, course_completion_xp)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [tenantId, teacherId, body.title, body.category,
-       body.thumbnailUrl ?? null, body.thumbnailColor ?? null, body.thumbnailIcon ?? null]
+       body.thumbnailUrl ?? null, body.thumbnailColor ?? null, body.thumbnailIcon ?? null,
+       body.lessonCompletionXp ?? 0, body.courseCompletionXp ?? 0]
     );
     return reply.code(201).send({ id: rows[0].id });
   });
@@ -161,10 +196,13 @@ export async function videosRoutes(app: FastifyInstance) {
          category = COALESCE($2, category),
          thumbnail_url = COALESCE($3, thumbnail_url),
          thumbnail_color = COALESCE($4, thumbnail_color),
-         thumbnail_icon = COALESCE($5, thumbnail_icon)
-       WHERE id = $6 AND tenant_id = $7`,
+         thumbnail_icon = COALESCE($5, thumbnail_icon),
+         lesson_completion_xp = COALESCE($6, lesson_completion_xp),
+         course_completion_xp = COALESCE($7, course_completion_xp)
+       WHERE id = $8 AND tenant_id = $9`,
       [body.title ?? null, body.category ?? null, body.thumbnailUrl ?? null,
-       body.thumbnailColor ?? null, body.thumbnailIcon ?? null, id, tenantId]
+       body.thumbnailColor ?? null, body.thumbnailIcon ?? null,
+       body.lessonCompletionXp ?? null, body.courseCompletionXp ?? null, id, tenantId]
     );
     if (!rowCount) return reply.code(404).send({ error: "Not found" });
     return { ok: true };
@@ -402,12 +440,21 @@ export async function videosRoutes(app: FastifyInstance) {
         [studentId, id, body.progressPct]
       );
 
+      let xpResult: Awaited<ReturnType<typeof awardXp>> | undefined;
+      let xpAwarded: number | undefined;
       if (body.progressPct >= 100 && !wasCompleted) {
-        const xpResult = await awardXp(client, studentId, VIDEO_XP_REWARD);
-        await client.query("COMMIT");
-        return { ...xpResult, xpAwarded: VIDEO_XP_REWARD };
+        xpResult = await awardXp(client, studentId, VIDEO_XP_REWARD);
+        xpAwarded = VIDEO_XP_REWARD;
       }
+
+      let completion: { lessonXpAwarded?: number; courseXpAwarded?: number } = {};
+      if (body.progressPct >= 100) {
+        completion = await checkLessonCompletion(client, studentId, id);
+      }
+
       await client.query("COMMIT");
+      if (xpResult) return { ...xpResult, xpAwarded, ...completion };
+      if (completion.lessonXpAwarded || completion.courseXpAwarded) return { ...completion };
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;
@@ -515,13 +562,107 @@ export async function videosRoutes(app: FastifyInstance) {
         [studentId, id, score, questions.length]
       );
 
+      let xpResult: Awaited<ReturnType<typeof awardXp>> | undefined;
       if (already.rows.length === 0 && score === questions.length) {
-        const xpResult = await awardXp(client, studentId, QUIZ_XP_REWARD);
-        await client.query("COMMIT");
-        return { score, total: questions.length, ...xpResult, xpAwarded: QUIZ_XP_REWARD };
+        xpResult = await awardXp(client, studentId, QUIZ_XP_REWARD);
       }
+
+      const completion = await checkLessonCompletion(client, studentId, id);
+
       await client.query("COMMIT");
-      return { score, total: questions.length };
+      if (xpResult) return { score, total: questions.length, ...xpResult, xpAwarded: QUIZ_XP_REWARD, ...completion };
+      return { score, total: questions.length, ...completion };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  });
+
+  // ── Kurs yakuniy testi ───────────────────────────────────────────────────────
+
+  app.get("/video-courses/:id/exam", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { role, tenantId } = request.user;
+    const courseRes = await pool.query(`SELECT id FROM video_courses WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    if (!courseRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+    const { rows } = await pool.query(
+      `SELECT id, question, options, correct_index AS "correctIndex"
+       FROM video_course_exam_questions WHERE course_id = $1 ORDER BY sort_order, created_at`,
+      [id]
+    );
+    if (role === "student") {
+      return rows.map(({ id: qid, question, options }) => ({ id: qid, question, options }));
+    }
+    return rows;
+  });
+
+  app.post("/video-courses/:id/exam", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = examQuestionSchema.parse(request.body);
+    const { tenantId } = request.user;
+    const courseRes = await pool.query(`SELECT id FROM video_courses WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    if (!courseRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+    const { rows } = await pool.query(
+      `INSERT INTO video_course_exam_questions (course_id, question, options, correct_index)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [id, body.question, JSON.stringify(body.options), body.correctIndex]
+    );
+    return reply.code(201).send({ id: rows[0].id });
+  });
+
+  app.delete("/video-courses/exam/:questionId", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "teacher")] }, async (request, reply) => {
+    const { questionId } = request.params as { questionId: string };
+    const { tenantId } = request.user;
+    const { rowCount } = await pool.query(
+      `DELETE FROM video_course_exam_questions q
+       USING video_courses c
+       WHERE q.id = $1 AND c.id = q.course_id AND c.tenant_id = $2`,
+      [questionId, tenantId]
+    );
+    if (!rowCount) return reply.code(404).send({ error: "Not found" });
+    return { ok: true };
+  });
+
+  app.post("/video-courses/:id/exam/submit", { onRequest: [app.requireRole("student")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = examSubmitSchema.parse(request.body);
+    const { tenantId } = request.user;
+    const studentId = await getStudentIdForUser(request.user.sub);
+    if (!studentId) return reply.code(404).send({ error: "Student not found" });
+
+    const courseRes = await pool.query(`SELECT id FROM video_courses WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    if (!courseRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+
+    const { rows: questions } = await pool.query(
+      `SELECT id, correct_index AS "correctIndex" FROM video_course_exam_questions
+       WHERE course_id = $1 ORDER BY sort_order, created_at`,
+      [id]
+    );
+    if (questions.length === 0) return reply.code(400).send({ error: "Bu kursda yakuniy test yo'q" });
+
+    let score = 0;
+    for (let i = 0; i < questions.length; i++) {
+      if (body.answers[i] === questions[i].correctIndex) score++;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint)`, [`course-exam:${studentId}:${id}`]);
+
+      await client.query(
+        `INSERT INTO video_course_exam_attempts (student_id, course_id, score, total)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (student_id, course_id) DO UPDATE SET score = $3, total = $4, created_at = now()`,
+        [studentId, id, score, questions.length]
+      );
+
+      const courseXpAwarded = await checkCourseCompletion(client, studentId, id);
+
+      await client.query("COMMIT");
+      return { score, total: questions.length, courseXpAwarded };
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;

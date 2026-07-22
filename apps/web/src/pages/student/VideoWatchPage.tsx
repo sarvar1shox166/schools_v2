@@ -57,10 +57,12 @@ export default function VideoWatchPage() {
 
   async function finish() {
     if (!videoId) return;
-    const res = await submitQuiz.mutateAsync({ videoId, answers: answers.map(a => a ?? -1) });
+    const res = await submitQuiz.mutateAsync({ videoId, answers: answers.map(a => a ?? -1), courseId });
     setResult(res);
     setPhase("done");
     if (res.xpAwarded) showXp(res.xpAwarded, `Test tugadi! ${res.score}/${res.total} to'g'ri`);
+    if (res.lessonXpAwarded) setTimeout(() => showXp(res.lessonXpAwarded!, "Dars to'liq tugallandi!"), res.xpAwarded ? 1600 : 0);
+    if (res.courseXpAwarded) setTimeout(() => showXp(res.courseXpAwarded!, "Kurs tugatildi! Tabriklaymiz 🏆"), (res.xpAwarded ? 1600 : 0) + (res.lessonXpAwarded ? 1600 : 0));
   }
 
   function handleTimeUpdate(e: React.SyntheticEvent<HTMLVideoElement>) {
@@ -80,6 +82,8 @@ export default function VideoWatchPage() {
     updateProgress.mutate({ videoId, progressPct: 100, courseId }, {
       onSuccess: (res) => {
         if (res.xpAwarded) showXp(res.xpAwarded, "Video ko'rib bo'ldingiz!");
+        if (res.lessonXpAwarded) setTimeout(() => showXp(res.lessonXpAwarded!, "Dars to'liq tugallandi!"), res.xpAwarded ? 1600 : 0);
+        if (res.courseXpAwarded) setTimeout(() => showXp(res.courseXpAwarded!, "Kurs tugatildi! Tabriklaymiz 🏆"), (res.xpAwarded ? 1600 : 0) + (res.lessonXpAwarded ? 1600 : 0));
       },
     });
   }

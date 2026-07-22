@@ -1576,6 +1576,8 @@ export interface VideoCourse {
   thumbnailIcon: string | null;
   videoCount: number;
   watchedCount: number;
+  lessonCompletionXp: number;
+  courseCompletionXp: number;
 }
 
 export interface VideoLessonItem {
@@ -1585,10 +1587,18 @@ export interface VideoLessonItem {
   durationSeconds: number | null;
   thumbnailUrl: string | null;
   progressPct: number;
+  lessonDone: boolean;
+}
+
+export interface VideoCourseExamStatus {
+  questionCount: number;
+  completed: boolean;
+  allLessonsDone: boolean;
 }
 
 export interface VideoCourseDetail extends VideoCourse {
   lessons: VideoLessonItem[];
+  exam?: VideoCourseExamStatus;
 }
 
 export function useVideoCourses(category?: string) {
@@ -1612,6 +1622,7 @@ export function useCreateVideoCourse() {
     mutationFn: async (payload: {
       title: string; category: string;
       thumbnailUrl?: string; thumbnailColor?: string; thumbnailIcon?: string;
+      lessonCompletionXp?: number; courseCompletionXp?: number;
     }) => (await api.post<{ id: string }>("/video-courses", payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["video-courses"] }),
   });
@@ -1623,6 +1634,7 @@ export function useUpdateVideoCourse() {
     mutationFn: async ({ id, ...payload }: {
       id: string; title?: string; category?: string;
       thumbnailUrl?: string; thumbnailColor?: string; thumbnailIcon?: string;
+      lessonCompletionXp?: number; courseCompletionXp?: number;
     }) => (await api.patch(`/video-courses/${id}`, payload)).data,
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["video-courses"] });
@@ -1697,7 +1709,10 @@ export function useUpdateVideoProgress() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ videoId, progressPct }: { videoId: string; progressPct: number; courseId?: string }) =>
-      (await api.post<{ xp?: number; level?: number; streak?: number; xpAwarded?: number }>(`/videos/${videoId}/progress`, { progressPct })).data,
+      (await api.post<{
+        xp?: number; level?: number; streak?: number; xpAwarded?: number;
+        lessonXpAwarded?: number; courseXpAwarded?: number;
+      }>(`/videos/${videoId}/progress`, { progressPct })).data,
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["video-courses"] });
       if (vars.courseId) qc.invalidateQueries({ queryKey: ["video-course", vars.courseId] });
@@ -1739,9 +1754,58 @@ export function useDeleteQuizQuestion() {
 }
 
 export function useSubmitQuiz() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ videoId, answers }: { videoId: string; answers: number[] }) =>
-      (await api.post<{ score: number; total: number; xpAwarded?: number }>(`/videos/${videoId}/quiz/submit`, { answers })).data,
+    mutationFn: async ({ videoId, answers, courseId }: { videoId: string; answers: number[]; courseId?: string }) =>
+      (await api.post<{
+        score: number; total: number; xpAwarded?: number;
+        lessonXpAwarded?: number; courseXpAwarded?: number;
+      }>(`/videos/${videoId}/quiz/submit`, { answers })).data,
+    onSuccess: (_d, vars) => {
+      if (vars.courseId) qc.invalidateQueries({ queryKey: ["video-course", vars.courseId] });
+    },
+  });
+}
+
+export interface VideoCourseExamQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctIndex?: number; // faqat admin/teacher uchun
+}
+
+export function useCourseExam(courseId: string | undefined) {
+  return useQuery({
+    queryKey: ["courseExam", courseId],
+    enabled: !!courseId,
+    queryFn: async () => (await api.get<VideoCourseExamQuestion[]>(`/video-courses/${courseId}/exam`)).data,
+  });
+}
+
+export function useAddExamQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ courseId, ...body }: { courseId: string; question: string; options: string[]; correctIndex: number }) =>
+      (await api.post<{ id: string }>(`/video-courses/${courseId}/exam`, body)).data,
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["courseExam", vars.courseId] }),
+  });
+}
+
+export function useDeleteExamQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ questionId }: { questionId: string; courseId: string }) =>
+      (await api.delete(`/video-courses/exam/${questionId}`)).data,
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["courseExam", vars.courseId] }),
+  });
+}
+
+export function useSubmitCourseExam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ courseId, answers }: { courseId: string; answers: number[] }) =>
+      (await api.post<{ score: number; total: number; courseXpAwarded?: number }>(`/video-courses/${courseId}/exam/submit`, { answers })).data,
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["video-course", vars.courseId] }),
   });
 }
 
