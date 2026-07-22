@@ -361,7 +361,9 @@ function WeeklyView({ teacherFilter, onOpenAdd, onOpenView }: {
                   <td style={tdTime}>{hour}</td>
                   {weekDates.map((d, di) => {
                     const dateStr = toDateStr(d);
-                    const cellSlots = (byDate.get(dateStr) ?? []).filter((s) => String(s.startTime).slice(0, 5) === hour);
+                    // Slot vaqti "11:24" kabi bo'lsa ham, o'sha soatning qatoriga tushishi kerak —
+                    // faqat soat qismini solishtiramiz, daqiqa istalgan bo'lishi mumkin.
+                    const cellSlots = (byDate.get(dateStr) ?? []).filter((s) => String(s.startTime).slice(0, 2) === hour.slice(0, 2));
                     return (
                       <td key={di} style={tdCell}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -1172,6 +1174,9 @@ function LessonCard({ slot, onClick }: { slot: ScheduleOccurrenceSlot; onClick: 
         )}
       </div>
       <div style={{ fontSize: 11, marginTop: 3, display: "flex", gap: 4, flexWrap: "wrap" }}>
+        <span style={{ color: "var(--text-faint)", fontWeight: 700 }}>
+          {String(slot.startTime).slice(0, 5)}
+        </span>
         {slot.lessonType !== "guruh" && (
           <span style={{ color: "#f59e0b", fontWeight: 700 }}>
             {slot.lessonType === "individual" ? "ind." : "diag."}
