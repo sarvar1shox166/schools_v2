@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Link } from "react-router-dom";
 import { Icon, XpToastHost } from "@chess-school/ui";
 import { useAuthStore } from "../lib/auth-store.js";
 import { useMyXp, usePendingLessonReviews, useUnreadNotifications } from "../lib/queries.js";
 import { useNotificationSocket } from "../lib/notificationSocket.js";
+import { usePvpSocket } from "../lib/pvpSocket.js";
 import { Sidebar, type NavSection } from "./Sidebar.js";
 import { LessonReviewModal } from "../components/LessonReviewModal.js";
 import { StreakModal } from "../components/StreakModal.js";
 import { VideoUploadToast } from "../components/VideoUploadToast.js";
+import { NotificationsModal } from "../components/NotificationsModal.js";
+import { PvpChallengeModal } from "../components/PvpChallengeModal.js";
 
 function AutoLessonReviewPrompt() {
   const { data: pending = [] } = usePendingLessonReviews();
@@ -100,6 +102,8 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   const { data: unread } = useUnreadNotifications();
   useNotificationSocket();
   const isStudent = user?.role === "student";
+  const pvp = usePvpSocket(isStudent);
+  const [pvpModalOpen, setPvpModalOpen] = useState(false);
   const { data: xpData } = useMyXp(isStudent);
 
   const studentMeta = isStudent ? (STUDENT_PAGE_META[location.pathname] ?? { title, sub: "" }) : null;
@@ -121,6 +125,7 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   );
   const [mobOpen, setMobOpen] = useState(false);
   const [streakModalOpen, setStreakModalOpen] = useState(false);
+  const [notifModalOpen, setNotifModalOpen] = useState(false);
   // Close mobile sidebar on route change
   useEffect(() => { setMobOpen(false); }, [location.pathname]);
 
@@ -204,13 +209,19 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                 <span className="pill pill-streak" onClick={() => setStreakModalOpen(true)} style={{ cursor: "pointer" }} title="Kunlik streak bonusi">
                   <span className="kid-fire">🔥</span>{xpData?.streak ?? 0} kun
                 </span>
-                <Link to="/student/pvp" className="tb-btn" title="Jonli o'yin">
+                <button
+                  className="tb-btn"
+                  title={pvp.incomingChallenge ? "Sizni o'yinga chaqirishmoqda!" : "Jonli o'yin"}
+                  style={{ position: "relative" }}
+                  onClick={() => (pvp.incomingChallenge ? setPvpModalOpen(true) : navigate("/student/pvp"))}
+                >
                   <Icon name="swords" size={17} />
-                </Link>
+                  {!!pvp.incomingChallenge && <span className="dot" />}
+                </button>
               </div>
               <button
                 className="tb-btn"
-                onClick={() => notifRoute && navigate(notifRoute)}
+                onClick={() => (isStudent ? setNotifModalOpen(true) : notifRoute && navigate(notifRoute))}
                 title="Bildirishnomalar"
                 style={{ position: "relative" }}
               >
@@ -294,6 +305,15 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
         </main>
       </div>
       {isStudent && streakModalOpen && <StreakModal onClose={() => setStreakModalOpen(false)} />}
+      {isStudent && notifModalOpen && <NotificationsModal onClose={() => setNotifModalOpen(false)} />}
+      {isStudent && pvpModalOpen && pvp.incomingChallenge && (
+        <PvpChallengeModal
+          challenge={pvp.incomingChallenge}
+          onAccept={() => { pvp.respondChallenge(true); setPvpModalOpen(false); }}
+          onDecline={() => { pvp.respondChallenge(false); setPvpModalOpen(false); }}
+          onClose={() => setPvpModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

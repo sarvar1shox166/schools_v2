@@ -4,13 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { Chess } from "chess.js";
 import type { PvpGameState } from "./PvpGamePage.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
-import { useAuthStore } from "../../lib/auth-store.js";
+import { usePvpSocket, type OnlinePlayer, type IncomingChallenge, type PvpStatus } from "../../lib/pvpSocket.js";
 
 /* ── Shared helpers ──────────────────────────────────────────────────────── */
-function tcToSeconds(tc: string): number {
-  const [min, inc = "0"] = tc.split("+");
-  return parseInt(min) * 60 + parseInt(inc);
-}
 function fmt(s: number) {
   const m = Math.floor(s / 60), sec = s % 60;
   return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
@@ -94,8 +90,6 @@ function PvpBoardWithCoords({ fen, onMove, flipped, disabled, getMoves }: {
   );
 }
 
-const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
 const RESULT_LABELS: Record<string, string> = {
   white_wins:           "Oq g'alaba qozondi (mat)",
   black_wins:           "Qora g'alaba qozondi (mat)",
@@ -130,11 +124,6 @@ const DIFF_ELO: Record<number, number> = {
 function initials(name: string) {
   return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 }
-
-type Status = "disconnected" | "connecting" | "lobby" | "queued" | "playing" | "finished";
-
-interface OnlinePlayer { studentId: string; fullName: string; elo: number; inGame: boolean; }
-interface IncomingChallenge { fromStudentId: string; fromName: string; fromElo: number; tc: string; tcType: string; }
 
 /* ── Challenge notification (rasmdagi kabi) ──────────────────────────────── */
 function ChallengeNotification({ ch, onAccept, onDecline }: {
@@ -382,7 +371,7 @@ function CustomTimeModal({ onClose, onConfirm }: {
 
 /* ── Lobby screen ────────────────────────────────────────────────────────── */
 function LobbyScreen({ status, onlinePlayers, myElo, onJoinQueue, onChallenge, onComputerGame, challengeSent }: {
-  status: Status;
+  status: PvpStatus;
   onlinePlayers: OnlinePlayer[];
   myElo: number;
   onJoinQueue: () => void;
@@ -552,172 +541,15 @@ function LobbyScreen({ status, onlinePlayers, myElo, onJoinQueue, onChallenge, o
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
 export default function PvpPage() {
-  const accessToken = useAuthStore(s => s.accessToken);
-  const [status,           setStatus]           = useState<Status>("disconnected");
-  const [color,            setColor]            = useState<"w"|"b"|null>(null);
-  const [opponent,         setOpponent]         = useState<string|null>(null);
-  const [opponentElo,      setOpponentElo]      = useState<number>(1200);
-  const [fen,              setFen]              = useState(START_FEN);
-  const [error,            setError]            = useState<string|null>(null);
-  const [result,           setResult]           = useState<string|null>(null);
-  const [myElo,            setMyElo]            = useState(1200);
-  const [onlinePlayers,    setOnlinePlayers]    = useState<OnlinePlayer[]>([]);
-  const [incomingChallenge,setIncomingChallenge]= useState<IncomingChallenge|null>(null);
-  const [challengeTarget,  setChallengeTarget]  = useState<OnlinePlayer|null>(null);
-  const [challengeSent,    setChallengeSent]    = useState<string|null>(null);
-  const [gameTc,           setGameTc]           = useState<string|null>(null);
-  const [gameTcType,       setGameTcType]       = useState<string|null>(null);
-  const [moves,            setMoves]            = useState<string[]>([]);
-  const [turn,             setTurn]             = useState<"w"|"b">("w");
-  const [mySeconds,        setMySeconds]        = useState(300);
-  const [opSeconds,        setOpSeconds]        = useState(300);
-  const wsRef    = useRef<WebSocket|null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval>|null>(null);
+  const {
+    status, myElo, onlinePlayers, incomingChallenge, challengeSent,
+    color, opponent, opponentElo, fen, gameTc, gameTcType, moves, turn,
+    mySeconds, opSeconds, result, error,
+    joinQueue, leaveQueue, sendChallenge, respondChallenge, handleMove, resign, playAgain, reconnect,
+  } = usePvpSocket();
+  const [challengeTarget, setChallengeTarget] = useState<OnlinePlayer | null>(null);
   const boardColRef = useRef<HTMLDivElement>(null);
   const boardSize = useBoardSizePvp(boardColRef);
-
-  /* ── Auto-connect on mount ── */
-  useEffect(() => {
-    if (!accessToken) return;
-    connect();
-    return () => { wsRef.current?.close(); };
-  }, [accessToken]);
-
-  function connect() {
-    if (wsRef.current && wsRef.current.readyState <= 1) return; // already connecting/open
-    setStatus("connecting");
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${window.location.host}/api/v1/ws/pvp`);
-    wsRef.current = ws;
-
-    // Token travels as the first WS message, not a URL query param, so it never
-    // ends up in proxy access logs or browser history.
-    ws.onopen    = () => { ws.send(JSON.stringify({ type: "auth", token: accessToken })); };
-    ws.onerror   = () => { setError("Ulanishda xatolik"); setStatus("disconnected"); };
-    ws.onclose   = () => {
-      setOnlinePlayers([]);
-      setStatus(s => s === "playing" ? "finished" : "disconnected");
-    };
-
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      switch (msg.type) {
-        case "connected":
-          setMyElo(msg.myElo ?? 1200);
-          setStatus("lobby");
-          break;
-        case "online_list":
-          setOnlinePlayers(msg.players ?? []);
-          break;
-        case "queued":
-          setStatus("queued");
-          break;
-        case "left_queue":
-          setStatus("lobby");
-          break;
-        case "challenge_received":
-          setIncomingChallenge({ fromStudentId:msg.fromStudentId, fromName:msg.fromName, fromElo:msg.fromElo??1200, tc:msg.tc??"5+0", tcType:msg.tcType??"BLITS" });
-          break;
-        case "challenge_accepted":
-          setChallengeSent(null);
-          break;
-        case "challenge_declined":
-          setChallengeSent(null);
-          setError(`${msg.byName} taklifni rad etdi`);
-          setTimeout(() => setError(null), 3000);
-          break;
-        case "matched": {
-          const secs = tcToSeconds(msg.tc ?? "5+0");
-          setIncomingChallenge(null);
-          setChallengeSent(null);
-          setColor(msg.color);
-          setOpponent(msg.opponent ?? null);
-          setOpponentElo(msg.opponentElo ?? 1200);
-          setFen(msg.fen ?? START_FEN);
-          setGameTc(msg.tc ?? null);
-          setGameTcType(msg.tcType ?? null);
-          setStatus("playing");
-          setResult(null);
-          setError(null);
-          setMoves([]);
-          setTurn("w");
-          setMySeconds(secs);
-          setOpSeconds(secs);
-          break;
-        }
-        case "move":
-          setFen(msg.fen);
-          setTurn(msg.turn ?? "w");
-          setMoves(m => [...m, `${msg.from}${msg.to}`]);
-          if (msg.gameOver) { setResult(msg.result); setStatus("finished"); }
-          break;
-        case "ended":
-          setResult(msg.reason);
-          setStatus("finished");
-          break;
-        case "error":
-          setError(msg.message);
-          break;
-      }
-    };
-  }
-
-  function joinQueue() {
-    wsRef.current?.send(JSON.stringify({ type:"join_queue" }));
-  }
-
-  function leaveQueue() {
-    wsRef.current?.send(JSON.stringify({ type:"leave_queue" }));
-  }
-
-  function sendChallenge(target: OnlinePlayer, tc: string, tcType: string) {
-    setChallengeTarget(null);
-    setChallengeSent(target.studentId);
-    wsRef.current?.send(JSON.stringify({ type:"challenge", targetStudentId:target.studentId, tc, tcType }));
-  }
-
-  function respondChallenge(accept: boolean) {
-    if (!incomingChallenge) return;
-    wsRef.current?.send(JSON.stringify({
-      type: accept ? "challenge_accept" : "challenge_decline",
-      fromStudentId: incomingChallenge.fromStudentId,
-    }));
-    setIncomingChallenge(null);
-  }
-
-  function handleMove(from: string, to: string) {
-    setError(null);
-    wsRef.current?.send(JSON.stringify({ type:"move", from, to, promotion:"q" }));
-  }
-
-  function resign() {
-    wsRef.current?.send(JSON.stringify({ type:"resign" }));
-  }
-
-  /* ── Timer ─────────────────────────────────────────────────────────────── */
-  useEffect(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (status !== "playing") return;
-    const isMyTurn = turn === color;
-    timerRef.current = setInterval(() => {
-      if (isMyTurn) {
-        setMySeconds(s => { if (s <= 1) { resign(); return 0; } return s - 1; });
-      } else {
-        setOpSeconds(s => Math.max(0, s - 1));
-      }
-    }, 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [status, turn, color]);
-
-  function playAgain() {
-    setFen(START_FEN);
-    setColor(null);
-    setOpponent(null);
-    setResult(null);
-    setError(null);
-    setMoves([]);
-    setStatus("lobby");
-  }
 
   return (
     <div>
@@ -735,7 +567,7 @@ export default function PvpPage() {
         <ChallengePickerModal
           target={challengeTarget}
           onClose={() => setChallengeTarget(null)}
-          onChallenge={(tc, tcType) => sendChallenge(challengeTarget, tc, tcType)}
+          onChallenge={(tc, tcType) => { sendChallenge(challengeTarget.studentId, tc, tcType); setChallengeTarget(null); }}
         />
       )}
 
@@ -747,7 +579,7 @@ export default function PvpPage() {
           <div style={{ fontWeight:800,fontSize:17 }}>Ulanilmagan</div>
           <div style={{ fontSize:13,color:"rgba(255,255,255,.45)" }}>Server bilan aloqa o'rnatib bo'lmadi</div>
           {error && <div style={{ fontSize:12,color:"#f87171" }}>{error}</div>}
-          <button onClick={connect}
+          <button onClick={reconnect}
             style={{ padding:"11px 28px",borderRadius:12,border:"none",background:"#3b82f6",color:"#fff",fontWeight:700,cursor:"pointer" }}>
             Qayta ulanish
           </button>

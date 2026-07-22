@@ -9,12 +9,14 @@ function send(socket: WebSocket, payload: unknown) {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(payload));
 }
 
-/** Yangi bildirishnoma yozilganda chaqiriladi — shu foydalanuvchining ochiq
- *  tablariga signal yuboradi, ular esa REST orqali ro'yxatni qayta so'raydi. */
-export function pushNotificationPing(userId: string) {
+/** Yangi bildirishnoma (yoki boshqa real-time hodisa) yuz berganda chaqiriladi —
+ *  shu foydalanuvchining ochiq tablariga signal yuboradi, ular esa REST orqali
+ *  tegishli ro'yxatni qayta so'raydi. `type: "new"` — bildirishnomalar ro'yxati;
+ *  `type: "lessonEnded"` — dars tugadi, kutilayotgan baholash bo'lishi mumkin. */
+export function pushNotificationPing(userId: string, type: "new" | "lessonEnded" = "new") {
   const sockets = userSockets.get(userId);
   if (!sockets) return;
-  for (const s of sockets) send(s, { type: "new" });
+  for (const s of sockets) send(s, { type });
 }
 
 export async function notificationsWsRoutes(app: FastifyInstance) {

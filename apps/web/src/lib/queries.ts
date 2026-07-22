@@ -147,6 +147,9 @@ export function usePendingLessonReviews() {
   return useQuery({
     queryKey: ["pendingLessonReviews"],
     queryFn: async () => (await api.get<PendingLessonReview[]>("/me/lessons/pending-reviews")).data,
+    // WS push ("lessonEnded") invalidates this instantly when a lesson ends;
+    // polling here is only a safety net for when the socket is down.
+    refetchInterval: 60000,
   });
 }
 

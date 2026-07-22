@@ -23,7 +23,12 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const MIN_MINUTES_BEFORE_END = 5;
+function fmtCountdown(ms: number): string {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 export default function TLiveLessonPage() {
   const { scheduleSlotId } = useParams<{ scheduleSlotId: string }>();
@@ -66,19 +71,24 @@ export default function TLiveLessonPage() {
     setAttMap(init);
   }, [students, existingAtt]);
 
+  // Sekundiga yangilanadi — tugash sanog'i sahifani yangilamasdan real vaqtda ko'rinishi kerak.
   const [, setTick] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setTick((v) => v + 1), 15000);
+    const t = setInterval(() => setTick((v) => v + 1), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const canEnd = useMemo(() => {
-    if (!slot) return false;
+  const scheduledEndMs = useMemo(() => {
+    if (!slot) return null;
     const [h, m] = slot.startTime.split(":").map(Number);
-    const startMs = new Date();
-    startMs.setHours(h, m, 0, 0);
-    return Date.now() >= startMs.getTime() + MIN_MINUTES_BEFORE_END * 60000;
-  }, [slot]);
+    const start = new Date();
+    start.setHours(h, m, 0, 0);
+    return start.getTime() + slot.durationMinutes * 60000;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slot?.startTime, slot?.durationMinutes]);
+
+  const msRemaining = scheduledEndMs != null ? scheduledEndMs - Date.now() : 0;
+  const canEnd = scheduledEndMs != null && msRemaining <= 0;
 
   function changeAtt(id: string, status: AttStatus) {
     setAttMap((prev) => ({ ...prev, [id]: status }));
@@ -164,19 +174,29 @@ export default function TLiveLessonPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {slot.isOnline && slot.meetingUrl && (
-            <button className="btn" style={{ background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.35)", color: "#fff" }}
-              onClick={() => window.open(slot.meetingUrl!, "_blank", "noreferrer")}>
-              🎥 Darsga kirish
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {slot.isOnline && slot.meetingUrl && (
+              <button className="btn" style={{ background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.35)", color: "#fff" }}
+                onClick={() => window.open(slot.meetingUrl!, "_blank", "noreferrer")}>
+                🎥 Darsga kirish
+              </button>
+            )}
+            <button className="btn primary" style={{ background: canEnd ? "#fff" : "rgba(255,255,255,.3)", color: "#065f46", cursor: canEnd ? "pointer" : "not-allowed" }}
+              disabled={!canEnd || ending}
+              title={canEnd ? "" : "Dars rejalashtirilgan vaqti tugamaguncha yakunlab bo'lmaydi"}
+              onClick={handleEndLesson}>
+              ⏹ {ending ? "Tugatilmoqda..." : "Darsni tugatish"}
             </button>
+          </div>
+          {!canEnd && (
+            <div style={{
+              fontSize: 12.5, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,.18)",
+              padding: "4px 12px", borderRadius: 8, fontVariantNumeric: "tabular-nums",
+            }}>
+              ⏱ Tugashiga: {fmtCountdown(msRemaining)}
+            </div>
           )}
-          <button className="btn primary" style={{ background: canEnd ? "#fff" : "rgba(255,255,255,.3)", color: "#065f46", cursor: canEnd ? "pointer" : "not-allowed" }}
-            disabled={!canEnd || ending}
-            title={canEnd ? "" : `Dars boshlanganidan ${MIN_MINUTES_BEFORE_END} daqiqa o'tgach faollashadi`}
-            onClick={handleEndLesson}>
-            ⏹ {ending ? "Tugatilmoqda..." : "Darsni tugatish"}
-          </button>
         </div>
       </div>
 

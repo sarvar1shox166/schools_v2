@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { assignedTeacherIds } from "../../lib/moderator.js";
+import { pushNotificationPing } from "../notifications/notifications.ws.js";
 
 const createSchema = z.object({
   scheduleSlotId: z.string().uuid().optional(),
@@ -431,7 +432,8 @@ export async function lessonsRoutes(app: FastifyInstance) {
 
     const slotRes = await pool.query(
       `SELECT sl.id, sl.group_id AS "groupId", sl.lesson_type AS "lessonType",
-              sl.meeting_url AS "zoomLink", COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId"
+              sl.meeting_url AS "zoomLink", COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId",
+              sl.start_time AS "startTime", sl.duration_minutes AS "durationMinutes"
        FROM schedule_slots sl LEFT JOIN groups g ON g.id = sl.group_id
        WHERE sl.id = $1 AND sl.tenant_id = $2`,
       [body.scheduleSlotId, tenantId]
@@ -439,7 +441,22 @@ export async function lessonsRoutes(app: FastifyInstance) {
     const slot = slotRes.rows[0];
     if (!slot || slot.teacherId !== teacherId) return reply.code(403).send({ error: "Forbidden" });
 
+    // Dars rejalashtirilgan davomiyligi tugamasdan yakunlanishiga yo'l qo'yilmaydi —
+    // frontend'dagi cheklov faqat UX, haqiqiy tekshiruv shu yerda bo'lishi kerak.
+    const [startH, startM] = String(slot.startTime).split(":").map(Number);
+    const scheduledStart = new Date();
+    scheduledStart.setHours(startH, startM, 0, 0);
+    const scheduledEnd = new Date(scheduledStart.getTime() + slot.durationMinutes * 60000);
+    if (Date.now() < scheduledEnd.getTime()) {
+      return reply.code(400).send({
+        error: "Dars hali tugamagan",
+        endsAt: scheduledEnd.toISOString(),
+      });
+    }
+
     const client = await pool.connect();
+    let lessonId: string | null = null;
+    let homeworkId: string | null = null;
     try {
       await client.query("BEGIN");
       const lessonRes = await client.query(
@@ -449,8 +466,28 @@ export async function lessonsRoutes(app: FastifyInstance) {
          RETURNING id`,
         [tenantId, slot.id, slot.groupId, teacherId, today, body.topic ?? null, slot.zoomLink]
       );
+      lessonId = lessonRes.rows[0]?.id ?? null;
+      if (!lessonId) {
+        // ON CONFLICT DO NOTHING — dars bugun uchun allaqachon yaratilgan, o'sha yozuvni olamiz.
+        const existing = await client.query(
+          `SELECT id FROM lessons WHERE schedule_slot_id = $1 AND conducted_at = $2`,
+          [slot.id, today]
+        );
+        lessonId = existing.rows[0]?.id ?? null;
+      }
 
-      let homeworkId: string | null = null;
+      // Davomat odatda dars tugashidan oldin (jonli darsda) belgilanadi — o'sha payt
+      // hali lessons yozuvi yo'q edi, shuning uchun attendance_records.lesson_id bo'sh
+      // qolgan bo'lishi mumkin. Endi dars yaratilgach, shu kunga tegishli davomat
+      // yozuvlarini shu darsga bog'lab qo'yamiz (baholash/dars tarixi shunga tayanadi).
+      if (lessonId) {
+        await client.query(
+          `UPDATE attendance_records SET lesson_id = $1
+           WHERE schedule_slot_id = $2 AND date = $3 AND lesson_id IS NULL`,
+          [lessonId, slot.id, today]
+        );
+      }
+
       if (body.homework && lessonRes.rows.length > 0 && slot.lessonType === "guruh" && slot.groupId) {
         const hwRes = await client.query(
           `INSERT INTO homework (tenant_id, group_id, title, description, due_date, xp_reward)
@@ -461,12 +498,26 @@ export async function lessonsRoutes(app: FastifyInstance) {
         homeworkId = hwRes.rows[0].id;
       }
       await client.query("COMMIT");
-      return reply.code(201).send({ lessonId: lessonRes.rows[0]?.id ?? null, homeworkId });
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;
     } finally {
       client.release();
     }
+
+    // Darsda qatnashgan (p/l) o'quvchilarga real-time signal — ular ilovada bo'lsa,
+    // ustozni baholash oynasi darhol ochiladi (AutoLessonReviewPrompt).
+    if (lessonId) {
+      const attendees = await pool.query(
+        `SELECT u.id AS "userId" FROM attendance_records ar
+         JOIN students s ON s.id = ar.student_id
+         JOIN users u ON u.id = s.user_id
+         WHERE ar.lesson_id = $1 AND ar.status IN ('p', 'l')`,
+        [lessonId]
+      );
+      for (const row of attendees.rows) pushNotificationPing(row.userId, "lessonEnded");
+    }
+
+    return reply.code(201).send({ lessonId, homeworkId });
   });
 }

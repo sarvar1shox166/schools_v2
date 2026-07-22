@@ -127,6 +127,14 @@ export default function TeacherDashboard() {
 
   const countdown = useCountdown(nextLesson?.startTime);
 
+  const liveLessonEndTime = useMemo(() => {
+    if (!liveLesson) return undefined;
+    const [h, m] = liveLesson.startTime.split(":").map(Number);
+    const total = h * 60 + m + (liveLesson.durationMinutes ?? 90);
+    return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  }, [liveLesson]);
+  const liveCountdown = useCountdown(liveLessonEndTime);
+
   /* hero data */
   const firstName        = profile?.fullName?.split(" ")[0] ?? "Ustoz";
   const initials         = (profile?.fullName ?? "AK").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
@@ -325,6 +333,7 @@ export default function TeacherDashboard() {
               </div>
               <div style={{ fontSize:13.5, opacity:0.85 }}>
                 {liveLesson.startTime.slice(0,5)} · {studentsMap[liveLesson.groupName ?? ""] ?? slotStudents.length} o'quvchi
+                {" · "}⏱ tugashiga {liveCountdown.m}:{liveCountdown.s}
               </div>
             </div>
 

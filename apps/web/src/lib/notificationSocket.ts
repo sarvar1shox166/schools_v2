@@ -34,6 +34,9 @@ function connect(token: string) {
       const msg = JSON.parse(e.data);
       if (msg.type === "new") {
         queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      } else if (msg.type === "lessonEnded") {
+        // Dars hozirgina tugadi — kutilayotgan baholash bo'lsa, modal darhol ochilishi uchun.
+        queryClient.invalidateQueries({ queryKey: ["pendingLessonReviews"] });
       }
     } catch {
       // e'tiborsiz — noto'g'ri formatdagi xabar
