@@ -769,10 +769,8 @@ function AddModal({ date, hour, groups, teachers, onClose, onCreate, isPending, 
           )}
           <div>
             <label style={labelStyle}>VAQT</label>
-            <select className="inp" style={{ width: "100%" }} value={form.time}
-              onChange={(e) => setForm({ ...form, time: e.target.value })}>
-              {HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
-            </select>
+            <input className="inp" type="time" style={{ width: "100%" }} value={form.time}
+              onChange={(e) => setForm({ ...form, time: e.target.value })} />
           </div>
         </div>
 
