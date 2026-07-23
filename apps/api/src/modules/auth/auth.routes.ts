@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../../env.js";
-import { findUserByLogin, findUserByTelegramId, linkTelegramId, verifyPassword } from "./auth.service.js";
+import { findUserByLogin, findUserByTelegramId, getUserAuthState, linkTelegramId, revokeAllSessions, verifyPassword } from "./auth.service.js";
 import { verifyTelegramInitData } from "./telegram.js";
 import { getRefreshJwt } from "../../plugins/auth.js";
 
@@ -17,6 +17,7 @@ const telegramSchema = z.object({
 function issueSession(app: FastifyInstance, user: {
   id: string; tenantId: string | null; branchId: string | null;
   role: "super_admin" | "admin" | "teacher" | "student"; fullName: string; phone: string; login: string;
+  tokenVersion: number;
 }) {
   const payload = {
     sub: user.id,
@@ -26,7 +27,9 @@ function issueSession(app: FastifyInstance, user: {
   };
 
   const accessToken = app.jwt.sign(payload, { expiresIn: "15m" });
-  const refreshToken = getRefreshJwt(app).sign(payload, { expiresIn: "30d" });
+  // Refresh-token ichiga joriy token_version (tv) muhrlanadi — parol tiklanganda
+  // yoki "hamma qurilmadan chiqish"da tv oshiriladi va eski tokenlar o'ladi.
+  const refreshToken = getRefreshJwt(app).sign({ ...payload, tv: user.tokenVersion }, { expiresIn: "30d" });
 
   return {
     accessToken,
@@ -118,11 +121,22 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "refreshToken required" });
     }
 
-    let payload: { sub: string; tenantId: string | null; branchId: string | null; role: "super_admin"|"admin"|"teacher"|"student" };
+    let payload: { sub: string; tenantId: string | null; branchId: string | null; role: "super_admin"|"admin"|"teacher"|"student"; tv?: number };
     try {
       payload = getRefreshJwt(app).verify<typeof payload>(refreshToken);
     } catch {
       return reply.code(401).send({ error: "Invalid or expired refresh token" });
+    }
+
+    // Revocation tekshiruvi: hisob hali faol va token bekor qilinmaganmi.
+    // Eski tokenlarda tv bo'lmaydi — ular 0-versiya deb qabul qilinadi, shuning
+    // uchun birinchi revoke'dan keyin ular ham ishlamay qoladi.
+    const state = await getUserAuthState(payload.sub);
+    if (!state || !state.isActive) {
+      return reply.code(401).send({ error: "Invalid or expired refresh token" });
+    }
+    if ((payload.tv ?? 0) !== state.tokenVersion) {
+      return reply.code(401).send({ error: "Session revoked" });
     }
 
     const newPayload = {
@@ -133,9 +147,16 @@ export async function authRoutes(app: FastifyInstance) {
     };
 
     const accessToken = app.jwt.sign(newPayload, { expiresIn: "15m" });
-    const newRefreshToken = getRefreshJwt(app).sign(newPayload, { expiresIn: "30d" });
+    const newRefreshToken = getRefreshJwt(app).sign({ ...newPayload, tv: state.tokenVersion }, { expiresIn: "30d" });
 
     return reply.send({ accessToken, refreshToken: newRefreshToken });
+  });
+
+  /** Hamma qurilmadan chiqish — foydalanuvchining barcha refresh-tokenlarini bekor qiladi.
+   *  Joriy access-token o'z muddati (≤15 daqiqa) tugaguncha ishlashda davom etadi. */
+  app.post("/auth/logout-all", { onRequest: [app.authenticate] }, async (request) => {
+    await revokeAllSessions(request.user.sub);
+    return { ok: true };
   });
 
   app.get("/auth/me", { onRequest: [app.authenticate] }, async (request) => {

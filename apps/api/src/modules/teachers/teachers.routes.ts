@@ -103,7 +103,7 @@ export async function teachersRoutes(app: FastifyInstance) {
     const newPassword = generateTempPassword();
     const passwordHash = await hashPassword(newPassword);
     const { rowCount } = await pool.query(
-      `UPDATE users SET password_hash = $1
+      `UPDATE users SET password_hash = $1, token_version = token_version + 1
        WHERE id = (SELECT user_id FROM teachers WHERE id = $2 AND tenant_id = $3)`,
       [passwordHash, id, tenantId]
     );

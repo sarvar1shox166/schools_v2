@@ -85,6 +85,8 @@ export async function staffRoutes(app: FastifyInstance) {
        SET full_name  = COALESCE($1, full_name),
            phone      = COALESCE($2, phone),
            is_active  = COALESCE($3, is_active),
+           -- Hisob o'chirilganda barcha refresh-tokenlar ham bekor qilinadi
+           token_version = CASE WHEN $3 = false THEN token_version + 1 ELSE token_version END,
            updated_at = now()
        WHERE id = $4 AND tenant_id = $5
          AND role IN ('operator', 'accountant', 'moderator', 'assistant_admin', 'admin')`,

@@ -28,10 +28,14 @@ declare module "fastify" {
   }
 }
 
+/** Refresh-token payload — access payload + token_version (revocation uchun).
+ *  `tv` ixtiyoriy: eski (0051-migratsiyadan avval berilgan) tokenlarda bo'lmaydi. */
+export type RefreshPayload = JwtPayload & { tv?: number };
+
 /** `@fastify/jwt`'s built-in types only model the default (non-namespaced) registration. */
 export interface RefreshJwt {
-  sign(payload: JwtPayload, options?: Record<string, unknown>): string;
-  verify<T = JwtPayload>(token: string): T;
+  sign(payload: RefreshPayload, options?: Record<string, unknown>): string;
+  verify<T = RefreshPayload>(token: string): T;
 }
 
 export function getRefreshJwt(app: import("fastify").FastifyInstance): RefreshJwt {
