@@ -5,6 +5,7 @@ import { Chess } from "chess.js";
 import type { PvpGameState } from "./PvpGamePage.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { usePvpSocket, type OnlinePlayer, type IncomingChallenge, type PvpStatus } from "../../lib/pvpSocket.js";
+import { getCaptured } from "../../lib/chessMaterial.js";
 
 /* ── Shared helpers ──────────────────────────────────────────────────────── */
 function fmt(s: number) {
@@ -30,31 +31,40 @@ function useBoardSizePvp(ref: React.RefObject<HTMLDivElement>) {
   return size;
 }
 
-function PvpPlayerCard({ name, elo, seconds, isMe, isActive }: {
-  name: string; elo: number; seconds: number; isMe?: boolean; isActive: boolean;
+function PvpPlayerCard({ name, elo, seconds, isMe, isActive, captured }: {
+  name: string; elo: number; seconds: number; isMe?: boolean; isActive: boolean; captured?: string[];
 }) {
   const avatarColor = isMe ? "#22c55e" : ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#22c55e"][name.charCodeAt(0)%5];
   const initls = name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
   const isLow = seconds <= 30 && seconds > 0;
   return (
-    <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",
-      background: isActive ? "rgba(37,99,235,.18)" : "rgba(255,255,255,.04)",
-      border:`1.5px solid ${isActive?"#3b82f6":"rgba(255,255,255,.1)"}`,
-      borderRadius:14,transition:"all .2s" }}>
-      <div style={{ width:44,height:44,borderRadius:12,background:avatarColor,
-        display:"grid",placeItems:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>
-        {initls}
+    <div style={{
+      background: isActive ? "linear-gradient(135deg,rgba(59,130,246,0.14) 0%,#141417 60%)" : "#141417",
+      border: `1px solid ${isActive ? "rgba(59,130,246,0.35)" : "#232328"}`,
+      borderRadius: 14, padding: 14, transition: "all .2s",
+    }}>
+      <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+        <div style={{ width:44,height:44,borderRadius:12,background:avatarColor,
+          display:"grid",placeItems:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>
+          {initls}
+        </div>
+        <div style={{ flex:1,minWidth:0 }}>
+          <div style={{ fontWeight:800,fontSize:14,color:"#f5f5f6" }}>{name}</div>
+          <div style={{ fontSize:12,color:"#8b8d98",marginTop:1 }}>{elo} ELO</div>
+        </div>
+        <div style={{ padding:"8px 14px",borderRadius:10,
+          background: isLow?"#ef4444":isActive?"#3b82f6":"#18181c",
+          border: isLow || isActive ? "none" : "1px solid #232328",
+          fontWeight:800,fontSize:20,letterSpacing:1,color:"#fff",
+          fontVariantNumeric:"tabular-nums",transition:"background .3s" }}>
+          {fmt(seconds)}
+        </div>
       </div>
-      <div style={{ flex:1,minWidth:0 }}>
-        <div style={{ fontWeight:800,fontSize:14 }}>{name}</div>
-        <div style={{ fontSize:12,color:"rgba(255,255,255,.4)",marginTop:1 }}>{elo} ELO</div>
-      </div>
-      <div style={{ padding:"8px 16px",borderRadius:10,
-        background: isLow?"#ef4444":isActive?"#3b82f6":"rgba(255,255,255,.08)",
-        fontWeight:900,fontSize:22,letterSpacing:1,color:"#fff",
-        fontVariantNumeric:"tabular-nums",transition:"background .3s" }}>
-        {fmt(seconds)}
-      </div>
+      {!!captured?.length && (
+        <div style={{ display:"flex",flexWrap:"wrap",gap:2,marginTop:8,fontSize:16,lineHeight:1,color:"#c7d0e8" }}>
+          {captured.map((p,i)=><span key={i}>{p}</span>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -649,8 +659,12 @@ export default function PvpPage() {
         </div>
       )}
 
-      {/* Playing / Finished — PvpGamePage uslubida */}
-      {(status === "playing" || status === "finished") && (
+      {/* Playing / Finished */}
+      {(status === "playing" || status === "finished") && (() => {
+        const captured = getCaptured(fen);
+        const myCaptured = color === "w" ? captured.byWhite : captured.byBlack;
+        const opCaptured = color === "w" ? captured.byBlack : captured.byWhite;
+        return (
         <div style={{ display:"flex",gap:16,height:"calc(100vh - 220px)",overflow:"hidden" }}>
           {/* Board column */}
           <div ref={boardColRef} style={{ flex:1,minWidth:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
@@ -676,32 +690,37 @@ export default function PvpPage() {
               elo={opponentElo}
               seconds={opSeconds}
               isActive={turn !== color}
+              captured={opCaptured}
             />
 
             {/* Turn indicator */}
-            <div style={{ padding:"12px 16px",background:"rgba(255,255,255,.04)",
-              border:"1.5px solid rgba(255,255,255,.09)",borderRadius:12,
+            <div style={{ padding:"12px 16px",background:"#141417",
+              border:"1px solid #232328",borderRadius:12,
               display:"flex",alignItems:"center",gap:10,fontWeight:700,fontSize:14 }}>
               <div style={{ width:16,height:16,borderRadius:4,flexShrink:0,
                 background:turn==="w"?"#fff":"#1a1a2e",
                 border:turn==="b"?"2px solid rgba(255,255,255,.4)":"none" }}/>
-              {turn==="w" ? "Oq o'ynaydi" : "Qora o'ynaydi"}
-              {gameTc && <span style={{ marginLeft:"auto",fontSize:11,fontWeight:600,color:"rgba(255,255,255,.35)" }}>{gameTc} {gameTcType}</span>}
+              <span style={{ color:"#f5f5f6" }}>{turn==="w" ? "Oq o'ynaydi" : "Qora o'ynaydi"}</span>
+              {gameTc && <span style={{ marginLeft:"auto",fontSize:11,fontWeight:600,color:"#65666f" }}>{gameTc} {gameTcType}</span>}
             </div>
 
             {/* Move history */}
-            <div style={{ padding:"12px 16px",background:"rgba(255,255,255,.04)",
-              border:"1.5px solid rgba(255,255,255,.09)",borderRadius:12,
+            <div style={{ padding:"12px 16px",background:"#141417",
+              border:"1px solid #232328",borderRadius:12,
               minHeight:80,maxHeight:160,overflowY:"auto",flex:1 }}>
+              <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
+                <div style={{ color:"#f5f5f6",fontSize:12.5,fontWeight:800 }}>Yurishlar</div>
+                <div style={{ color:"#65666f",fontSize:11,fontWeight:700 }}>{moves.length} yurish</div>
+              </div>
               {moves.length === 0 ? (
-                <div style={{ color:"rgba(255,255,255,.25)",fontSize:13,textAlign:"center",paddingTop:16 }}>
+                <div style={{ color:"#54555e",fontSize:12.5,textAlign:"center",paddingTop:8 }}>
                   Hali yurish yo'q
                 </div>
               ) : (
                 <div style={{ display:"flex",flexWrap:"wrap",gap:4 }}>
                   {moves.map((m,i)=>(
                     <span key={i} style={{ fontSize:11,fontWeight:600,padding:"2px 7px",
-                      borderRadius:6,background:"rgba(255,255,255,.08)",color:"rgba(255,255,255,.7)" }}>
+                      borderRadius:6,background:"#18181c",color:"#c7d0e8" }}>
                       {i%2===0?`${Math.floor(i/2)+1}.`:""}{m}
                     </span>
                   ))}
@@ -729,7 +748,7 @@ export default function PvpPage() {
             {status === "playing" ? (
               <button onClick={resign}
                 style={{ padding:"12px",borderRadius:12,
-                  border:"1.5px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",
+                  border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",
                   color:"#f87171",fontWeight:700,cursor:"pointer",fontSize:14,
                   display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
                 🏳 Taslim bo'lish
@@ -750,10 +769,12 @@ export default function PvpPage() {
               seconds={mySeconds}
               isMe
               isActive={turn === color}
+              captured={myCaptured}
             />
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

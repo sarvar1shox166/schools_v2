@@ -49,7 +49,7 @@ export default function LeaderboardPage() {
   const gapToNext = myRank && myRank > 1 ? Math.max(0, (data[myRank - 2]?.elo ?? 1200) - myElo) : 0;
 
   return (
-    <div style={{ maxWidth: 1120, margin: "0 auto", paddingBottom: 40 }}>
+    <div style={{ paddingBottom: 40 }}>
 
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "#f5f5f6" }}>Reyting jadvali 🏆</div>

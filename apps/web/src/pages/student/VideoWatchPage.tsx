@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Card, showXp } from "@chess-school/ui";
+import { showXp } from "@chess-school/ui";
 import { useVideoQuiz, useSubmitQuiz, useUpdateVideoProgress, useVideoCourseDetail } from "../../lib/queries.js";
 
 export interface VideoWatchState {
@@ -28,7 +28,7 @@ export default function VideoWatchPage() {
   const title       = state?.title       ?? "Video dars";
   const courseTitle = state?.courseTitle ?? "Video darslar";
   const courseId    = state?.courseId;
-  const gradient    = state?.gradient    ?? "linear-gradient(135deg,#1e3a5f,#1565c0)";
+  const gradient    = state?.gradient    ?? "linear-gradient(135deg,#111827,#0f1a2e)";
   const videoUrl    = state?.videoUrl;
   const thumbnailUrl = state?.thumbnailUrl;
 
@@ -42,6 +42,8 @@ export default function VideoWatchPage() {
   const [answers, setAnswers] = useState<(number|null)[]>([]);
   const [current, setCurrent] = useState(0);
   const [result, setResult] = useState<{ score: number; total: number; xpAwarded?: number } | null>(null);
+
+  const lessonXp = course?.lessonCompletionXp ?? 0;
 
   function startTest() {
     setAnswers(questions.map(() => null));
@@ -103,20 +105,20 @@ export default function VideoWatchPage() {
 
   const q = questions[current];
   const allAnswered = answers.length > 0 && answers.every(a => a !== null);
-  const otherLessons = course?.lessons.filter((l) => l.id !== videoId) ?? [];
+  const lessons = course?.lessons ?? [];
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto" }}>
-      {/* Back */}
-      <button onClick={()=>navigate(-1)}
-        style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",color:"var(--text-faint)",cursor:"pointer",fontSize:14,fontWeight:600,marginBottom:16,padding:0 }}>
-        ← {courseTitle}
-      </button>
+    <div style={{ display: "grid", gridTemplateColumns: lessons.length > 0 ? "1fr 340px" : "1fr", gap: 20, alignItems: "start" }}>
+      <div>
+        <button onClick={() => navigate(-1)}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "#18181c", border: "1px solid #232328", borderRadius: 10, color: "#c7d0e8", cursor: "pointer", fontSize: 12.5, fontWeight: 700, marginBottom: 16, padding: "8px 12px 8px 10px" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+          {courseTitle}
+        </button>
 
-      <div style={{ display: "grid", gridTemplateColumns: otherLessons.length > 0 ? "1fr 320px" : "1fr", gap: 24, alignItems: "start" }}>
-        <div>
-          {/* Video player */}
-          <div style={{ borderRadius:16,overflow:"hidden",background:"#000",aspectRatio:"16/9",position:"relative",marginBottom:18 }}>
+        {/* Video player */}
+        <div style={{ position: "relative", background: "#141417", border: "1px solid #232328", borderRadius: 16, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.5)" }}>
+          <div style={{ position: "relative", aspectRatio: "16/9", background: "#000" }}>
             {videoUrl && videoUrl !== "#" ? (
               <video
                 key={videoId}
@@ -130,158 +132,194 @@ export default function VideoWatchPage() {
                 onContextMenu={(e) => e.preventDefault()}
                 onTimeUpdate={handleTimeUpdate}
                 onEnded={handleEnded}
-                style={{ width:"100%",height:"100%",display:"block",background:"#000" }}
+                style={{ width: "100%", height: "100%", display: "block", background: "#000" }}
               />
             ) : (
-              <div style={{ position:"absolute",inset:0,background:gradient,display:"flex",alignItems:"center",justifyContent:"center" }}>
-                <div style={{ fontSize:130,opacity:.15,userSelect:"none",color:"#fff" }}>♟</div>
+              <div style={{ position: "absolute", inset: 0, background: gradient, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ fontSize: 130, opacity: .15, userSelect: "none", color: "#fff" }}>♟</div>
               </div>
             )}
           </div>
+        </div>
 
-          {/* Title */}
-          <h2 style={{ margin:"0 0 6px",fontSize:21,fontWeight:900 }}>{title}</h2>
-          <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 22 }}>{courseTitle}</div>
+        {/* Info card */}
+        <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 16, padding: "20px 22px", marginTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ color: "#8b93b0", fontSize: 11, fontWeight: 800, letterSpacing: "0.05em", marginBottom: 5 }}>{courseTitle.toUpperCase()}</div>
+              <div style={{ color: "#f5f5f6", fontSize: 22, fontWeight: 800, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{title}</div>
+            </div>
+            {lessonXp > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(74,222,128,0.15)", border: "1px solid rgba(74,222,128,0.3)", color: "#4ade80", fontSize: 10.5, fontWeight: 800, padding: "4px 9px", borderRadius: 99 }}>
+                  +{lessonXp} XP olinadi
+                </div>
+                <div style={{ color: "#65666f", fontSize: 10.5 }}>Video va test tugagach</div>
+              </div>
+            )}
+          </div>
 
           {/* Test section */}
           {!quizLoading && questions.length === 0 ? null : (
-          <Card>
-            {phase === "idle" && (
-              <div style={{ padding:"24px 24px" }}>
-                <div style={{ display:"flex",alignItems:"center",gap:14,marginBottom:16 }}>
-                  <div style={{ width:48,height:48,borderRadius:13,background:"rgba(63,140,255,.15)",border:"1px solid rgba(63,140,255,.25)",display:"grid",placeItems:"center",fontSize:22,flexShrink:0 }}>
-                    📝
+            <div style={{ marginTop: 8 }}>
+              {phase === "idle" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 13, background: "rgba(59,130,246,.15)", border: "1px solid rgba(59,130,246,.25)", display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0 }}>📝</div>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: "#f5f5f6" }}>Dars testi</div>
+                    <div style={{ fontSize: 12.5, color: "#8b8d98", marginTop: 3 }}>{questions.length} ta savol</div>
                   </div>
-                  <div>
-                    <div style={{ fontWeight:800,fontSize:16 }}>Dars testi</div>
-                    <div style={{ fontSize:13,color:"var(--text-faint)",marginTop:3 }}>
-                      {questions.length} ta savol · Hammasiga to'g'ri javob berilsa +15 XP
+                  <button
+                    onClick={startTest} disabled={quizLoading}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg,#3b82f6,#2563eb)", color: "#fff", fontSize: 12.5, fontWeight: 800, padding: "10px 16px", borderRadius: 10, cursor: "pointer", border: "none" }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                    Testni boshlash
+                  </button>
+                </div>
+              )}
+
+              {phase === "test" && q && (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ flex: 1, height: 5, borderRadius: 99, background: "#1e1e22", overflow: "hidden" }}>
+                      <div style={{ height: "100%", borderRadius: 99, background: "#3b82f6", width: `${((current + 1) / questions.length) * 100}%`, transition: "width .3s" }} />
                     </div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#8b8d98", flexShrink: 0 }}>{current + 1}/{questions.length}</span>
                   </div>
-                </div>
-                <p style={{ margin:"0 0 20px",fontSize:13.5,color:"var(--text-faint)",lineHeight:1.65 }}>
-                  Darsni ko'rgach bilimingizni tekshiring. Hammasini to'g'ri topsangiz XP yutasiz!
-                </p>
-                <button className="btn" style={{ background:"var(--kacc,#3F8CFF)",color:"#fff",border:"none" }}
-                  onClick={startTest} disabled={quizLoading}>
-                  Testni boshlash →
-                </button>
-              </div>
-            )}
 
-            {phase === "test" && q && (
-              <div style={{ padding:"24px" }}>
-                {/* Progress */}
-                <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
-                  <div style={{ flex:1,height:5,borderRadius:99,background:"rgba(255,255,255,.1)",overflow:"hidden" }}>
-                    <div style={{ height:"100%",borderRadius:99,background:"var(--kacc,#3F8CFF)",
-                      width:`${((current+1)/questions.length)*100}%`,transition:"width .3s" }}/>
+                  <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 16, lineHeight: 1.5, color: "#f5f5f6" }}>{q.question}</div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                    {q.options.map((opt, i) => {
+                      const picked = answers[current] === i;
+                      return (
+                        <button key={i} onClick={() => selectAnswer(i)}
+                          style={{
+                            textAlign: "left", padding: "12px 16px", borderRadius: 12, cursor: "pointer", fontSize: 14, fontWeight: 600, transition: "all .15s",
+                            background: picked ? "rgba(59,130,246,.18)" : "#18181c",
+                            border: picked ? "1.5px solid #3b82f6" : "1.5px solid #232328",
+                            color: picked ? "#93c5fd" : "#e5e7eb",
+                          }}>
+                          <span style={{
+                            display: "inline-block", width: 24, height: 24, borderRadius: "50%", textAlign: "center", lineHeight: "24px", fontSize: 12, fontWeight: 800, marginRight: 10, flexShrink: 0,
+                            background: picked ? "#3b82f6" : "#232328",
+                            color: picked ? "#fff" : "#8b8d98",
+                          }}>
+                            {String.fromCharCode(65 + i)}
+                          </span>
+                          {opt}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <span style={{ fontSize:12,fontWeight:700,color:"var(--text-faint)",flexShrink:0 }}>
-                    {current+1}/{questions.length}
-                  </span>
-                </div>
 
-                {/* Question */}
-                <div style={{ fontWeight:800,fontSize:16,marginBottom:16,lineHeight:1.5 }}>{q.question}</div>
-
-                {/* Options */}
-                <div style={{ display:"flex",flexDirection:"column",gap:10,marginBottom:24 }}>
-                  {q.options.map((opt,i)=>{
-                    const picked = answers[current]===i;
-                    return (
-                      <button key={i} onClick={()=>selectAnswer(i)}
-                        style={{ textAlign:"left",padding:"12px 16px",borderRadius:12,cursor:"pointer",fontSize:14,fontWeight:600,transition:"all .15s",
-                          background: picked ? "rgba(63,140,255,.2)" : "rgba(255,255,255,.05)",
-                          border: picked ? "1.5px solid var(--kacc,#3F8CFF)" : "1.5px solid var(--border,rgba(255,255,255,.1))",
-                          color: picked ? "var(--kacc,#3F8CFF)" : "inherit" }}>
-                        <span style={{ display:"inline-block",width:24,height:24,borderRadius:"50%",textAlign:"center",lineHeight:"24px",fontSize:12,fontWeight:800,marginRight:10,flexShrink:0,
-                          background: picked ? "var(--kacc,#3F8CFF)" : "rgba(255,255,255,.08)",
-                          color: picked ? "#fff" : "var(--text-faint)" }}>
-                          {String.fromCharCode(65+i)}
-                        </span>
-                        {opt}
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                    {current > 0 && (
+                      <button onClick={() => setCurrent(c => c - 1)}
+                        style={{ padding: "10px 16px", borderRadius: 10, background: "#18181c", border: "1px solid #232328", color: "#c7d0e8", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                        ← Oldingi
                       </button>
-                    );
-                  })}
+                    )}
+                    {current < questions.length - 1 ? (
+                      <button
+                        disabled={answers[current] === null}
+                        onClick={() => setCurrent(c => c + 1)}
+                        style={{ padding: "10px 16px", borderRadius: 10, background: "#3b82f6", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: answers[current] === null ? .5 : 1 }}>
+                        Keyingi →
+                      </button>
+                    ) : (
+                      <button
+                        disabled={!allAnswered || submitQuiz.isPending}
+                        onClick={finish}
+                        style={{ padding: "10px 16px", borderRadius: 10, background: "#22c55e", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: !allAnswered ? .5 : 1 }}>
+                        {submitQuiz.isPending ? "Yuborilmoqda..." : "Tugatish ✓"}
+                      </button>
+                    )}
+                  </div>
                 </div>
+              )}
 
-                {/* Nav buttons */}
-                <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
-                  {current > 0 && (
-                    <button className="btn" style={{ background:"rgba(255,255,255,.07)",border:"1px solid var(--border)" }}
-                      onClick={()=>setCurrent(c=>c-1)}>
-                      ← Oldingi
-                    </button>
-                  )}
-                  {current < questions.length-1 ? (
-                    <button className="btn" style={{ background:"var(--kacc,#3F8CFF)",color:"#fff",border:"none",opacity:answers[current]===null?.5:1 }}
-                      disabled={answers[current]===null}
-                      onClick={()=>setCurrent(c=>c+1)}>
-                      Keyingi →
-                    </button>
-                  ) : (
-                    <button className="btn" style={{ background:"#22c55e",color:"#fff",border:"none",opacity:!allAnswered?.5:1 }}
-                      disabled={!allAnswered || submitQuiz.isPending}
-                      onClick={finish}>
-                      {submitQuiz.isPending ? "Yuborilmoqda..." : "Tugatish ✓"}
-                    </button>
-                  )}
+              {phase === "done" && result && (
+                <div style={{ textAlign: "center", padding: "12px 0" }}>
+                  <div style={{ fontSize: 56, marginBottom: 16 }}>{result.score === result.total ? "🏆" : result.score >= result.total / 2 ? "🎯" : "📚"}</div>
+                  <div style={{ fontWeight: 900, fontSize: 22, marginBottom: 8, color: "#f5f5f6" }}>
+                    {result.score === result.total ? "Ajoyib!" : result.score >= result.total / 2 ? "Yaxshi natija!" : "Ko'proq mashq qiling!"}
+                  </div>
+                  <div style={{ fontSize: 15, color: "#8b8d98", marginBottom: 20 }}>
+                    {result.score}/{result.total} ta savol to'g'ri
+                    {result.xpAwarded ? <> · <span style={{ color: "#facc15", fontWeight: 700 }}>+{result.xpAwarded} XP</span></> : null}
+                  </div>
+                  <button
+                    onClick={() => { setPhase("idle"); setResult(null); }}
+                    style={{ padding: "10px 20px", borderRadius: 10, background: "#3b82f6", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                    Yopish
+                  </button>
                 </div>
-              </div>
-            )}
-
-            {phase === "done" && result && (
-              <div style={{ padding:"32px 24px",textAlign:"center" }}>
-                <div style={{ fontSize:56,marginBottom:16 }}>{result.score===result.total?"🏆":result.score>=result.total/2?"🎯":"📚"}</div>
-                <div style={{ fontWeight:900,fontSize:22,marginBottom:8 }}>
-                  {result.score===result.total ? "Ajoyib!" : result.score>=result.total/2 ? "Yaxshi natija!" : "Ko'proq mashq qiling!"}
-                </div>
-                <div style={{ fontSize:15,color:"var(--text-faint)",marginBottom:20 }}>
-                  {result.score}/{result.total} ta savol to'g'ri
-                  {result.xpAwarded ? <> · <span style={{ color:"#f59e0b",fontWeight:700 }}>+{result.xpAwarded} XP</span></> : null}
-                </div>
-                <button className="btn" style={{ marginTop:8,background:"var(--kacc,#3F8CFF)",color:"#fff",border:"none" }}
-                  onClick={()=>{ setPhase("idle"); setResult(null); }}>
-                  Yopish
-                </button>
-              </div>
-            )}
-          </Card>
+              )}
+            </div>
           )}
         </div>
-
-        {/* Other lessons in this course */}
-        {otherLessons.length > 0 && (
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12 }}>Shu kursdagi boshqa darslar</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {otherLessons.map((l) => (
-                <div key={l.id} onClick={() => goToLesson(l.id, l.title, l.videoUrl, l.thumbnailUrl, l.durationSeconds)}
-                  style={{ display: "flex", gap: 10, cursor: "pointer" }}>
-                  <div style={{
-                    width: 96, aspectRatio: "16/9", borderRadius: 8, flexShrink: 0, overflow: "hidden",
-                    background: gradient, position: "relative",
-                  }}>
-                    {l.thumbnailUrl && (
-                      <img src={l.thumbnailUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    )}
-                    {l.progressPct >= 100 && (
-                      <div style={{ position: "absolute", top: 3, left: 3, background: "#22c55e", borderRadius: 99, padding: "1px 5px", fontSize: 9, fontWeight: 700, color: "#fff" }}>✓</div>
-                    )}
-                    {l.durationSeconds && (
-                      <div style={{ position: "absolute", bottom: 3, right: 3, background: "rgba(0,0,0,.7)", borderRadius: 4, padding: "0 4px", fontSize: 10, fontWeight: 700, color: "#fff" }}>
-                        {fmtSec(l.durationSeconds)}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35 }}>{l.title}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Other lessons in this course */}
+      {lessons.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {course && (
+            <div style={{ background: "linear-gradient(135deg,rgba(59,130,246,0.14) 0%,#141417 60%)", border: "1px solid rgba(59,130,246,0.28)", borderRadius: 14, padding: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ color: "#f5f5f6", fontSize: 13, fontWeight: 800 }}>Kurs progressi</div>
+                <div style={{ color: "#60a5fa", fontSize: 12, fontWeight: 800 }}>{course.watchedCount} / {course.videoCount}</div>
+              </div>
+              <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 99, overflow: "hidden", marginBottom: 10 }}>
+                <div style={{ width: `${course.videoCount ? (course.watchedCount / course.videoCount) * 100 : 0}%`, height: "100%", background: "linear-gradient(90deg,#60a5fa,#a78bfa)", borderRadius: 99 }} />
+              </div>
+            </div>
+          )}
+
+          <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, padding: "16px 14px" }}>
+            <div style={{ color: "#f5f5f6", fontSize: 13, fontWeight: 800, marginBottom: 12 }}>Shu kursdagi darslar</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {lessons.map((l) => {
+                const isCurrent = l.id === videoId;
+                const done = l.lessonDone || l.progressPct >= 100;
+                return (
+                  <div key={l.id} onClick={() => !isCurrent && goToLesson(l.id, l.title, l.videoUrl, l.thumbnailUrl, l.durationSeconds)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, cursor: isCurrent ? "default" : "pointer",
+                      background: isCurrent ? "linear-gradient(135deg,rgba(59,130,246,0.12),#18181c 70%)" : "#18181c",
+                      border: isCurrent ? "1px solid rgba(96,165,250,0.4)" : "1px solid #232328",
+                    }}>
+                    <div style={{ width: 40, height: 32, borderRadius: 7, background: done ? "rgba(34,197,94,0.15)" : isCurrent ? "rgba(59,130,246,0.15)" : "#232328", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {done ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.6"><polyline points="4 12 10 18 20 6"/></svg>
+                      ) : isCurrent ? (
+                        <div style={{ display: "flex", gap: 2, alignItems: "end", height: 12 }}>
+                          <div style={{ width: 3, background: "#60a5fa", height: "60%", borderRadius: 1 }} />
+                          <div style={{ width: 3, background: "#60a5fa", height: "100%", borderRadius: 1 }} />
+                          <div style={{ width: 3, background: "#60a5fa", height: "40%", borderRadius: 1 }} />
+                        </div>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#8b93b0" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.35, color: isCurrent ? "#f5f5f6" : "#c7d0e8" }}>{l.title}</div>
+                  </div>
+                );
+              })}
+            </div>
+            {course?.exam && course.exam.questionCount > 0 && (
+              <div style={{ marginTop: 14, padding: 12, background: "linear-gradient(135deg,rgba(234,179,8,0.1),rgba(234,179,8,0.03))", border: "1px dashed rgba(234,179,8,0.28)", borderRadius: 10, display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 9, background: "linear-gradient(135deg,#facc15,#f59e0b)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🏆</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: "#facc15", fontSize: 12, fontWeight: 800, lineHeight: 1.2 }}>Mavzu yakuniy testi</div>
+                  <div style={{ color: "#8b8d98", fontSize: 10.5, marginTop: 2 }}>Barcha darslardan keyin</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

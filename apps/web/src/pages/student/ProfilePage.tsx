@@ -159,7 +159,7 @@ export default function ProfilePage() {
   const bg = avatarColor(name);
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", paddingBottom: 40 }}>
+    <div style={{ paddingBottom: 40 }}>
 
       {/* ── Hero ── */}
       <div style={{

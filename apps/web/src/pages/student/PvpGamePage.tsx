@@ -5,6 +5,7 @@ import { Chess } from "@chess-school/chess-engine";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { api } from "../../lib/api.js";
 import { useRecordGameResult } from "../../lib/queries.js";
+import { getCaptured } from "../../lib/chessMaterial.js";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -34,40 +35,47 @@ function formatTime(seconds: number): string {
 
 /* ── Player card ──────────────────────────────────────────────────────────── */
 function PlayerCard({
-  name, elo, seconds, avatar, isComputer, isActive, isLow,
+  name, elo, seconds, avatar, isComputer, isActive, isLow, captured,
 }: {
   name: string; elo: number; seconds: number;
-  avatar: string; isComputer?: boolean; isActive: boolean; isLow?: boolean;
+  avatar: string; isComputer?: boolean; isActive: boolean; isLow?: boolean; captured?: string[];
 }) {
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",
-      background: isActive ? "rgba(37,99,235,.18)" : "rgba(255,255,255,.04)",
-      border: `1.5px solid ${isActive ? "#3b82f6" : "rgba(255,255,255,.1)"}`,
-      borderRadius: 14, transition: "all .2s",
+      background: isActive ? "linear-gradient(135deg,rgba(59,130,246,0.14) 0%,#141417 60%)" : "#141417",
+      border: `1px solid ${isActive ? "rgba(59,130,246,0.35)" : "#232328"}`,
+      borderRadius: 14, padding: 14, transition: "all .2s",
     }}>
-      <div style={{
-        width: 44, height: 44, borderRadius: 12, overflow: "hidden",
-        background: isComputer
-          ? "linear-gradient(135deg,#3b82f6,#1d4ed8)"
-          : "linear-gradient(135deg,#22c55e,#16a34a)",
-        display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0,
-      }}>
-        {avatar}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 12, overflow: "hidden",
+          background: isComputer
+            ? "linear-gradient(135deg,#a78bfa,#7c3aed)"
+            : "linear-gradient(135deg,#22c55e,#16a34a)",
+          display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0,
+        }}>
+          {avatar}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: "#f5f5f6" }}>{name}</div>
+          <div style={{ fontSize: 12, color: "#8b8d98", marginTop: 1 }}>{elo} ELO</div>
+        </div>
+        <div style={{
+          padding: "8px 14px", borderRadius: 10,
+          background: isLow ? "#ef4444" : isActive ? "#3b82f6" : "#18181c",
+          border: isLow || isActive ? "none" : "1px solid #232328",
+          fontWeight: 800, fontSize: 20, letterSpacing: 1,
+          color: "#fff", fontVariantNumeric: "tabular-nums",
+          transition: "background .3s",
+        }}>
+          {formatTime(seconds)}
+        </div>
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 800, fontSize: 14 }}>{name}</div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)", marginTop: 1 }}>{elo} ELO</div>
-      </div>
-      <div style={{
-        padding: "8px 16px", borderRadius: 10,
-        background: isLow ? "#ef4444" : isActive ? "#3b82f6" : "rgba(255,255,255,.08)",
-        fontWeight: 900, fontSize: 22, letterSpacing: 1,
-        color: "#fff", fontVariantNumeric: "tabular-nums",
-        transition: "background .3s",
-      }}>
-        {formatTime(seconds)}
-      </div>
+      {!!captured?.length && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 8, fontSize: 16, lineHeight: 1, color: "#c7d0e8" }}>
+          {captured.map((p, i) => <span key={i}>{p}</span>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -147,12 +155,12 @@ function GameOverModal({
       display: "grid", placeItems: "center", zIndex: 9999,
     }}>
       <div style={{
-        background: "#1e2640", border: "1.5px solid rgba(255,255,255,.12)",
+        background: "#141417", border: "1px solid #232328",
         borderRadius: 20, padding: "32px 40px", textAlign: "center", minWidth: 320,
       }}>
         <div style={{ fontSize: 48, marginBottom: 8 }}>{isWin ? "🏆" : isDraw ? "🤝" : "💔"}</div>
-        <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 4 }}>{title}</div>
-        <div style={{ fontSize: 14, color: "rgba(255,255,255,.5)", marginBottom: 28 }}>{sub}</div>
+        <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 4, color: "#f5f5f6" }}>{title}</div>
+        <div style={{ fontSize: 14, color: "#8b8d98", marginBottom: 28 }}>{sub}</div>
         <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
           <button onClick={onRematch} style={{
             padding: "12px 28px", borderRadius: 12, border: "none",
@@ -162,8 +170,8 @@ function GameOverModal({
           </button>
           <button onClick={onExit} style={{
             padding: "12px 28px", borderRadius: 12,
-            border: "1.5px solid rgba(255,255,255,.2)",
-            background: "rgba(255,255,255,.06)", color: "rgba(255,255,255,.8)",
+            border: "1px solid #232328",
+            background: "#18181c", color: "#c7d0e8",
             fontWeight: 700, fontSize: 15, cursor: "pointer",
           }}>
             ← Chiqish
@@ -379,35 +387,51 @@ export default function PvpGamePage() {
   }
 
   const compName = unbeatable ? "👑 Yengilmas" : `Kompyuter (${difficulty}-daraja)`;
+  const captured = getCaptured(fen);
+  const playerCaptured = resolvedColor === "white" ? captured.byWhite : captured.byBlack;
+  const compCaptured = resolvedColor === "white" ? captured.byBlack : captured.byWhite;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Top bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#111114", border: "1px solid #1e1e22", borderRadius: 14, padding: "10px 14px" }}>
         <button onClick={() => navigate("/student/pvp")}
           style={{
-            display: "flex", alignItems: "center", gap: 6, padding: "8px 16px",
-            borderRadius: 10, border: "1.5px solid rgba(255,255,255,.12)",
-            background: "rgba(255,255,255,.06)", color: "rgba(255,255,255,.8)",
-            fontWeight: 700, fontSize: 14, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 8px 10px",
+            borderRadius: 10, border: "1px solid #232328",
+            background: "#18181c", color: "#c7d0e8",
+            fontWeight: 700, fontSize: 12.5, cursor: "pointer",
           }}>
-          ← Orqaga
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+          Orqaga
         </button>
         <div style={{
-          display: "flex", alignItems: "center", gap: 6, padding: "6px 14px",
-          borderRadius: 99, border: `1.5px solid ${tcColor}44`, background: `${tcColor}18`,
+          display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
+          borderRadius: 10, border: `1px solid ${tcColor}44`, background: `${tcColor}18`,
         }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: tcColor, display: "inline-block" }} />
-          <span style={{ fontWeight: 700, fontSize: 13, color: tcColor }}>{tc} {tcType}</span>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: tcColor, display: "inline-block" }} />
+          <span style={{ fontWeight: 800, fontSize: 12, color: tcColor, letterSpacing: "0.02em" }}>{tc} {tcType}</span>
+        </div>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6, padding: "7px 11px",
+          borderRadius: 10, border: "1px solid rgba(139,92,246,0.28)", background: "rgba(139,92,246,0.12)",
+          color: "#c4b5fd", fontSize: 11.5, fontWeight: 700,
+        }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="10.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="10.5" r="1.5" fill="currentColor" stroke="none"/><path d="M8 15c1.5 1 3 1.5 4 1.5s2.5-.5 4-1.5"/></svg>
+          Bot bilan
         </div>
         {unbeatable && (
           <div style={{
-            display: "flex", alignItems: "center", gap: 6, padding: "6px 14px",
-            borderRadius: 99, border: "1.5px solid #fbbf2444", background: "#fbbf2418",
+            display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
+            borderRadius: 10, border: "1px solid #fbbf2444", background: "#fbbf2418",
           }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: "#fbbf24" }}>👑 YENGILMAS REJIM</span>
+            <span style={{ fontWeight: 700, fontSize: 12, color: "#fbbf24" }}>👑 YENGILMAS REJIM</span>
           </div>
         )}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 7, color: "#8b8d98", fontSize: 12, fontWeight: 600, padding: "8px 12px", background: "#18181c", border: "1px solid #232328", borderRadius: 10 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          Yurish: <span style={{ color: "#f5f5f6", fontWeight: 800 }}>{moves.length}</span>
+        </div>
       </div>
 
       {/* Main layout */}
@@ -444,12 +468,13 @@ export default function PvpGamePage() {
             isComputer
             isActive={!isPlayerTurn}
             isLow={computerSeconds <= 30}
+            captured={compCaptured}
           />
 
           {/* Turn / thinking indicator */}
           <div style={{
-            padding: "12px 16px", background: "rgba(255,255,255,.04)",
-            border: "1.5px solid rgba(255,255,255,.09)", borderRadius: 12,
+            padding: "12px 16px", background: "#141417",
+            border: "1px solid #232328", borderRadius: 12,
             display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 14,
           }}>
             {thinking ? (
@@ -468,19 +493,23 @@ export default function PvpGamePage() {
                   background: turn === "white" ? "#fff" : "#1a1a2e",
                   border: turn === "black" ? "2px solid rgba(255,255,255,.4)" : "none",
                 }} />
-                {turn === "white" ? "Oq o'ynaydi" : "Qora o'ynaydi"}
+                <span style={{ color: "#f5f5f6" }}>{turn === "white" ? "Oq o'ynaydi" : "Qora o'ynaydi"}</span>
               </>
             )}
           </div>
 
           {/* Move history */}
           <div style={{
-            padding: "12px 16px", background: "rgba(255,255,255,.04)",
-            border: "1.5px solid rgba(255,255,255,.09)", borderRadius: 12,
+            padding: "12px 16px", background: "#141417",
+            border: "1px solid #232328", borderRadius: 12,
             minHeight: 90, maxHeight: 160, overflowY: "auto",
           }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ color: "#f5f5f6", fontSize: 12.5, fontWeight: 800 }}>Yurishlar</div>
+              <div style={{ color: "#65666f", fontSize: 11, fontWeight: 700 }}>{moves.length} yurish</div>
+            </div>
             {moves.length === 0 ? (
-              <div style={{ color: "rgba(255,255,255,.25)", fontSize: 13, textAlign: "center", paddingTop: 18 }}>
+              <div style={{ color: "#54555e", fontSize: 12.5, textAlign: "center", paddingTop: 8 }}>
                 Hali yurish yo'q
               </div>
             ) : (
@@ -488,7 +517,7 @@ export default function PvpGamePage() {
                 {moves.map((m, i) => (
                   <span key={i} style={{
                     fontSize: 11, fontWeight: 600, padding: "2px 7px",
-                    borderRadius: 6, background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.7)",
+                    borderRadius: 6, background: "#18181c", color: "#c7d0e8",
                   }}>
                     {i % 2 === 0 ? `${Math.floor(i / 2) + 1}.` : ""}{m}
                   </span>
@@ -500,21 +529,20 @@ export default function PvpGamePage() {
           {/* Action buttons */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
             {[
-              { icon: "🏳", label: "Taslim", action: () => setGameOver(resolvedColor === "white" ? "black_wins_resign" : "white_wins_resign") },
-              { icon: "½", label: "Durang", action: () => setGameOver("draw") },
-              { icon: "🔄", label: "Yangi", action: handleRematch },
+              { icon: "🏳", label: "Taslim", color: "#f87171", bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.25)", action: () => setGameOver(resolvedColor === "white" ? "black_wins_resign" : "white_wins_resign") },
+              { icon: "½", label: "Durang", color: "#facc15", bg: "rgba(234,179,8,0.12)", border: "rgba(234,179,8,0.25)", action: () => setGameOver("draw") },
+              { icon: "🔄", label: "Yangi", color: "#60a5fa", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.25)", action: handleRematch },
             ].map(btn => (
               <button key={btn.label} onClick={btn.action}
                 style={{
-                  padding: "12px 8px", borderRadius: 12,
-                  border: "1.5px solid rgba(255,255,255,.1)",
-                  background: "rgba(255,255,255,.05)",
-                  cursor: "pointer", textAlign: "center", transition: "background .12s",
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,.1)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,.05)")}>
-                <div style={{ fontSize: 18, marginBottom: 4 }}>{btn.icon}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>{btn.label}</div>
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+                  padding: "12px 6px", borderRadius: 12,
+                  border: "1px solid #232328",
+                  background: "#141417",
+                  cursor: "pointer", textAlign: "center",
+                }}>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: btn.bg, border: `1px solid ${btn.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>{btn.icon}</div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: btn.color }}>{btn.label}</div>
               </button>
             ))}
           </div>
@@ -527,6 +555,7 @@ export default function PvpGamePage() {
             avatar="🤓"
             isActive={isPlayerTurn}
             isLow={playerSeconds <= 30}
+            captured={playerCaptured}
           />
         </div>
       </div>
