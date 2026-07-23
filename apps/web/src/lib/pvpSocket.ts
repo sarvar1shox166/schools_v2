@@ -195,9 +195,9 @@ export function dismissIncomingChallenge() {
   setState({ incomingChallenge: null });
 }
 
-export function handleMove(from: string, to: string) {
+export function handleMove(from: string, to: string, promotion: "q" | "r" | "b" | "n" = "q") {
   setState({ error: null });
-  ws?.send(JSON.stringify({ type: "move", from, to, promotion: "q" }));
+  ws?.send(JSON.stringify({ type: "move", from, to, promotion }));
 }
 
 export function resign() {

@@ -4,8 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { Chess } from "chess.js";
 import type { PvpGameState } from "./PvpGamePage.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
+import { PromotionModal } from "../../components/PromotionModal.js";
+import { MaterialColumn } from "../../components/MaterialColumn.js";
 import { usePvpSocket, type OnlinePlayer, type IncomingChallenge, type PvpStatus } from "../../lib/pvpSocket.js";
-import { getCaptured } from "../../lib/chessMaterial.js";
+import { getCaptured, isPromotionMove } from "../../lib/chessMaterial.js";
 
 /* ── Shared helpers ──────────────────────────────────────────────────────── */
 function fmt(s: number) {
@@ -19,7 +21,7 @@ function useBoardSizePvp(ref: React.RefObject<HTMLDivElement>) {
     function calc() {
       const el = ref.current;
       const availH = window.innerHeight - 220;
-      const availW = el ? el.getBoundingClientRect().width : window.innerWidth - 520;
+      const availW = el ? el.getBoundingClientRect().width : window.innerWidth - 600;
       setSize(Math.floor(Math.min(availW, availH, 680)));
     }
     calc();
@@ -31,8 +33,8 @@ function useBoardSizePvp(ref: React.RefObject<HTMLDivElement>) {
   return size;
 }
 
-function PvpPlayerCard({ name, elo, seconds, isMe, isActive, captured }: {
-  name: string; elo: number; seconds: number; isMe?: boolean; isActive: boolean; captured?: string[];
+function PvpPlayerCard({ name, elo, seconds, isMe, isActive }: {
+  name: string; elo: number; seconds: number; isMe?: boolean; isActive: boolean;
 }) {
   const avatarColor = isMe ? "#22c55e" : ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#22c55e"][name.charCodeAt(0)%5];
   const initls = name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
@@ -42,29 +44,23 @@ function PvpPlayerCard({ name, elo, seconds, isMe, isActive, captured }: {
       background: isActive ? "linear-gradient(135deg,rgba(59,130,246,0.14) 0%,#141417 60%)" : "#141417",
       border: `1px solid ${isActive ? "rgba(59,130,246,0.35)" : "#232328"}`,
       borderRadius: 14, padding: 14, transition: "all .2s",
+      display: "flex", alignItems: "center", gap: 12,
     }}>
-      <div style={{ display:"flex",alignItems:"center",gap:12 }}>
-        <div style={{ width:44,height:44,borderRadius:12,background:avatarColor,
-          display:"grid",placeItems:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>
-          {initls}
-        </div>
-        <div style={{ flex:1,minWidth:0 }}>
-          <div style={{ fontWeight:800,fontSize:14,color:"#f5f5f6" }}>{name}</div>
-          <div style={{ fontSize:12,color:"#8b8d98",marginTop:1 }}>{elo} ELO</div>
-        </div>
-        <div style={{ padding:"8px 14px",borderRadius:10,
-          background: isLow?"#ef4444":isActive?"#3b82f6":"#18181c",
-          border: isLow || isActive ? "none" : "1px solid #232328",
-          fontWeight:800,fontSize:20,letterSpacing:1,color:"#fff",
-          fontVariantNumeric:"tabular-nums",transition:"background .3s" }}>
-          {fmt(seconds)}
-        </div>
+      <div style={{ width:44,height:44,borderRadius:12,background:avatarColor,
+        display:"grid",placeItems:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>
+        {initls}
       </div>
-      {!!captured?.length && (
-        <div style={{ display:"flex",flexWrap:"wrap",gap:2,marginTop:8,fontSize:16,lineHeight:1,color:"#c7d0e8" }}>
-          {captured.map((p,i)=><span key={i}>{p}</span>)}
-        </div>
-      )}
+      <div style={{ flex:1,minWidth:0 }}>
+        <div style={{ fontWeight:800,fontSize:14,color:"#f5f5f6" }}>{name}</div>
+        <div style={{ fontSize:12,color:"#8b8d98",marginTop:1 }}>{elo} ELO</div>
+      </div>
+      <div style={{ padding:"8px 14px",borderRadius:10,
+        background: isLow?"#ef4444":isActive?"#3b82f6":"#18181c",
+        border: isLow || isActive ? "none" : "1px solid #232328",
+        fontWeight:800,fontSize:20,letterSpacing:1,color:"#fff",
+        fontVariantNumeric:"tabular-nums",transition:"background .3s" }}>
+        {fmt(seconds)}
+      </div>
     </div>
   );
 }
@@ -558,8 +554,17 @@ export default function PvpPage() {
     joinQueue, leaveQueue, sendChallenge, respondChallenge, handleMove, resign, playAgain, reconnect,
   } = usePvpSocket();
   const [challengeTarget, setChallengeTarget] = useState<OnlinePlayer | null>(null);
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
   const boardColRef = useRef<HTMLDivElement>(null);
   const boardSize = useBoardSizePvp(boardColRef);
+
+  function onBoardMove(from: string, to: string) {
+    if (isPromotionMove(fen, from, to)) {
+      setPendingPromotion({ from, to });
+      return;
+    }
+    handleMove(from, to);
+  }
 
   return (
     <div>
@@ -662,18 +667,19 @@ export default function PvpPage() {
       {/* Playing / Finished */}
       {(status === "playing" || status === "finished") && (() => {
         const captured = getCaptured(fen);
-        const myCaptured = color === "w" ? captured.byWhite : captured.byBlack;
-        const opCaptured = color === "w" ? captured.byBlack : captured.byWhite;
         return (
-        <div style={{ display:"flex",gap:16,height:"calc(100vh - 220px)",overflow:"hidden" }}>
+        <div style={{ display:"grid",gridTemplateColumns:"70px 1fr 340px",gap:16,height:"calc(100vh - 220px)",overflow:"hidden" }}>
+          {/* Left column — material advantage + captured pieces */}
+          <MaterialColumn diff={captured.diff} byWhite={captured.byWhite} byBlack={captured.byBlack} />
+
           {/* Board column */}
-          <div ref={boardColRef} style={{ flex:1,minWidth:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
+          <div ref={boardColRef} style={{ minWidth:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
             <div style={{ width:boardSize,height:boardSize,flexShrink:0 }}>
               <PvpBoardWithCoords
                 fen={fen}
-                onMove={handleMove}
+                onMove={onBoardMove}
                 flipped={color === "b"}
-                disabled={status !== "playing" || turn !== color}
+                disabled={status !== "playing" || turn !== color || !!pendingPromotion}
                 getMoves={sq => {
                   try { return new Chess(fen).moves({ square:sq as import("chess.js").Square, verbose:true }).map((m:{to:string})=>m.to); }
                   catch { return []; }
@@ -683,14 +689,13 @@ export default function PvpPage() {
           </div>
 
           {/* Right panel */}
-          <div style={{ width:280,flexShrink:0,display:"flex",flexDirection:"column",gap:10,overflowY:"auto" }}>
+          <div style={{ width:340,flexShrink:0,display:"flex",flexDirection:"column",gap:10,overflowY:"auto" }}>
             {/* Opponent card */}
             <PvpPlayerCard
               name={opponent ?? "Raqib"}
               elo={opponentElo}
               seconds={opSeconds}
               isActive={turn !== color}
-              captured={opCaptured}
             />
 
             {/* Turn indicator */}
@@ -769,12 +774,23 @@ export default function PvpPage() {
               seconds={mySeconds}
               isMe
               isActive={turn === color}
-              captured={myCaptured}
             />
           </div>
         </div>
         );
       })()}
+
+      {/* Promotion choice */}
+      {pendingPromotion && (
+        <PromotionModal
+          color={color ?? "w"}
+          onPick={(piece) => {
+            handleMove(pendingPromotion.from, pendingPromotion.to, piece);
+            setPendingPromotion(null);
+          }}
+          onCancel={() => setPendingPromotion(null)}
+        />
+      )}
     </div>
   );
 }

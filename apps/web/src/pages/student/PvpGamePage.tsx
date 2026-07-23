@@ -3,9 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { Chess } from "@chess-school/chess-engine";
 import { ChessBoard } from "../../components/ChessBoard.js";
+import { PromotionModal } from "../../components/PromotionModal.js";
+import { MaterialColumn } from "../../components/MaterialColumn.js";
 import { api } from "../../lib/api.js";
 import { useRecordGameResult } from "../../lib/queries.js";
-import { getCaptured } from "../../lib/chessMaterial.js";
+import { getCaptured, isPromotionMove } from "../../lib/chessMaterial.js";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -35,47 +37,41 @@ function formatTime(seconds: number): string {
 
 /* ── Player card ──────────────────────────────────────────────────────────── */
 function PlayerCard({
-  name, elo, seconds, avatar, isComputer, isActive, isLow, captured,
+  name, elo, seconds, avatar, isComputer, isActive, isLow,
 }: {
   name: string; elo: number; seconds: number;
-  avatar: string; isComputer?: boolean; isActive: boolean; isLow?: boolean; captured?: string[];
+  avatar: string; isComputer?: boolean; isActive: boolean; isLow?: boolean;
 }) {
   return (
     <div style={{
       background: isActive ? "linear-gradient(135deg,rgba(59,130,246,0.14) 0%,#141417 60%)" : "#141417",
       border: `1px solid ${isActive ? "rgba(59,130,246,0.35)" : "#232328"}`,
       borderRadius: 14, padding: 14, transition: "all .2s",
+      display: "flex", alignItems: "center", gap: 12,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 12, overflow: "hidden",
-          background: isComputer
-            ? "linear-gradient(135deg,#a78bfa,#7c3aed)"
-            : "linear-gradient(135deg,#22c55e,#16a34a)",
-          display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0,
-        }}>
-          {avatar}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 14, color: "#f5f5f6" }}>{name}</div>
-          <div style={{ fontSize: 12, color: "#8b8d98", marginTop: 1 }}>{elo} ELO</div>
-        </div>
-        <div style={{
-          padding: "8px 14px", borderRadius: 10,
-          background: isLow ? "#ef4444" : isActive ? "#3b82f6" : "#18181c",
-          border: isLow || isActive ? "none" : "1px solid #232328",
-          fontWeight: 800, fontSize: 20, letterSpacing: 1,
-          color: "#fff", fontVariantNumeric: "tabular-nums",
-          transition: "background .3s",
-        }}>
-          {formatTime(seconds)}
-        </div>
+      <div style={{
+        width: 44, height: 44, borderRadius: 12, overflow: "hidden",
+        background: isComputer
+          ? "linear-gradient(135deg,#a78bfa,#7c3aed)"
+          : "linear-gradient(135deg,#22c55e,#16a34a)",
+        display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0,
+      }}>
+        {avatar}
       </div>
-      {!!captured?.length && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 8, fontSize: 16, lineHeight: 1, color: "#c7d0e8" }}>
-          {captured.map((p, i) => <span key={i}>{p}</span>)}
-        </div>
-      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: "#f5f5f6" }}>{name}</div>
+        <div style={{ fontSize: 12, color: "#8b8d98", marginTop: 1 }}>{elo} ELO</div>
+      </div>
+      <div style={{
+        padding: "8px 14px", borderRadius: 10,
+        background: isLow ? "#ef4444" : isActive ? "#3b82f6" : "#18181c",
+        border: isLow || isActive ? "none" : "1px solid #232328",
+        fontWeight: 800, fontSize: 20, letterSpacing: 1,
+        color: "#fff", fontVariantNumeric: "tabular-nums",
+        transition: "background .3s",
+      }}>
+        {formatTime(seconds)}
+      </div>
     </div>
   );
 }
@@ -190,7 +186,7 @@ function useBoardSize(ref: React.RefObject<HTMLDivElement>) {
     function calc() {
       const el = ref.current;
       const availH = window.innerHeight - 220; // topbar + padding + game topbar
-      const availW = el ? el.getBoundingClientRect().width : window.innerWidth - 520;
+      const availW = el ? el.getBoundingClientRect().width : window.innerWidth - 600;
       setSize(Math.floor(Math.min(availW, availH, 680)));
     }
     calc();
@@ -236,6 +232,7 @@ export default function PvpGamePage() {
   const [moves, setMoves] = useState<string[]>([]);
   const [thinking, setThinking] = useState(false);
   const [gameOver, setGameOver] = useState<string | null>(null);
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
   const resultRecordedRef = useRef(false);
 
   const totalSeconds = tcToSeconds(tc);
@@ -323,13 +320,11 @@ export default function PvpGamePage() {
   }, [isPlayerTurn, gameOver, thinking, fen, requestComputerMove]);
 
   /* ── Player move ─────────────────────────────────────────────────────── */
-  function handleMove(from: string, to: string) {
-    if (!isPlayerTurn || gameOver || thinking) return;
-
+  function commitMove(from: string, to: string, promotion: "q" | "r" | "b" | "n" = "q") {
     const chess = chessRef.current;
     let result;
     try {
-      result = chess.move({ from, to, promotion: "q" });
+      result = chess.move({ from, to, promotion });
     } catch {
       result = null;
     }
@@ -339,10 +334,19 @@ export default function PvpGamePage() {
     const newTurn = chess.turn() === "w" ? "white" : "black";
     setFen(newFen);
     setTurn(newTurn);
-    setMoves(m => [...m, `${from}${to}`]);
+    setMoves(m => [...m, `${from}${to}${result.promotion ? result.promotion : ""}`]);
 
     const status = checkStatus(chess);
     if (status) setGameOver(status);
+  }
+
+  function handleMove(from: string, to: string) {
+    if (!isPlayerTurn || gameOver || thinking) return;
+    if (isPromotionMove(fen, from, to)) {
+      setPendingPromotion({ from, to });
+      return;
+    }
+    commitMove(from, to);
   }
 
   /* ── Record result when game ends ───────────────────────────────────── */
@@ -388,8 +392,6 @@ export default function PvpGamePage() {
 
   const compName = unbeatable ? "👑 Yengilmas" : `Kompyuter (${difficulty}-daraja)`;
   const captured = getCaptured(fen);
-  const playerCaptured = resolvedColor === "white" ? captured.byWhite : captured.byBlack;
-  const compCaptured = resolvedColor === "white" ? captured.byBlack : captured.byWhite;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -436,18 +438,21 @@ export default function PvpGamePage() {
 
       {/* Main layout */}
       <div style={{
-        display: "flex", gap: 16,
+        display: "grid", gridTemplateColumns: "70px 1fr 340px", gap: 16,
         height: "calc(100vh - 220px)",
         overflow: "hidden",
       }}>
+        {/* Left column — material advantage + captured pieces */}
+        <MaterialColumn diff={captured.diff} byWhite={captured.byWhite} byBlack={captured.byBlack} />
+
         {/* Board column — fills remaining space */}
-        <div ref={boardColRef} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div ref={boardColRef} style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ width: boardSize, height: boardSize, flexShrink: 0 }}>
             <BoardWithCoords
               fen={fen}
               onMove={handleMove}
               flipped={isFlipped}
-              disabled={!isPlayerTurn || !!gameOver || thinking}
+              disabled={!isPlayerTurn || !!gameOver || thinking || !!pendingPromotion}
               getMoves={(square) =>
                 chessRef.current
                   .moves({ square: square as import("chess.js").Square, verbose: true })
@@ -458,7 +463,7 @@ export default function PvpGamePage() {
         </div>
 
         {/* Right panel */}
-        <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+        <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
           {/* Computer card */}
           <PlayerCard
             name={compName}
@@ -468,7 +473,6 @@ export default function PvpGamePage() {
             isComputer
             isActive={!isPlayerTurn}
             isLow={computerSeconds <= 30}
-            captured={compCaptured}
           />
 
           {/* Turn / thinking indicator */}
@@ -555,10 +559,21 @@ export default function PvpGamePage() {
             avatar="🤓"
             isActive={isPlayerTurn}
             isLow={playerSeconds <= 30}
-            captured={playerCaptured}
           />
         </div>
       </div>
+
+      {/* Promotion choice */}
+      {pendingPromotion && (
+        <PromotionModal
+          color={resolvedColor === "white" ? "w" : "b"}
+          onPick={(piece) => {
+            commitMove(pendingPromotion.from, pendingPromotion.to, piece);
+            setPendingPromotion(null);
+          }}
+          onCancel={() => setPendingPromotion(null)}
+        />
+      )}
 
       {/* Game over modal */}
       {gameOver && (

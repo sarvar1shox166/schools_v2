@@ -196,6 +196,12 @@ export function ChessBoard({
   function handleMouseDown(e: React.MouseEvent, piece: string, square: string) {
     if (disabled) return;
     e.preventDefault();
+    // A piece already selected and this square (occupied by an enemy piece) is a
+    // legal destination — treat it as a capture-by-click instead of re-selecting.
+    if (selected && selected !== square && legalSquares.has(square)) {
+      commit(selected, square);
+      return;
+    }
     const cellSize = boardRef.current
       ? boardRef.current.getBoundingClientRect().width / 8 : 64;
     openLegal(square);
