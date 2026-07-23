@@ -206,9 +206,12 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                   <span className="lv-bar"><span style={{ width: `${xpPct}%` }} /></span>
                 </span>
                 <span className="kid-tb-xp-txt">{xpVal} XP</span>
+                <span className="kid-pill-divider" />
                 <span className="pill pill-streak" onClick={() => setStreakModalOpen(true)} style={{ cursor: "pointer" }} title="Kunlik streak bonusi">
                   <span className="kid-fire">🔥</span>{xpData?.streak ?? 0} kun
                 </span>
+              </div>
+              <div className="kid-topbar-icons">
                 <button
                   className="tb-btn"
                   title={pvp.incomingChallenge ? "Sizni o'yinga chaqirishmoqda!" : "Jonli o'yin"}
@@ -218,30 +221,25 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                   <Icon name="swords" size={17} />
                   {!!pvp.incomingChallenge && <span className="dot" />}
                 </button>
-              </div>
-              <button
-                className="tb-btn"
-                onClick={() => (isStudent ? setNotifModalOpen(true) : notifRoute && navigate(notifRoute))}
-                title="Bildirishnomalar"
-                style={{ position: "relative" }}
-              >
-                <Icon name="bell" size={17} />
-                {!!unread?.count && <span className="dot" />}
-              </button>
-              <button className="tb-btn" onClick={() => navigate("/student/profile")} title="Sozlamalar">
-                <Icon name="settings" size={17} />
-              </button>
-              <div
-                onClick={() => navigate("/student/profile")}
-                title="Mening profilim"
-                style={{
-                  width: 34, height: 34, borderRadius: 10, flexShrink: 0, cursor: "pointer",
-                  background: "linear-gradient(135deg,#8b5cf6,#6366f1)", display: "flex", alignItems: "center",
-                  justifyContent: "center", color: "#fff", fontSize: 12.5, fontWeight: 700,
-                  boxShadow: "0 4px 12px rgba(139,92,246,.3)",
-                }}
-              >
-                {(user?.fullName ?? "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
+                <button className="tb-btn" onClick={() => navigate("/student/profile")} title="Sozlamalar">
+                  <Icon name="settings" size={17} />
+                </button>
+                <button
+                  className="tb-btn"
+                  onClick={() => (isStudent ? setNotifModalOpen(true) : notifRoute && navigate(notifRoute))}
+                  title="Bildirishnomalar"
+                  style={{ position: "relative" }}
+                >
+                  <Icon name="bell" size={17} />
+                  {!!unread?.count && <span className="dot" />}
+                </button>
+                <div
+                  className="tb-btn tb-avatar"
+                  onClick={() => navigate("/student/profile")}
+                  title="Mening profilim"
+                >
+                  {(user?.fullName ?? "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
+                </div>
               </div>
             </>
           ) : (

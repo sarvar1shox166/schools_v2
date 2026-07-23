@@ -256,7 +256,7 @@ svg.ic { display: block; flex: none; }
 .inp::placeholder { color: var(--text-faint); }
 
 .content { flex: 1; overflow-y: auto; padding: 26px 28px 60px; min-height: 0; }
-.content-inner { max-width: 1360px; margin: 0 auto; }
+.content-inner { max-width: none; }
 .page-enter { animation: pageIn .4s var(--ease) forwards; }
 @keyframes pageIn { from { transform: translateY(6px); } to { transform: none; } }
 
@@ -905,7 +905,11 @@ body[data-theme="light"][data-gender="girl"] {
 .kid-theme .sidebar .nav-item[data-navid="profile"]     .nav-ico-badge { background: rgba(20,184,166,.2); }
 
 /* === Topbar pills === */
-.kid-topbar-pills { display: flex; align-items: center; gap: 10px; margin-right: 12px; }
+.kid-topbar-pills {
+  display: flex; align-items: center; gap: 10px; margin-right: 10px;
+  background: #18181c; border: 1px solid #232328; border-radius: 22px;
+  padding: 5px 14px 5px 12px;
+}
 .kid-topbar-pills .pill {
   display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px;
   font-size: 12.5px; font-weight: 800; white-space: nowrap;
@@ -913,20 +917,22 @@ body[data-theme="light"][data-gender="girl"] {
 .pill-level { background: linear-gradient(135deg,#f3c969,#d4a843); color: #1a0800; font-weight: 900; font-size: 10.5px; }
 .pill-streak {
   display: flex; align-items: center; gap: 4px; font-weight: 700; font-size: 12px;
-  color: var(--kwarn, #f59e0b);
-  background: rgba(245,158,11,.1);
-  border: 1px solid rgba(245,158,11,.2);
+  color: #f59e0b;
+  background: rgba(245,158,11,.12);
+  border: 1px solid rgba(245,158,11,.25);
   border-radius: 999px; padding: 4px 10px;
 }
+.kid-pill-divider { width: 1px; align-self: stretch; margin: 4px 0; background: #2c2c32; flex: none; }
 .kid-xp-bar { width: 120px; }
 .kid-xp-bar .lv-bar {
   display: block; height: 6px; width: 100%; border-radius: 999px;
-  background: var(--kborder2, rgba(255,255,255,.13)); overflow: hidden;
+  background: #2c2c32; overflow: hidden;
 }
 .kid-xp-bar .lv-bar > span {
   display: block; height: 100%; border-radius: 999px;
   background: linear-gradient(90deg, var(--kacc,#3F8CFF), var(--kacc2,#6aa8ff));
 }
+.kid-topbar-icons { display: flex; align-items: center; gap: 8px; }
 
 /* === Hero === */
 .kids-hero {
@@ -1039,22 +1045,32 @@ body[data-gender="girl"] .kid-tgb.on {
 .kid-theme .kid-banner p { text-shadow: none; }
 
 /* === Student topbar === */
-.kid-theme .topbar { background: var(--kcard, #fff); border-bottom-color: var(--kborder, rgba(0,0,0,.07)); }
-.kid-tb-title { font-size: 17px; font-weight: 800; line-height: 1.2; color: var(--ktext, #152040); }
-.kid-tb-sub { font-size: 11.5px; color: var(--kdim, #7a8aaa); margin-top: 1px; }
-.kid-tb-xp-txt { font-size: 11px; font-weight: 700; color: var(--kacc2, #6aa8ff); white-space: nowrap; }
+.kid-theme .topbar {
+  background: #111114; border: 1px solid #1e1e22; border-bottom: 1px solid #1e1e22;
+  margin: 14px 20px 0; border-radius: 18px; height: 62px;
+}
+.kid-tb-title { font-size: 17px; font-weight: 800; line-height: 1.2; color: #f4f4f5; }
+.kid-tb-sub { font-size: 11.5px; color: #8a8a92; margin-top: 1px; }
+.kid-tb-xp-txt { font-size: 11px; font-weight: 700; color: #93b4ff; white-space: nowrap; }
 .kid-fire { display: inline-block; animation: kFire .5s infinite alternate; }
 @keyframes kFire { from { transform: scale(1) rotate(-5deg); } to { transform: scale(1.2) rotate(5deg); } }
 
 /* tb-btn for student topbar */
 .kid-theme .topbar .tb-btn {
-  width: 34px; height: 34px; border-radius: 9px;
-  border: 1px solid var(--kborder2, rgba(0,0,0,.12));
-  background: var(--kcard2, #eef5ff); color: var(--kdim, #7a8aaa);
+  width: 36px; height: 36px; border-radius: 10px;
+  border: 1px solid #232328;
+  background: #18181c; color: #a1a1aa;
   display: grid; place-items: center; cursor: pointer;
-  transition: all .15s; flex: none;
+  transition: all .15s; flex: none; font-size: 12px; font-weight: 700;
 }
-.kid-theme .topbar .tb-btn:hover { color: var(--ktext, #152040); }
+.kid-theme .topbar .tb-btn:hover { color: #f4f4f5; border-color: #2c2c32; }
+.kid-theme .topbar .tb-avatar {
+  background: linear-gradient(135deg,#8b5cf6,#6366f1); color: #fff; border-color: #232328;
+}
+.kid-theme .topbar .tb-btn .dot {
+  position: absolute; top: 6px; right: 7px; width: 8px; height: 8px; border-radius: 99px;
+  background: #ef4444; border: 2px solid #18181c;
+}
 
 /* === CSS Transitions for theme switching === */
 body { transition: background .3s, color .3s; }
@@ -1111,6 +1127,8 @@ body { transition: background .3s, color .3s; }
   /* Topbar */
   .topbar { padding: 0 14px; height: 60px; gap: 12px; }
   .topbar h1 { font-size: 16px; }
+  .kid-theme .topbar { margin: 10px 12px 0; border-radius: 16px; height: 58px; }
+  .kid-topbar-pills { padding: 4px 10px 4px 10px; gap: 8px; }
   .search { display: none; } /* Mobileda qidiruv yashirin */
 
   /* Content */
