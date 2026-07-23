@@ -99,9 +99,11 @@ export async function videosRoutes(app: FastifyInstance) {
               c.thumbnail_icon AS "thumbnailIcon",
               c.lesson_completion_xp AS "lessonCompletionXp", c.course_completion_xp AS "courseCompletionXp",
               COUNT(DISTINCT v.id)::int AS "videoCount",
+              COUNT(DISTINCT q.video_id)::int AS "testCount",
               ${watchedSelect} AS "watchedCount"
        FROM video_courses c
        LEFT JOIN video_lessons v ON v.course_id = c.id
+       LEFT JOIN video_quiz_questions q ON q.video_id = v.id
        ${progressJoin}
        WHERE ${conditions.join(" AND ")}
        GROUP BY c.id
@@ -142,7 +144,8 @@ export async function videosRoutes(app: FastifyInstance) {
       `SELECT v.id, v.title, v.video_url AS "videoUrl", v.duration_seconds AS "durationSeconds",
               v.thumbnail_url AS "thumbnailUrl",
               ${progressSelect} AS "progressPct",
-              ${lessonDoneSelect} AS "lessonDone"
+              ${lessonDoneSelect} AS "lessonDone",
+              EXISTS(SELECT 1 FROM video_quiz_questions q WHERE q.video_id = v.id) AS "hasQuiz"
        FROM video_lessons v
        ${progressJoin}
        WHERE v.course_id = $1

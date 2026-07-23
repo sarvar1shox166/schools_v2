@@ -1576,6 +1576,7 @@ export interface VideoCourse {
   thumbnailColor: string | null;
   thumbnailIcon: string | null;
   videoCount: number;
+  testCount: number;
   watchedCount: number;
   lessonCompletionXp: number;
   courseCompletionXp: number;
@@ -1589,6 +1590,7 @@ export interface VideoLessonItem {
   thumbnailUrl: string | null;
   progressPct: number;
   lessonDone: boolean;
+  hasQuiz: boolean;
 }
 
 export interface VideoCourseExamStatus {

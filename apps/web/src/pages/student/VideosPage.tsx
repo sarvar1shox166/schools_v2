@@ -63,9 +63,17 @@ function CourseCard({ course, idx, onOpen }: { course: VideoCourse; idx: number;
         <div style={{ position: "absolute", top: 10, left: 10, background: statusBg, color: "#fff", fontSize: 10.5, fontWeight: 800, padding: "4px 10px", borderRadius: 99, boxShadow: "0 3px 10px rgba(0,0,0,.3)", letterSpacing: "0.03em", backdropFilter: "blur(4px)" }}>
           {statusText}
         </div>
-        <div style={{ position: "absolute", bottom: 10, right: 10, display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)", color: "#f5f5f6", fontSize: 10.5, fontWeight: 800, padding: "4px 8px", borderRadius: 99 }}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-          {course.videoCount} video
+        <div style={{ position: "absolute", bottom: 10, right: 10, display: "flex", gap: 6 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)", color: "#f5f5f6", fontSize: 10.5, fontWeight: 800, padding: "4px 8px", borderRadius: 99 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            {course.videoCount} video
+          </div>
+          {course.testCount > 0 && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)", color: "#f5f5f6", fontSize: 10.5, fontWeight: 800, padding: "4px 8px", borderRadius: 99 }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              {course.testCount} test
+            </div>
+          )}
         </div>
       </div>
       <div style={{ padding: "14px 16px 16px" }}>
@@ -250,6 +258,12 @@ function LessonRow({ lesson, num, xp, onOpen }: { lesson: VideoLessonItem; num: 
               {fmtSec(lesson.durationSeconds)}
             </div>
           ) : null}
+          {lesson.hasQuiz && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              Video testi{xp > 0 ? ` · +${xp} XP` : ""}
+            </div>
+          )}
         </div>
       </div>
       <div
