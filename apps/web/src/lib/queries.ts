@@ -972,6 +972,7 @@ export interface LeaderboardEntry {
   level: number;
   streak: number;
   elo: number;
+  wins: number;
 }
 
 export function useDailyPuzzle() {

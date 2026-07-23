@@ -1,14 +1,14 @@
-import { useState } from "react";
 import { useAuthStore } from "../../lib/auth-store.js";
-import { useLeaderboard, useMyXp } from "../../lib/queries.js";
+import { usePvpSocket } from "../../lib/pvpSocket.js";
+import { useLeaderboard, useMyXp, useEloHistory, useGameStats } from "../../lib/queries.js";
 
 function initials(name: string) {
   return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
 const COLORS = [
-  "#f59e0b","#3b82f6","#8b5cf6","#ec4899","#10b981",
-  "#ef4444","#06b6d4","#f97316","#84cc16","#6366f1",
+  "#f59e0b", "#3b82f6", "#8b5cf6", "#ec4899", "#10b981",
+  "#ef4444", "#06b6d4", "#f97316", "#84cc16", "#6366f1",
 ];
 function avatarColor(name: string) {
   let h = 0;
@@ -16,253 +16,177 @@ function avatarColor(name: string) {
   return COLORS[h % COLORS.length];
 }
 
-function Av({ name, size = 40 }: { name: string; size?: number }) {
-  const bg = avatarColor(name);
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: size * 0.24,
-      background: bg, display: "flex", alignItems: "center", justifyContent: "center",
-      fontWeight: 900, fontSize: size * 0.36, color: "#fff", flexShrink: 0,
-    }}>
-      {initials(name)}
-    </div>
-  );
-}
+const MEDALS = ["🥇", "🥈", "🥉"];
+const MEDAL_SIZES = [58, 48, 42];
+const AVATAR_SIZES = [86, 72, 62];
+const AVATAR_FONTS = [26, 22, 19];
+const NAME_SIZES = [23, 21, 19];
+const ELO_SIZES = [52, 40, 34];
+const ELO_COLORS = ["#facc15", "#e5e7eb", "#fdba74"];
+const RANK_COLORS = ["#facc15", "#e5e7eb", "#fdba74"];
 
 export default function LeaderboardPage() {
   const { data = [], isLoading } = useLeaderboard();
   const { data: xp } = useMyXp();
+  const { data: eloHistory = [] } = useEloHistory();
+  const { data: gameStats } = useGameStats();
   const user = useAuthStore((s) => s.user);
+  const { onlinePlayers } = usePvpSocket();
+  const onlineIds = new Set(onlinePlayers.map((p) => p.studentId));
 
   const myIdx = data.findIndex((s) => s.userId === user?.id);
   const myRank = myIdx >= 0 ? myIdx + 1 : null;
   const myEntry = myIdx >= 0 ? data[myIdx] : null;
   const myElo = xp?.elo ?? myEntry?.elo ?? 1200;
 
+  const weekElo = eloHistory.length > 0 ? eloHistory[Math.max(0, eloHistory.length - 7)]?.elo ?? myElo : myElo;
+  const weekDiff = myElo - weekElo;
+  const weekDiffStr = weekDiff >= 0 ? `+${weekDiff}` : `${weekDiff}`;
+
   const top3 = data.slice(0, 3);
   const rest = data.slice(3);
 
-  // ELO gap to next rank
-  const gapToNext = myRank && myRank > 1
-    ? Math.max(0, (data[myRank - 2]?.elo ?? 1200) - myElo)
-    : 0;
-
-  // Podium order: 2nd (left), 1st (center), 3rd (right)
-  const podiumOrder = [1, 0, 2];
-  // index 0 = 1st place, 1 = 2nd, 2 = 3rd
-  const podiumHeights = [200, 160, 130];
-  const podiumColors = [
-    "linear-gradient(180deg,#fbbf24 0%,#d97706 100%)",
-    "linear-gradient(180deg,#94a3b8 0%,#64748b 100%)",
-    "linear-gradient(180deg,#b45309 0%,#92400e 100%)",
-  ];
-  const badgeColors = ["#fbbf24", "#94a3b8", "#b45309"];
-  const rankMedal = ["🥇", "🥈", "🥉"];
+  const gapToNext = myRank && myRank > 1 ? Math.max(0, (data[myRank - 2]?.elo ?? 1200) - myElo) : 0;
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", paddingBottom: 40 }}>
+    <div style={{ maxWidth: 1120, margin: "0 auto", paddingBottom: 40 }}>
 
-      {/* ── Header row ─────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 32 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, display: "flex", alignItems: "center", gap: 8 }}>
-            🏆 Reyting jadvali
-          </h2>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "rgba(255,255,255,.35)" }}>
-            XP bo'yicha umumiy reyting
-          </p>
-        </div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "#f5f5f6" }}>Reyting jadvali 🏆</div>
       </div>
 
-      {/* ── Podium ─────────────────────────────────────────────────── */}
-      {!isLoading && top3.length > 0 && (
-        <div style={{ display: "flex", alignItems: "flex-end", marginBottom: 0 }}>
-          {podiumOrder.map((rank0) => {
-            const e = top3[rank0];
-            if (!e) return <div key={rank0} style={{ flex: 1 }} />;
+      {/* ── Top-3 + siz paneli ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr", gap: 20, marginBottom: 20, alignItems: "start" }}>
+
+        <div style={{ background: "linear-gradient(135deg,#141417 0%,#161620 100%)", border: "1px solid #232328", borderRadius: 22, padding: "34px 40px", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: -40, right: -40, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle,rgba(234,179,8,0.14),transparent 70%)" }} />
+          <div style={{ position: "absolute", bottom: -30, right: -20, fontSize: 200, lineHeight: 1, color: "#fff", opacity: 0.03 }}>♛</div>
+
+          {isLoading ? (
+            <div style={{ color: "#65666f", textAlign: "center", padding: "40px 0" }}>Yuklanmoqda...</div>
+          ) : top3.length === 0 ? (
+            <div style={{ color: "#65666f", textAlign: "center", padding: "40px 0" }}>Hali ma'lumot yo'q</div>
+          ) : top3.map((e, i) => {
             const isMe = e.userId === user?.id;
-            const avSz = rank0 === 0 ? 68 : 54;
+            const online = onlineIds.has(e.userId);
             return (
-              <div key={rank0} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                {/* Info above block */}
-                <div style={{ textAlign: "center", marginBottom: 10 }}>
-                  <div style={{ position: "relative", display: "inline-block" }}>
-                    <Av name={e.fullName} size={avSz} />
+              <div key={e.userId} style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 0", borderBottom: i < top3.length - 1 ? "1px solid #232328" : "none" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 18, minWidth: 0 }}>
+                  <div style={{ fontSize: MEDAL_SIZES[i], lineHeight: 1 }}>{MEDALS[i]}</div>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
                     <div style={{
-                      position: "absolute", bottom: -6, right: -6,
-                      width: 20, height: 20, borderRadius: "50%",
-                      background: badgeColors[rank0],
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 11, fontWeight: 900, color: "#fff",
-                      border: "2px solid #131929",
-                    }}>{rank0 + 1}</div>
+                      width: AVATAR_SIZES[i], height: AVATAR_SIZES[i], borderRadius: 16, background: avatarColor(e.fullName),
+                      display: "flex", alignItems: "center", justifyContent: "center", color: "#0a0a0c", fontSize: AVATAR_FONTS[i], fontWeight: 800,
+                      boxShadow: "0 6px 18px rgba(0,0,0,.3)",
+                    }}>{initials(e.fullName)}</div>
+                    {online && <div style={{ position: "absolute", bottom: -2, right: -2, width: 14, height: 14, borderRadius: "50%", background: "#22c55e", border: "2.5px solid #141417", boxShadow: "0 0 8px rgba(34,197,94,.6)" }} />}
                   </div>
-                  <div style={{ marginTop: 12, fontWeight: 800, fontSize: 14 }}>
-                    {isMe ? "Siz" : e.fullName.split(" ")[0]}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#3b82f6", marginTop: 1 }}>
-                    {e.elo ?? 1200}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#f59e0b", fontWeight: 600, marginTop: 1 }}>
-                    ⚡ {e.xp} XP
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: NAME_SIZES[i], fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.1, color: "#f5f5f6", whiteSpace: "nowrap" }}>
+                      {isMe ? "Siz" : e.fullName}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 3, color: "#fb923c", fontSize: 12, fontWeight: 700 }}>🔥 {e.streak}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 3, color: "#4ade80", fontSize: 12, fontWeight: 700 }}>✓ {e.wins} g'alaba</div>
+                    </div>
                   </div>
                 </div>
-                {/* Block */}
-                <div style={{
-                  width: "100%", height: podiumHeights[rank0],
-                  background: podiumColors[rank0],
-                  borderRadius: "10px 10px 0 0",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 52, fontWeight: 900, color: "rgba(255,255,255,.18)",
-                }}>
-                  {rank0 + 1}
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: ELO_SIZES[i], fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: ELO_COLORS[i] }}>{e.elo}</div>
+                  <div style={{ fontSize: 11, color: "#65666f", marginTop: 6, fontWeight: 600 }}>{e.xp} XP</div>
                 </div>
               </div>
             );
           })}
         </div>
-      )}
 
-      {/* ── Bottom row: list + right panel ────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 20, alignItems: "start" }}>
-
-        {/* To'liq jadval */}
-        <div style={{
-          background: "rgba(255,255,255,.04)",
-          border: "1.5px solid rgba(255,255,255,.08)",
-          borderRadius: top3.length > 0 ? "0 0 14px 14px" : 14,
-          overflow: "hidden",
-        }}>
-          {/* List header */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,.06)",
-          }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: "rgba(99,102,241,.2)", display: "grid", placeItems: "center", fontSize: 14,
-            }}>📊</div>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 14 }}>To'liq jadval</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,.35)" }}>Barcha o'quvchilar</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ background: "linear-gradient(135deg,rgba(34,197,94,0.18) 0%,#141417 65%)", border: "1px solid rgba(34,197,94,0.28)", borderRadius: 20, padding: "20px 22px", position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: -30, right: -30, width: 130, height: 130, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,197,94,0.22),transparent 70%)" }} />
+            <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: "0.2em", color: "#4ade80" }}>/SIZNING O'RNINGIZ</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 10 }}>
+                  <div style={{ fontSize: 40, fontWeight: 800, color: "#f5f5f6", lineHeight: 1, letterSpacing: "-0.03em" }}>{myRank ? `${myRank}-o'rin` : "—"}</div>
+                  <div style={{ color: "#86efac", fontSize: 13, fontWeight: 700 }}>{myElo} ELO</div>
+                </div>
+                {myRank && myRank > 1 && (
+                  <div style={{ fontSize: 12, color: "#86efac", fontWeight: 600, marginTop: 8 }}>▲ {gapToNext} ELO — {myRank - 1}-o'ringacha</div>
+                )}
+              </div>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#22c55e,#16a34a)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 18px rgba(34,197,94,.4)", flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#052e16" strokeWidth="2.4"><path d="M12 15a5 5 0 100-10 5 5 0 000 10z" /><path d="M8.5 14L7 22l5-3 5 3-1.5-8" /></svg>
+              </div>
             </div>
           </div>
 
-          {isLoading && (
-            <div style={{ padding: 32, textAlign: "center", color: "rgba(255,255,255,.3)", fontSize: 14 }}>
-              Yuklanmoqda...
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div style={{ background: "linear-gradient(135deg,rgba(59,130,246,0.12) 0%,#141417 60%)", border: "1px solid #232328", borderRadius: 14, padding: 14 }}>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: "0.15em", color: "#60a5fa" }}>HAFTA</div>
+              <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, letterSpacing: "-0.02em", color: "#f5f5f6" }}>{weekDiffStr}</div>
+              <div style={{ fontSize: 11, color: "#8b8d98" }}>ELO farqi</div>
             </div>
-          )}
+            <div style={{ background: "linear-gradient(135deg,rgba(139,92,246,0.14) 0%,#141417 60%)", border: "1px solid #232328", borderRadius: 14, padding: 14 }}>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: "0.15em", color: "#a78bfa" }}>O'YIN</div>
+              <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, letterSpacing: "-0.02em", color: "#f5f5f6" }}>{gameStats?.wins ?? 0}—{gameStats?.losses ?? 0}</div>
+              <div style={{ fontSize: 11, color: "#8b8d98" }}>G'alaba / Mag'lub</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Full table ── */}
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em", color: "#f5f5f6" }}>Barcha o'quvchilar</div>
+        </div>
+
+        <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 16, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "56px 1.7fr 0.9fr 1fr 0.7fr", padding: "14px 22px", background: "#18181c", color: "#8b8d98", fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: "0.15em", borderBottom: "1px solid #232328" }}>
+            <div>#</div><div>O'QUVCHI</div><div>ELO</div><div>XP</div><div>STREAK</div>
+          </div>
+
+          {isLoading && <div style={{ padding: 32, textAlign: "center", color: "#65666f", fontSize: 14 }}>Yuklanmoqda...</div>}
 
           {rest.map((e, i) => {
             const rank = i + 4;
             const isMe = e.userId === user?.id;
+            const online = onlineIds.has(e.userId);
             return (
               <div key={e.userId} style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "11px 20px",
-                background: isMe ? "rgba(59,130,246,.08)" : "transparent",
-                borderBottom: "1px solid rgba(255,255,255,.04)",
-                borderLeft: isMe ? "3px solid #3b82f6" : "3px solid transparent",
+                display: "grid", gridTemplateColumns: "56px 1.7fr 0.9fr 1fr 0.7fr", padding: "14px 22px", alignItems: "center",
+                borderBottom: i < rest.length - 1 ? "1px solid #1a1a1e" : "none",
+                background: isMe ? "linear-gradient(90deg,rgba(34,197,94,0.08),transparent)" : "transparent",
+                borderLeft: isMe ? "3px solid #22c55e" : "3px solid transparent",
               }}>
-                <div style={{ width: 24, textAlign: "center", fontWeight: 700, fontSize: 13, color: "rgba(255,255,255,.4)" }}>
-                  {rank}
-                </div>
-                <Av name={e.fullName} size={34} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>
-                    {e.fullName}{isMe ? " (Siz)" : ""}
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, fontWeight: 800, color: "#65666f" }}>{String(rank).padStart(2, "0")}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: avatarColor(e.fullName), color: "#0a0a0c", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(e.fullName)}</div>
+                    {online && <div style={{ position: "absolute", bottom: -2, right: -2, width: 11, height: 11, borderRadius: "50%", background: "#22c55e", border: "2px solid #141417" }} />}
                   </div>
-                  <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 1 }}>⚡ {e.xp} XP</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.2, color: "#f5f5f6" }}>{e.fullName}</div>
+                      {isMe && <div style={{ background: "rgba(34,197,94,.2)", border: "1px solid rgba(34,197,94,.35)", color: "#4ade80", fontSize: 9.5, fontWeight: 800, padding: "1px 6px", borderRadius: 99, letterSpacing: "0.05em" }}>SIZ</div>}
+                    </div>
+                    <div style={{ color: "#4ade80", fontSize: 10.5, fontWeight: 600, marginTop: 2 }}>{e.wins} g'alaba</div>
+                  </div>
                 </div>
-                {/* Rank change */}
-                <div style={{ width: 36, textAlign: "center", fontSize: 12, color: "rgba(255,255,255,.3)" }}>
-                  —
-                </div>
-                {/* ELO */}
-                <div style={{ width: 50, textAlign: "right", fontWeight: 800, fontSize: 14, color: "#e2e8f0" }}>
-                  {e.elo ?? 1200}
-                </div>
-                {/* ELO change */}
-                <div style={{ width: 36, textAlign: "right", fontSize: 12, color: "rgba(255,255,255,.3)" }}>
-                  0
-                </div>
+                <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "'JetBrains Mono',monospace", letterSpacing: "-0.02em", color: "#f5f5f6" }}>{e.elo}</div>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 800, color: "#c7d0e8" }}>{e.xp}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "#fb923c" }}>🔥 {e.streak}</div>
               </div>
             );
           })}
 
           {!isLoading && data.length === 0 && (
-            <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,.25)", fontSize: 14 }}>
-              Hali ma'lumot yo'q
-            </div>
+            <div style={{ padding: 40, textAlign: "center", color: "#54555e", fontSize: 14 }}>Hali ma'lumot yo'q</div>
           )}
         </div>
 
-        {/* ── Right panel ────────────────────────────────────────── */}
-        <div style={{
-          background: "rgba(255,255,255,.04)",
-          border: "1.5px solid rgba(255,255,255,.08)",
-          borderRadius: 14, overflow: "hidden",
-        }}>
-          {/* Medal + rank */}
-          <div style={{ padding: "28px 20px 20px", textAlign: "center", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
-            <div style={{ fontSize: 44, marginBottom: 6 }}>
-              {myRank === 1 ? "🥇" : myRank === 2 ? "🥈" : myRank === 3 ? "🥉" : "🏅"}
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1 }}>
-              {myRank ? `${myRank}-o'rin` : "—"}
-            </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", marginTop: 4 }}>
-              Sizning o'rningiz
-            </div>
-          </div>
-
-          {/* ELO ball */}
-          <div style={{
-            margin: "16px 16px 0",
-            background: "rgba(37,99,235,.25)",
-            border: "1px solid rgba(59,130,246,.3)",
-            borderRadius: 12, padding: "14px 16px", textAlign: "center",
-          }}>
-            <div style={{ fontSize: 34, fontWeight: 900, color: "#60a5fa" }}>{myElo}</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)", marginTop: 2 }}>ELO ball</div>
-          </div>
-
-          {/* Progress to next rank */}
-          {myRank && myRank > 1 && (
-            <div style={{ margin: "14px 16px 0", padding: "12px 14px", background: "rgba(255,255,255,.03)", borderRadius: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8 }}>
-                <span style={{ color: "rgba(255,255,255,.45)" }}>
-                  {myRank - 1}-o'ringacha
-                </span>
-                <span style={{ color: "#f59e0b", fontWeight: 700 }}>{gapToNext} ELO</span>
-              </div>
-              <div style={{ height: 6, background: "rgba(255,255,255,.08)", borderRadius: 99, overflow: "hidden" }}>
-                <div style={{
-                  height: "100%", borderRadius: 99,
-                  background: "linear-gradient(90deg,#f59e0b,#fbbf24)",
-                  width: `${Math.max(4, Math.min(96, 100 - (gapToNext / 600) * 100))}%`,
-                }} />
-              </div>
-            </div>
-          )}
-
-          {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: "14px 16px 18px" }}>
-            {[
-              { label: "Bu hafta", value: `+${xp?.xp ?? 0}`, color: "#3b82f6" },
-              { label: "G'alaba",  value: "—",               color: "#10b981" },
-              { label: "Mag'lub",  value: "—",               color: "#ef4444" },
-            ].map((s) => (
-              <div key={s.label} style={{
-                background: "rgba(255,255,255,.04)", borderRadius: 10,
-                padding: "10px 6px", textAlign: "center",
-              }}>
-                <div style={{ fontSize: 17, fontWeight: 900, color: s.color }}>{s.value}</div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,.35)", marginTop: 2 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
+        <div style={{ color: "#65666f", fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: "0.05em", marginTop: 14 }}>
+          Jami {data.length} o'quvchi
         </div>
       </div>
     </div>

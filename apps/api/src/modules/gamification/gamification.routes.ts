@@ -453,10 +453,16 @@ export async function gamificationRoutes(app: FastifyInstance) {
   app.get("/leaderboard", async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT u.id AS "userId", u.full_name AS "fullName", sx.xp, sx.level, sx.streak, sx.elo
+      `SELECT u.id AS "userId", u.full_name AS "fullName", sx.xp, sx.level, sx.streak, sx.elo,
+              COALESCE(gr.wins, 0) AS wins
        FROM student_xp sx
        JOIN students s ON s.id = sx.student_id
        JOIN users u ON u.id = s.user_id
+       LEFT JOIN (
+         SELECT student_id, COUNT(*) FILTER (WHERE result = 'win')::int AS wins
+         FROM game_results
+         GROUP BY student_id
+       ) gr ON gr.student_id = s.id
        WHERE s.tenant_id = $1
        ORDER BY sx.xp DESC
        LIMIT 50`,
