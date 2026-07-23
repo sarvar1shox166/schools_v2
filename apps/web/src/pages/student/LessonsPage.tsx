@@ -62,10 +62,14 @@ export default function LessonsPage() {
   }, [tick, next?.nextAt]);
 
   const countdown = {
-    h: Math.floor(countdownMs / 3600000), m: Math.floor((countdownMs % 3600000) / 60000), s: Math.floor((countdownMs % 60000) / 1000),
+    d: Math.floor(countdownMs / 86400000),
+    h: Math.floor((countdownMs % 86400000) / 3600000),
+    m: Math.floor((countdownMs % 3600000) / 60000),
   };
   const canJoinNext = !!next && !next.endedToday && countdownMs <= 5 * 60 * 1000;
   const isToday = next ? new Date(next.nextAt).toDateString() === new Date().toDateString() : false;
+  // Ko'chirilgan darsda haftalik kun emas, aynan yangi sananing kuni ko'rsatilishi kerak.
+  const nextDow = next ? (new Date(next.nextAt).getDay() + 6) % 7 : 0;
 
   async function handleComplete(id: string, xp: number) {
     const res = await completeHW.mutateAsync(id);
@@ -104,8 +108,14 @@ export default function LessonsPage() {
                     boxShadow: next.isLive ? "0 0 8px #ef4444" : "none",
                     animation: next.isLive ? "pulse-live 1.6s infinite" : "none",
                   }} />
-                  {isToday ? "Bugun" : DAY_SHORT[next.dayOfWeek]} · {next.startTime.slice(0, 5)}
+                  {isToday ? "Bugun" : DAY_SHORT[nextDow]} · {next.startTime.slice(0, 5)}
                 </div>
+                {next.isRescheduled && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(234,179,8,.15)", border: "1px solid rgba(234,179,8,.35)", color: "#facc15", fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 8 }}>
+                    <Icon name="refresh" size={11} />
+                    Vaqti ko'chirildi
+                  </div>
+                )}
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(139,92,246,.15)", border: "1px solid rgba(167,139,250,.3)", color: "#c4b5fd", fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 8 }}>
                   <Icon name="students" size={11} />
                   {next.groupName ?? next.customName ?? "Individual dars"}
@@ -119,26 +129,30 @@ export default function LessonsPage() {
                 {next.groupName ?? next.customName ?? "Individual dars"}
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 22, flexWrap: "wrap" }}>
-                {([{ v: countdown.h, l: "SOAT" }, null, { v: countdown.m, l: "DAQIQA" }, null, { v: countdown.s, l: "SONIYA" }] as ({ v: number; l: string } | null)[]).map((item, i) =>
-                  item === null
-                    ? <div key={i} style={{ color: "#4a5578", fontSize: 22, fontWeight: 800 }}>:</div>
-                    : <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "12px 16px", minWidth: 72 }}>
-                        <div style={{ color: "#fff", fontSize: 32, fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{String(item.v).padStart(2, "0")}</div>
-                        <div style={{ color: "#8b93b0", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", marginTop: 6 }}>{item.l}</div>
-                      </div>
-                )}
-                <div style={{ color: "#c7d0e8", fontSize: 14 }}>qoldi</div>
-              </div>
+              {!canJoinNext && (
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 22, flexWrap: "wrap" }}>
+                  {([
+                    countdown.d > 0 ? { v: countdown.d, l: "KUN" } : null,
+                    { v: countdown.h, l: "SOAT" },
+                    { v: countdown.m, l: "DAQIQA" },
+                  ] as ({ v: number; l: string } | null)[]).filter(Boolean).map((item, i) =>
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "12px 16px", minWidth: 72 }}>
+                      <div style={{ color: "#fff", fontSize: 32, fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{String(item!.v).padStart(2, "0")}</div>
+                      <div style={{ color: "#8b93b0", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", marginTop: 6 }}>{item!.l}</div>
+                    </div>
+                  )}
+                  <div style={{ color: "#c7d0e8", fontSize: 14 }}>qoldi</div>
+                </div>
+              )}
 
-              {next.meetingUrl && next.meetingUrl !== "null" && (
+              {/* Tugma faqat dars boshlanish vaqti kelgandan keyin (yoki 5 daqiqa qolganda) ko'rinadi. */}
+              {canJoinNext && next.meetingUrl && next.meetingUrl !== "null" && (
                 <button onClick={() => {
-                  if (!canJoinNext) { alert(next.endedToday ? "Bu dars yakunlangan" : "Dars hali boshlanmagan"); return; }
                   if (isToday) joinLesson.mutate(next.id);
                   window.open(next.meetingUrl!, "_blank", "noreferrer");
                 }} style={{
                   display: "flex", alignItems: "center", gap: 6, marginTop: 22, fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer",
-                  background: canJoinNext ? "#3b82f6" : "rgba(255,255,255,.08)", color: canJoinNext ? "#fff" : "#8b93b0",
+                  background: "#3b82f6", color: "#fff",
                 }}>
                   🎥 Darsga kirish
                 </button>

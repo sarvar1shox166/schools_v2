@@ -228,7 +228,8 @@ export async function scheduleRoutes(app: FastifyInstance) {
     );
 
     const exceptionsRes = await pool.query(
-      `SELECT schedule_slot_id AS "scheduleSlotId", date, kind
+      `SELECT schedule_slot_id AS "scheduleSlotId", date, kind,
+              new_date AS "newDate", new_start_time AS "newStartTime"
        FROM schedule_exceptions
        WHERE tenant_id = $1 AND date >= CURRENT_DATE - INTERVAL '1 day'
          AND kind IN ('cancelled', 'rescheduled', 'holiday')`,
@@ -245,9 +246,15 @@ export async function scheduleRoutes(app: FastifyInstance) {
     function isExcepted(slotId: string, dateStr: string): boolean {
       return holidayDates.has(dateStr) || excepted.has(`${slotId}:${dateStr}`);
     }
+    // Ko'chirilgan darslar — asl sanada yashiriladi (yuqoridagi isExcepted orqali),
+    // yangi sana/vaqtda esa alohida nomzod sifatida hisobga olinishi kerak, aks holda
+    // o'quvchi uchun bu dars "yo'qolib" ketardi (keyingi haftaga o'tkazib yuborilardi).
+    const reschedules = exceptionsRes.rows.filter(
+      (e) => e.kind === "rescheduled" && e.scheduleSlotId && e.newDate
+    );
 
     const now = new Date();
-    let best: { row: (typeof rows)[number]; at: Date; endsAt: Date } | null = null;
+    let best: { row: (typeof rows)[number]; at: Date; endsAt: Date; isRescheduled: boolean; startTimeOverride?: string } | null = null;
     for (const row of rows) {
       const [h, m] = String(row.startTime).split(":").map(Number);
       const durationMin = row.durationMinutes ?? 90;
@@ -262,7 +269,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
         if (candidateEnd < now) continue; // o'tib ketgan bir martalik dars — endi hisobga olinmaydi
         const effectiveAt = candidate < now ? now : candidate;
         const bestEffectiveAt = best ? (best.at < now ? now : best.at) : null;
-        if (!best || effectiveAt < bestEffectiveAt!) best = { row, at: candidate, endsAt: candidateEnd };
+        if (!best || effectiveAt < bestEffectiveAt!) best = { row, at: candidate, endsAt: candidateEnd, isRescheduled: false };
         continue;
       }
 
@@ -287,13 +294,40 @@ export async function scheduleRoutes(app: FastifyInstance) {
       const effectiveAt = candidate < now ? now : candidate;
       const bestEffectiveAt = best ? (best.at < now ? now : best.at) : null;
       if (!best || effectiveAt < bestEffectiveAt!) {
-        best = { row, at: candidate, endsAt: candidateEnd };
+        best = { row, at: candidate, endsAt: candidateEnd, isRescheduled: false };
+      }
+    }
+
+    // Boshqa kunga ko'chirilgan darslar — yangi sana/vaqtda alohida nomzod sifatida qo'shiladi.
+    for (const exc of reschedules) {
+      const row = rows.find((r) => r.id === exc.scheduleSlotId);
+      if (!row) continue;
+      const newDateStr = toDateStr(new Date(exc.newDate));
+      const timeStr = String(exc.newStartTime ?? row.startTime);
+      const [h, m] = timeStr.split(":").map(Number);
+      const candidate = new Date(newDateStr + "T00:00:00");
+      candidate.setHours(h, m, 0, 0);
+      const durationMin = row.durationMinutes ?? 90;
+      const candidateEnd = new Date(candidate.getTime() + durationMin * 60000);
+      if (candidateEnd < now) continue; // ko'chirilgan sana ham o'tib ketgan
+
+      const effectiveAt = candidate < now ? now : candidate;
+      const bestEffectiveAt = best ? (best.at < now ? now : best.at) : null;
+      if (!best || effectiveAt < bestEffectiveAt!) {
+        best = { row, at: candidate, endsAt: candidateEnd, isRescheduled: true, startTimeOverride: timeStr };
       }
     }
 
     if (!best) return null;
     const isLive = best.at <= now && now < best.endsAt && !best.row.endedToday;
-    return { ...best.row, nextAt: best.at.toISOString(), endsAt: best.endsAt.toISOString(), isLive };
+    return {
+      ...best.row,
+      startTime: best.startTimeOverride ?? best.row.startTime,
+      nextAt: best.at.toISOString(),
+      endsAt: best.endsAt.toISOString(),
+      isLive,
+      isRescheduled: best.isRescheduled,
+    };
   });
 
   app.get("/me/teacher-schedule", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {

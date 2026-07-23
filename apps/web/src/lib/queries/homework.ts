@@ -22,6 +22,7 @@ export interface NextLesson {
   endedToday: boolean;
   teacherRating: number | null;
   teacherStudentsCount: number;
+  isRescheduled: boolean;
 }
 
 export function useNextLesson() {

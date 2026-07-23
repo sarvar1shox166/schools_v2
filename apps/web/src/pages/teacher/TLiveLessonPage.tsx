@@ -2,26 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Card, Icon, showXp } from "@chess-school/ui";
 import {
-  useTodaySchedule, useGroupStudents, useAttendance, useMarkAttendance,
+  useTodaySchedule, useGroupStudents,
   useEndLesson, useAwardXp, useJoinTeacherLesson,
 } from "../../lib/queries.js";
 
-type AttStatus = "p" | "l" | "a" | "ae";
-
-const STATUS_CONFIG: Record<AttStatus, { label: string; bg: string; color: string; border: string; title: string }> = {
-  p:  { label: "✓", bg: "#d1fae5", color: "#059669", border: "#059669", title: "Keldi" },
-  l:  { label: "–", bg: "#fef3c7", color: "#d97706", border: "#d97706", title: "Kechikdi" },
-  a:  { label: "✗", bg: "#fee2e2", color: "#dc2626", border: "#dc2626", title: "Kelmadi" },
-  ae: { label: "S", bg: "#e0e7ff", color: "#4338ca", border: "#4338ca", title: "Sababli" },
-};
-
 const AVATAR_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#3b82f6", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
-
-/** Mahalliy sana — .toISOString() UTC'ga o'tkazib kunni siljitib yuborishi mumkin. */
-function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function fmtCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.ceil(ms / 1000));
@@ -33,7 +18,6 @@ function fmtCountdown(ms: number): string {
 export default function TLiveLessonPage() {
   const { scheduleSlotId } = useParams<{ scheduleSlotId: string }>();
   const navigate = useNavigate();
-  const date = todayStr();
 
   const { data: todaySchedule, isLoading: schedLoading } = useTodaySchedule();
   const slot = todaySchedule?.find((s) => s.id === scheduleSlotId) ?? null;
@@ -41,15 +25,9 @@ export default function TLiveLessonPage() {
   const joinTeacherLesson = useJoinTeacherLesson();
   const endLesson = useEndLesson();
   const awardXp = useAwardXp();
-  const markAttendance = useMarkAttendance();
 
   const { data: students = [], isLoading: studLoading } = useGroupStudents(slot?.groupId ?? null);
-  const { data: existingAtt = [] } = useAttendance(scheduleSlotId ?? null, date);
 
-  const [attMap, setAttMap] = useState<Record<string, AttStatus>>({});
-  const [reasonMap, setReasonMap] = useState<Record<string, string>>({});
-  const [excusedInput, setExcusedInput] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [xpAmounts, setXpAmounts] = useState<Record<string, string>>({});
 
   const [ending, setEnding] = useState(false);
@@ -63,13 +41,6 @@ export default function TLiveLessonPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleSlotId, slot?.isStarted]);
-
-  useEffect(() => {
-    const init: Record<string, AttStatus> = {};
-    for (const s of students) init[s.id] = "p";
-    for (const r of existingAtt) init[r.studentId] = r.status as AttStatus;
-    setAttMap(init);
-  }, [students, existingAtt]);
 
   // Sekundiga yangilanadi — tugash sanog'i sahifani yangilamasdan real vaqtda ko'rinishi kerak.
   const [, setTick] = useState(0);
@@ -89,23 +60,6 @@ export default function TLiveLessonPage() {
 
   const msRemaining = scheduledEndMs != null ? scheduledEndMs - Date.now() : 0;
   const canEnd = scheduledEndMs != null && msRemaining <= 0;
-
-  function changeAtt(id: string, status: AttStatus) {
-    setAttMap((prev) => ({ ...prev, [id]: status }));
-    if (status !== "ae") setExcusedInput(null);
-    setSaved(false);
-  }
-
-  async function handleSaveAttendance() {
-    if (!scheduleSlotId) return;
-    const records = students.map((s) => ({
-      studentId: s.id,
-      status: attMap[s.id] ?? "p",
-      reason: attMap[s.id] === "ae" ? (reasonMap[s.id] || undefined) : undefined,
-    }));
-    await markAttendance.mutateAsync({ scheduleSlotId, date, records });
-    setSaved(true);
-  }
 
   async function handleGiveXp(studentId: string) {
     const amount = Number(xpAmounts[studentId]);
@@ -211,9 +165,9 @@ export default function TLiveLessonPage() {
         <Card style={{ borderRadius: 16, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "18px 22px 14px", borderBottom: "1px solid var(--border)" }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: "#3b82f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="check-square" size={18} style={{ color: "#fff" }} />
+              <Icon name="zap" size={18} style={{ color: "#fff" }} />
             </div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Davomat va XP</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>XP berish</div>
           </div>
 
           {studLoading && (
@@ -228,90 +182,35 @@ export default function TLiveLessonPage() {
 
           {!studLoading && students.length > 0 && (
             <div style={{ padding: "8px 0" }}>
-              {students.map((s, idx) => {
-                const status = attMap[s.id] ?? "p";
-                const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length];
-                return (
-                  <div key={s.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 22px", flexWrap: "wrap" }}>
-                      <div style={{ borderRadius: "50%", flexShrink: 0 }}>
-                        <Avatar name={s.fullName} size="sm" />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 120, fontWeight: 650, fontSize: 13.5 }}>{s.fullName}</div>
-
-                      <div style={{ display: "flex", gap: 5 }}>
-                        {(["p", "l", "a", "ae"] as const).map((k) => {
-                          const cfg = STATUS_CONFIG[k];
-                          const selected = status === k;
-                          return (
-                            <button key={k} title={cfg.title} onClick={() => changeAtt(s.id, k)}
-                              style={{
-                                width: 30, height: 30, borderRadius: 8, cursor: "pointer",
-                                border: selected ? `1px solid ${cfg.border}` : "1px solid var(--border)",
-                                background: selected ? cfg.bg : "var(--surface-2)",
-                                color: selected ? cfg.color : "var(--text-faint)",
-                                fontSize: 12, fontWeight: 700,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}>
-                              {cfg.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <input
-                          type="number" min={1} max={500} placeholder="XP"
-                          value={xpAmounts[s.id] ?? ""}
-                          onChange={(e) => setXpAmounts((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                          style={{ width: 56, padding: "5px 6px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, textAlign: "center" }}
-                        />
-                        <button
-                          disabled={!xpAmounts[s.id] || awardXp.isPending}
-                          onClick={() => handleGiveXp(s.id)}
-                          style={{
-                            padding: "5px 10px", borderRadius: 8, border: "none", cursor: "pointer",
-                            background: "#f59e0b", color: "#fff", fontSize: 11.5, fontWeight: 700,
-                            opacity: !xpAmounts[s.id] ? 0.5 : 1,
-                          }}>
-                          ⚡ Berish
-                        </button>
-                      </div>
+              {students.map((s) => (
+                <div key={s.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 22px", flexWrap: "wrap" }}>
+                    <div style={{ borderRadius: "50%", flexShrink: 0 }}>
+                      <Avatar name={s.fullName} size="sm" />
                     </div>
+                    <div style={{ flex: 1, minWidth: 120, fontWeight: 650, fontSize: 13.5 }}>{s.fullName}</div>
 
-                    {status === "ae" && excusedInput === s.id && (
-                      <div style={{ padding: "0 22px 10px 60px" }}>
-                        <input className="inp" placeholder="Sabab (ixtiyoriy)..." style={{ width: "100%", fontSize: 12 }}
-                          value={reasonMap[s.id] ?? ""}
-                          onChange={(e) => setReasonMap((prev) => ({ ...prev, [s.id]: e.target.value }))} />
-                      </div>
-                    )}
-                    {status === "ae" && excusedInput !== s.id && (
-                      <div style={{ padding: "0 22px 8px 60px" }}>
-                        <button style={{ fontSize: 12, color: "#4338ca", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                          onClick={() => setExcusedInput(s.id)}>
-                          + Sabab qo'shish
-                        </button>
-                      </div>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input
+                        type="number" min={1} max={500} placeholder="XP"
+                        value={xpAmounts[s.id] ?? ""}
+                        onChange={(e) => setXpAmounts((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                        style={{ width: 56, padding: "5px 6px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, textAlign: "center" }}
+                      />
+                      <button
+                        disabled={!xpAmounts[s.id] || awardXp.isPending}
+                        onClick={() => handleGiveXp(s.id)}
+                        style={{
+                          padding: "5px 10px", borderRadius: 8, border: "none", cursor: "pointer",
+                          background: "#f59e0b", color: "#fff", fontSize: 11.5, fontWeight: 700,
+                          opacity: !xpAmounts[s.id] ? 0.5 : 1,
+                        }}>
+                        ⚡ Berish
+                      </button>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {students.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "flex-end", padding: "14px 22px", borderTop: "1px solid var(--border)" }}>
-              <button
-                disabled={markAttendance.isPending}
-                onClick={handleSaveAttendance}
-                style={{
-                  padding: "9px 24px", borderRadius: 10, border: "none",
-                  background: saved ? "#10b981" : "#3b82f6", color: "#fff",
-                  fontSize: 13.5, fontWeight: 700, cursor: "pointer",
-                }}>
-                {markAttendance.isPending ? "Saqlanmoqda..." : saved ? "✓ Saqlandi" : "✓ Davomatni saqlash"}
-              </button>
+                </div>
+              ))}
             </div>
           )}
         </Card>

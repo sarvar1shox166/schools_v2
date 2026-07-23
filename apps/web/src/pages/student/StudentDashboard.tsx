@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@chess-school/ui";
 import { LessonReviewModal } from "../../components/LessonReviewModal.js";
@@ -112,8 +112,6 @@ export default function StudentDashboard() {
   const joinLesson = useJoinLesson();
   const [reviewTarget, setReviewTarget] = useState<typeof pendingReviews[number] | null>(null);
   const [streakModalOpen, setStreakModalOpen] = useState(false);
-  const [tick, setTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setTick((v) => v + 1), 1000); return () => clearInterval(t); }, []);
 
   const activePkg = packages.find((p) => p.status === "active");
   const remainingLessons = activePkg ? activePkg.totalLessons - activePkg.usedLessons : null;
@@ -136,15 +134,7 @@ export default function StudentDashboard() {
   const liveNow = nextLesson?.isLive ?? false;
   const isNextLessonToday = nextLesson ? new Date(nextLesson.nextAt).toDateString() === new Date().toDateString() : false;
   const pendingReview = pendingReviews[0] ?? null;
-  const upcomingToday = isNextLessonToday && !liveNow && !pendingReview;
   const noLessonToday = !nextLessonLoading && !liveNow && !isNextLessonToday && !pendingReview;
-
-  const countdownMs = useMemo(() => {
-    if (!nextLesson) return 0;
-    return Math.max(0, new Date(nextLesson.nextAt).getTime() - Date.now());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, nextLesson?.nextAt]);
-  const canJoinNext = !!nextLesson && !nextLesson.endedToday && countdownMs <= 5 * 60 * 1000;
 
   const today = (new Date().getDay() + 6) % 7; // 0=Mon
   const weekSchedule = [...(schedule ?? [])]
@@ -340,42 +330,8 @@ export default function StudentDashboard() {
             </div>
           )}
 
-          {upcomingToday && nextLesson && (
-            <div style={{
-              background: "linear-gradient(135deg,rgba(59,130,246,.08),rgba(20,20,23,1))",
-              border: "1px solid #1f2a3a", borderRadius: 14, padding: "18px 20px",
-              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(59,130,246,.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-                </div>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ background: "rgba(59,130,246,.15)", color: "#60a5fa", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 8 }}>BUGUNGI DARS</div>
-                    <div style={{ color: "#8b8d98", fontSize: 12.5 }}>{nextLesson.startTime.slice(0, 5)}</div>
-                  </div>
-                  <div style={{ color: "#f5f5f6", fontSize: 15, fontWeight: 700, marginTop: 4 }}>{nextLesson.groupName ?? nextLesson.customName ?? "Dars"}</div>
-                  {nextLesson.teacherName && <div style={{ color: "#65666f", fontSize: 12.5, marginTop: 2 }}>{nextLesson.teacherName}</div>}
-                </div>
-              </div>
-              {nextLesson.meetingUrl && (
-                <button onClick={() => {
-                  if (!canJoinNext) { alert("Dars hali boshlanmagan"); return; }
-                  joinLesson.mutate(nextLesson.id);
-                  window.open(nextLesson.meetingUrl!, "_blank", "noreferrer");
-                }}
-                  disabled={joinLesson.isPending}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 9, border: "none", cursor: joinLesson.isPending ? "default" : "pointer",
-                    background: canJoinNext ? "#3b82f6" : "rgba(255,255,255,.08)", color: canJoinNext ? "#fff" : "#65666f",
-                    opacity: joinLesson.isPending ? 0.7 : 1,
-                  }}>
-                  🎥 Darsga kirish
-                </button>
-              )}
-            </div>
-          )}
+          {/* Bugungi (hali boshlanmagan) darsning to'liq ko'rinishi endi faqat
+              "Darslarim" bo'limida — bu yerda takrorlanmaydi. */}
 
           {noLessonToday && !pendingReview && (
             <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>

@@ -360,8 +360,8 @@ function EditModal({ teacher, onClose }: {
     >
       <div style={{
         background: "var(--surface)", borderRadius: 18,
-        width: 480, maxWidth: "calc(100vw - 32px)",
-        maxHeight: "90vh", overflowY: "auto",
+        width: 560, maxWidth: "calc(100vw - 32px)",
+        maxHeight: "90vh", overflowY: "auto", overflowX: "hidden",
         boxShadow: "0 24px 64px rgba(0,0,0,.22)",
       }}>
         {/* Modal header */}
@@ -393,12 +393,12 @@ function EditModal({ teacher, onClose }: {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 14, marginBottom: 16 }}>
             <div>
               <label style={labelStyle}>ISM FAMILYA</label>
-              <input className="inp" value={form.fullName}
+              <input className="inp" style={{ width: "100%" }} value={form.fullName}
                 onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
             </div>
             <div>
               <label style={labelStyle}>TAJRIBA</label>
-              <input className="inp" placeholder="8 yil" value={form.expYears}
+              <input className="inp" style={{ width: "100%" }} placeholder="8 yil" value={form.expYears}
                 onChange={(e) => setForm({ ...form, expYears: e.target.value })} />
             </div>
           </div>
@@ -424,7 +424,7 @@ function EditModal({ teacher, onClose }: {
           {/* TELEFON */}
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>TELEFON</label>
-            <input className="inp" value={form.phone}
+            <input className="inp" style={{ width: "100%" }} value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </div>
 
