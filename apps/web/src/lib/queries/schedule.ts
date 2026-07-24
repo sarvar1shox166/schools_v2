@@ -109,6 +109,9 @@ export function useCreateScheduleException() {
       qc.invalidateQueries({ queryKey: ["scheduleExceptions"] });
       qc.invalidateQueries({ queryKey: ["scheduleToday"] });
       qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
+      qc.invalidateQueries({ queryKey: ["daySlots"] });
+      qc.invalidateQueries({ queryKey: ["unresolvedAbsences"] });
+      qc.invalidateQueries({ queryKey: ["nextLesson"] });
     },
   });
 }

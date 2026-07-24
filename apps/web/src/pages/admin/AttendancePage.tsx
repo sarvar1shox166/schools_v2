@@ -12,7 +12,10 @@ import {
   useTeacherAttendanceHistoryMatrix,
   useDaySlots,
   useMarkTeacherAttendance,
+  useCreateScheduleException,
+  useUnresolvedAbsences,
   type DaySlot,
+  type UnresolvedAbsence,
 } from "../../lib/queries.js";
 
 /* ─── Types ─── */
@@ -74,6 +77,7 @@ export default function AttendancePage() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [showModal, setShowModal] = useState(false);
+  const [resolvingAbsence, setResolvingAbsence] = useState<UnresolvedAbsence | null>(null);
 
   const today = todayStr();
   const isToday = selectedDate === today;
@@ -84,6 +88,7 @@ export default function AttendancePage() {
   const { data: matrix, isLoading: matLoading } = useAttendanceHistoryMatrix(selectedGroupId, 8);
   const { data: teacherMatrix, isLoading: teacherMatLoading } = useTeacherAttendanceHistoryMatrix(8);
   const { data: daySlotsData } = useDaySlots(selectedDate);
+  const { data: unresolvedAbsences = [] } = useUnresolvedAbsences();
 
   /* When groups load, auto-select the first */
   const activeGroupId = selectedGroupId ?? (groups[0]?.id ?? null);
@@ -128,8 +133,55 @@ export default function AttendancePage() {
           }}
         >
           <Icon name="teacher" size={14} /> O'qituvchilar
+          {unresolvedAbsences.length > 0 && (
+            <span style={{
+              background: "#ef4444", color: "#fff", fontSize: 10.5, fontWeight: 800,
+              borderRadius: 99, padding: "1px 6px", minWidth: 16, textAlign: "center",
+            }}>
+              {unresolvedAbsences.length}
+            </span>
+          )}
         </button>
       </div>
+
+      {/* Hal qilinmagan "kelmadi" belgilar — bekor qilish/ko'chirish kutmoqda */}
+      {tab === "teacher" && unresolvedAbsences.length > 0 && (
+        <Card style={{ padding: 0, borderColor: "rgba(239,68,68,.35)" }}>
+          <div style={{
+            padding: "14px 18px", display: "flex", alignItems: "center", gap: 12,
+            borderBottom: "1px solid var(--border)",
+          }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 9, background: "rgba(239,68,68,.15)",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <Icon name="alert" size={16} style={{ color: "#ef4444" }} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>Hal qilinmagan darslar</div>
+              <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 1 }}>
+                O'qituvchi "kelmadi" deb belgilangan, lekin dars hali bekor qilinmagan yoki ko'chirilmagan
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {unresolvedAbsences.map((a) => (
+              <div key={`${a.scheduleSlotId}:${a.date}`} style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "10px 18px",
+                borderBottom: "1px solid var(--border)",
+              }}>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
+                  <span style={{ fontWeight: 700 }}>{a.groupLabel}</span>
+                  <span style={{ color: "var(--text-faint)" }}> · {a.teacherName} · {fmtDate(a.date)} {a.startTime.slice(0, 5)}</span>
+                </div>
+                <button className="btn" style={{ fontSize: 12.5, padding: "6px 14px" }} onClick={() => setResolvingAbsence(a)}>
+                  Hal qilish
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Day of week strip */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -416,6 +468,16 @@ export default function AttendancePage() {
           onClose={() => setShowModal(false)}
         />
       )}
+
+      {resolvingAbsence && (
+        <ResolveAbsenceModal
+          scheduleSlotId={resolvingAbsence.scheduleSlotId}
+          date={resolvingAbsence.date}
+          defaultTime={resolvingAbsence.startTime.slice(0, 5)}
+          label={`${resolvingAbsence.groupLabel} — ${resolvingAbsence.teacherName}`}
+          onClose={() => setResolvingAbsence(null)}
+        />
+      )}
     </div>
   );
 }
@@ -601,6 +663,7 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
   const [statuses, setStatuses] = useState<Record<string, AttStatus>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [err, setErr] = useState("");
+  const [resolvingSlot, setResolvingSlot] = useState<DaySlot | null>(null);
 
   const slots = data?.slots ?? [];
   const dayLabel = DOW_LABEL[data?.dayOfWeek ?? todayDow()];
@@ -616,6 +679,10 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
         date,
         records: [{ scheduleSlotId: s.scheduleSlotId, teacherId: s.teacherId, status: LOCAL_TO_API[status] }],
       });
+      // "Kelmadi" belgilanganda darhol taklif qilamiz: bekor qilinsinmi yoki
+      // ko'chirilsinmi (2-variant — ixtiyoriy, "Keyinroq" bosilsa ham davomat
+      // to'g'ri saqlanib qoladi, faqat "hal qilinmagan" ro'yxatida ko'rinadi).
+      if (status === "kelmadi") setResolvingSlot(s);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
     } finally {
@@ -702,6 +769,117 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
         <div style={{ display: "flex", gap: 12, padding: "0 24px 18px" }}>
           <button className="btn primary" style={{ flex: 1, justifyContent: "center", fontWeight: 700 }} onClick={onClose}>
             Yopish
+          </button>
+        </div>
+      </div>
+
+      {resolvingSlot && (
+        <ResolveAbsenceModal
+          scheduleSlotId={resolvingSlot.scheduleSlotId}
+          date={date}
+          defaultTime={resolvingSlot.startTime.slice(0, 5)}
+          label={`${slotLabel(resolvingSlot)} — ${resolvingSlot.teacherName ?? ""}`}
+          onClose={() => setResolvingSlot(null)}
+        />
+      )}
+    </div>,
+    document.body
+  );
+}
+
+/* ─── O'qituvchi kelmagan darsni hal qilish: bekor qilish yoki ko'chirish ─── */
+function ResolveAbsenceModal({ scheduleSlotId, date, defaultTime, label, onClose }: {
+  scheduleSlotId: string; date: string; defaultTime: string; label: string; onClose: () => void;
+}) {
+  const createException = useCreateScheduleException();
+  const [action, setAction] = useState<"cancelled" | "rescheduled">("cancelled");
+  const [newDate, setNewDate] = useState(date);
+  const [newTime, setNewTime] = useState(defaultTime);
+  const [reason, setReason] = useState("O'qituvchi kelmadi");
+  const [err, setErr] = useState("");
+
+  async function handleSubmit() {
+    setErr("");
+    try {
+      if (action === "cancelled") {
+        await createException.mutateAsync({ scheduleSlotId, date, kind: "cancelled", reason: reason || undefined });
+      } else {
+        await createException.mutateAsync({
+          scheduleSlotId, date, kind: "rescheduled",
+          newDate, newStartTime: newTime, reason: reason || undefined,
+        });
+      }
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    }
+  }
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 260,
+        background: "rgba(0,0,0,.45)", backdropFilter: "blur(3px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+      }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: "var(--surface)", borderRadius: 18, width: 420, maxWidth: "100%",
+        boxShadow: "0 24px 64px rgba(0,0,0,.22)", padding: 22,
+      }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>
+          Dars bekor qilinsinmi yoki ko'chirilsinmi?
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 18 }}>
+          {label} — {fmtDate(date)}
+        </div>
+
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          {(["cancelled", "rescheduled"] as const).map((a) => (
+            <button key={a} onClick={() => setAction(a)}
+              style={{
+                flex: 1, padding: "9px 4px", borderRadius: 8, cursor: "pointer",
+                border: action === a ? "none" : "1px solid var(--border)",
+                background: action === a ? "var(--accent)" : "var(--surface-2)",
+                color: action === a ? "#fff" : "var(--text-dim)",
+                fontWeight: 700, fontSize: 12.5,
+              }}>
+              {a === "cancelled" ? "Bekor qilish" : "Ko'chirish"}
+            </button>
+          ))}
+        </div>
+
+        {action === "rescheduled" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)" }}>YANGI SANA</label>
+              <input className="inp" type="date" style={{ width: "100%" }} value={newDate}
+                onChange={(e) => setNewDate(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)" }}>YANGI VAQT</label>
+              <input className="inp" type="time" style={{ width: "100%" }} value={newTime}
+                onChange={(e) => setNewTime(e.target.value)} />
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)" }}>SABAB</label>
+          <input className="inp" style={{ width: "100%" }} value={reason}
+            onChange={(e) => setReason(e.target.value)} />
+        </div>
+
+        {err && (
+          <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{err}</div>
+        )}
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Keyinroq</button>
+          <button className="btn primary" style={{ flex: 2, justifyContent: "center" }}
+            disabled={createException.isPending} onClick={handleSubmit}>
+            <Icon name="check" size={14} /> {createException.isPending ? "Saqlanmoqda..." : "Tasdiqlash"}
           </button>
         </div>
       </div>

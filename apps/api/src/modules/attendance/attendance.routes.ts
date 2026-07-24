@@ -484,6 +484,48 @@ export async function attendanceRoutes(app: FastifyInstance) {
     }
   );
 
+  // O'qituvchi "kelmadi" deb belgilangan, lekin hali bekor qilinmagan/ko'chirilmagan
+  // darslar — bu ro'yxat bo'sh bo'lishi kerak: har bir "kelmadi" oxir-oqibat
+  // schedule_exceptions bilan hal qilinishi kutiladi (2-variant: ixtiyoriy, lekin kuzatiladi).
+  app.get(
+    "/attendance/teacher/unresolved-absences",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator")] },
+    async (request) => {
+      const { tenantId, role, sub } = request.user;
+
+      const params: unknown[] = [tenantId];
+      let filter = "";
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        filter = `AND ta.teacher_id = ANY($2::uuid[])`;
+        params.push(ids);
+      }
+
+      const { rows } = await pool.query(
+        `SELECT ta.schedule_slot_id AS "scheduleSlotId", ta.teacher_id AS "teacherId",
+                to_char(ta.date, 'YYYY-MM-DD') AS "date",
+                u.full_name AS "teacherName", sl.start_time AS "startTime",
+                COALESCE(g.name, sl.custom_name, 'Dars') AS "groupLabel"
+         FROM teacher_attendance ta
+         JOIN schedule_slots sl ON sl.id = ta.schedule_slot_id
+         LEFT JOIN groups g ON g.id = sl.group_id
+         JOIN teachers t ON t.id = ta.teacher_id
+         JOIN users u ON u.id = t.user_id
+         WHERE ta.tenant_id = $1 AND ta.status = 'a'
+           AND ta.date >= CURRENT_DATE - INTERVAL '30 days'
+           ${filter}
+           AND NOT EXISTS (
+             SELECT 1 FROM schedule_exceptions se
+             WHERE se.schedule_slot_id = ta.schedule_slot_id AND se.date = ta.date
+               AND se.kind IN ('cancelled', 'rescheduled')
+           )
+         ORDER BY ta.date DESC`,
+        params
+      );
+      return rows;
+    }
+  );
+
   app.post(
     "/attendance/teacher",
     { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator", "moderator", "teacher")] },

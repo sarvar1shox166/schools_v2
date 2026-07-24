@@ -189,6 +189,22 @@ export function useDaySlots(date: string) {
   });
 }
 
+export interface UnresolvedAbsence {
+  scheduleSlotId: string;
+  teacherId: string;
+  teacherName: string;
+  groupLabel: string;
+  startTime: string;
+  date: string;
+}
+
+export function useUnresolvedAbsences() {
+  return useQuery({
+    queryKey: ["unresolvedAbsences"],
+    queryFn: async () => (await api.get<UnresolvedAbsence[]>("/attendance/teacher/unresolved-absences")).data,
+  });
+}
+
 export function useMarkTeacherAttendance() {
   const qc = useQueryClient();
   return useMutation({
