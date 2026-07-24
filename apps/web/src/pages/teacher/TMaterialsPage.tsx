@@ -455,6 +455,7 @@ export default function TMaterialsPage() {
   const { data: teacherSchedule } = useTeacherSchedule();
   const { data: todaySlots = [] } = useTodaySchedule();
   const { data: homework = [], isLoading: hwLoading } = useHomework();
+  const [selectedGroupId, setSelectedGroupId] = useState<string | "all">("all");
 
   const todayGroups = todaySlots.filter((s) => s.groupId);
   const now = new Date();
@@ -466,6 +467,20 @@ export default function TMaterialsPage() {
     const total = withStudents.reduce((s, h) => s + (h.completionCount ?? 0) / (h.totalStudents ?? 1), 0);
     return Math.round((total / withStudents.length) * 100);
   }, [homework]);
+
+  // Bir nechta guruhi bo'lgan o'qituvchida vazifalar soni tez ko'payadi — barcha
+  // guruhlarni bitta oqim ichida aralashtirib qo'yish o'rniga, guruh bo'yicha
+  // yorliqlar (tab) orqali ajratamiz.
+  const groups = teacherSchedule?.groups ?? [];
+  const countByGroup = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const h of homework) if (h.groupId) m[h.groupId] = (m[h.groupId] ?? 0) + 1;
+    return m;
+  }, [homework]);
+  const filteredHomework = selectedGroupId === "all"
+    ? homework
+    : homework.filter((h) => h.groupId === selectedGroupId);
+  const selectedGroupName = selectedGroupId === "all" ? null : groups.find((g) => g.id === selectedGroupId)?.name ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -499,12 +514,30 @@ export default function TMaterialsPage() {
 
       <div>
         <div style={{ color: "var(--text-faint)", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", marginBottom: 12 }}>OLDIN BERILGAN VAZIFALAR</div>
+
+        {groups.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+            <div onClick={() => setSelectedGroupId("all")} style={tabStyle(selectedGroupId === "all")}>
+              Barchasi ({homework.length})
+            </div>
+            {groups.map((g) => (
+              <div key={g.id} onClick={() => setSelectedGroupId(g.id)} style={tabStyle(selectedGroupId === g.id)}>
+                {g.name} ({countByGroup[g.id] ?? 0})
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {hwLoading ? (
             <div style={{ padding: "24px 0", textAlign: "center", color: "var(--text-faint)" }}>Yuklanmoqda...</div>
-          ) : homework.length === 0 ? (
-            <EmptyState icon="📝" title="Hali vazifa berilmagan" sub="Bugun dars o'tgan guruhingizni ochib vazifa bering" />
-          ) : homework.map((hw) => <HomeworkListItem key={hw.id} hw={hw} />)}
+          ) : filteredHomework.length === 0 ? (
+            <EmptyState
+              icon="📝"
+              title={selectedGroupName ? `${selectedGroupName} guruhiga hali vazifa berilmagan` : "Hali vazifa berilmagan"}
+              sub="Bugun dars o'tgan guruhingizni ochib vazifa bering"
+            />
+          ) : filteredHomework.map((hw) => <HomeworkListItem key={hw.id} hw={hw} />)}
         </div>
       </div>
     </div>

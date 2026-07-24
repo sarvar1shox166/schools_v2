@@ -42,6 +42,15 @@ const assignSchema = z.object({
   paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
+// Allaqachon tayinlangan paketni tuzatish uchun — masalan "8 ta dars" deb sotib
+// olingan paketga admin xato qilib kam/ko'p yozgan bo'lsa, yoki muddatini uzaytirish kerak bo'lsa.
+const updateStudentPackageSchema = z.object({
+  totalLessons: z.number().int().positive().optional(),
+  usedLessons: z.number().int().min(0).optional(),
+  status: z.enum(["active", "finished", "expired"]).optional(),
+  expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+});
+
 export async function paymentsRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
@@ -197,6 +206,45 @@ export async function paymentsRoutes(app: FastifyInstance) {
     } finally {
       client.release();
     }
+  });
+
+  app.patch("/student-packages/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = updateStudentPackageSchema.parse(request.body);
+    const { tenantId } = request.user;
+
+    // total_lessons kamaytirilsa used_lessons dan kam bo'lib qolmasin — bu holatda
+    // "ishlatilgan darslar" mavjud paketdan ko'p bo'lib qoladi va UI buzilardi.
+    const currentRes = await pool.query(
+      `SELECT sp.used_lessons AS "usedLessons"
+       FROM student_packages sp JOIN students s ON s.id = sp.student_id
+       WHERE sp.id = $1 AND s.tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (currentRes.rows.length === 0) return reply.code(404).send({ error: "Paket topilmadi" });
+    const usedLessons = body.usedLessons ?? currentRes.rows[0].usedLessons;
+    if (body.totalLessons != null && body.totalLessons < usedLessons) {
+      return reply.code(400).send({ error: `Jami darslar soni ishlatilgan darslardan (${usedLessons}) kam bo'lishi mumkin emas` });
+    }
+
+    const expiresAtProvided = Object.prototype.hasOwnProperty.call(body, "expiresAt");
+    const { rows } = await pool.query(
+      `UPDATE student_packages sp SET
+         total_lessons = COALESCE($1, sp.total_lessons),
+         used_lessons  = COALESCE($2, sp.used_lessons),
+         status        = COALESCE($3, sp.status),
+         expires_at    = CASE WHEN $4 THEN $5::date ELSE sp.expires_at END
+       FROM students s
+       WHERE sp.id = $6 AND s.id = sp.student_id AND s.tenant_id = $7
+       RETURNING sp.id`,
+      [
+        body.totalLessons ?? null, body.usedLessons ?? null, body.status ?? null,
+        expiresAtProvided, body.expiresAt ?? null,
+        id, tenantId,
+      ]
+    );
+    if (rows.length === 0) return reply.code(404).send({ error: "Paket topilmadi" });
+    return { ok: true };
   });
 
   // ---- Stats ----

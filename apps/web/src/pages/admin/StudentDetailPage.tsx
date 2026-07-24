@@ -5,9 +5,9 @@ import { Avatar, Card, Icon, fmtSom } from "@chess-school/ui";
 import { DateField } from "../../components/DateField.js";
 import {
   useStudent, useUpdateStudent, useDeleteStudent, useSetStudentGroup,
-  useResetStudentPassword, useStudentPackages, useAssignPackage,
+  useResetStudentPassword, useStudentPackages, useAssignPackage, useUpdateStudentPackage,
   useGroups, usePackages, useUploadImage,
-  type Package, type StudentDetail,
+  type Package, type StudentDetail, type StudentPackage,
 } from "../../lib/queries.js";
 
 const LEVELS = ["Boshlang'ich", "1-razryad", "2-razryad", "3-razryad", "4-razryad", "Nomzod"];
@@ -42,6 +42,7 @@ export default function StudentDetailPage() {
   const deleteStudent = useDeleteStudent();
   const resetPassword = useResetStudentPassword();
   const assignPackage = useAssignPackage();
+  const updateStudentPackage = useUpdateStudentPackage();
   const uploadImage = useUploadImage();
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,6 +67,8 @@ export default function StudentDetailPage() {
 
   /* Delete confirm */
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editingPkg, setEditingPkg] = useState<StudentPackage | null>(null);
+  const [editDraft, setEditDraft] = useState({ totalLessons: "", expiresAt: "", status: "active" as StudentPackage["status"] });
 
   if (isLoading) {
     return (
@@ -137,6 +140,26 @@ export default function StudentDetailPage() {
     });
     setShowPayModal(false);
     setPay({ packageId: "", method: "naqd", expiresAt: "" });
+  }
+
+  function openEditPkg(pkg: StudentPackage) {
+    setEditingPkg(pkg);
+    setEditDraft({
+      totalLessons: String(pkg.totalLessons),
+      expiresAt: pkg.expiresAt ? pkg.expiresAt.slice(0, 10) : "",
+      status: pkg.status,
+    });
+  }
+
+  async function handleSaveEditPkg() {
+    if (!editingPkg) return;
+    await updateStudentPackage.mutateAsync({
+      id: editingPkg.id,
+      totalLessons: Number(editDraft.totalLessons),
+      expiresAt: editDraft.expiresAt || null,
+      status: editDraft.status,
+    });
+    setEditingPkg(null);
   }
 
   async function handleDelete() {
@@ -406,16 +429,21 @@ export default function StudentDetailPage() {
                             {pkg.expiresAt && ` — ${new Date(pkg.expiresAt).toLocaleDateString("uz-Latn-UZ")}`}
                           </div>
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                          <span style={{
-                            padding: "2px 10px", borderRadius: 20, fontSize: 11.5,
-                            fontWeight: 700, background: `${statusColor}22`, color: statusColor,
-                          }}>
-                            {pkg.status === "active" ? "Faol" : pkg.status === "finished" ? "Tugagan" : "Muddati o'tgan"}
-                          </span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-faint)" }}>
-                            {fmtSom(pkg.price)} so'm
-                          </span>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                            <span style={{
+                              padding: "2px 10px", borderRadius: 20, fontSize: 11.5,
+                              fontWeight: 700, background: `${statusColor}22`, color: statusColor,
+                            }}>
+                              {pkg.status === "active" ? "Faol" : pkg.status === "finished" ? "Tugagan" : "Muddati o'tgan"}
+                            </span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-faint)" }}>
+                              {fmtSom(pkg.price)} so'm
+                            </span>
+                          </div>
+                          <button className="iconbtn" style={{ width: 30, height: 30, flexShrink: 0 }} title="Paketni tahrirlash" onClick={() => openEditPkg(pkg)}>
+                            <Icon name="edit" size={14} />
+                          </button>
                         </div>
                       </div>
                       {/* Lesson progress */}
@@ -531,6 +559,53 @@ export default function StudentDetailPage() {
                   onClick={handleAssignPackage}>
                   <Icon name="check" size={14} />
                   {assignPackage.isPending ? "Saqlanmoqda..." : "Rasmiylashtirish"}
+                </button>
+              </div>
+            </div>
+          </ModalBox>
+        </Overlay>
+      )}
+
+      {/* ── Paketni tahrirlash ── */}
+      {editingPkg && (
+        <Overlay onClose={() => setEditingPkg(null)}>
+          <ModalBox width={420}>
+            <ModalHead title="Paketni tahrirlash" onClose={() => setEditingPkg(null)} />
+            <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ fontSize: 13, color: "var(--text-faint)" }}>{editingPkg.packageName}</div>
+
+              <FieldWrap label="JAMI DARSLAR SONI">
+                <input
+                  type="number" min={editingPkg.usedLessons || 1} className="inp" style={{ width: "100%" }}
+                  value={editDraft.totalLessons}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, totalLessons: e.target.value }))}
+                />
+                <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 5 }}>
+                  {editingPkg.usedLessons} dars allaqachon ishlatilgan — shundan kam qilib bo'lmaydi
+                </div>
+              </FieldWrap>
+
+              <FieldWrap label="HOLAT">
+                <select className="inp" style={{ width: "100%" }}
+                  value={editDraft.status}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, status: e.target.value as StudentPackage["status"] }))}>
+                  <option value="active">Faol</option>
+                  <option value="finished">Tugagan</option>
+                  <option value="expired">Muddati o'tgan</option>
+                </select>
+              </FieldWrap>
+
+              <FieldWrap label="MUDDATI (ixtiyoriy)">
+                <DateField value={editDraft.expiresAt} onChange={(v) => setEditDraft((d) => ({ ...d, expiresAt: v }))} />
+              </FieldWrap>
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => setEditingPkg(null)}>Bekor</button>
+                <button className="btn primary" style={{ flex: 2, justifyContent: "center" }}
+                  disabled={!editDraft.totalLessons || Number(editDraft.totalLessons) < editingPkg.usedLessons || updateStudentPackage.isPending}
+                  onClick={handleSaveEditPkg}>
+                  <Icon name="check" size={14} />
+                  {updateStudentPackage.isPending ? "Saqlanmoqda..." : "Saqlash"}
                 </button>
               </div>
             </div>

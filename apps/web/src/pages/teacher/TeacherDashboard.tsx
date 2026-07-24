@@ -1,15 +1,12 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Card, fmtSom, Icon } from "@chess-school/ui";
+import { Card, fmtSom, Icon } from "@chess-school/ui";
 import {
-  useAttendance,
   useJoinTeacherLesson,
-  useMarkAttendance,
   useMyIncome,
   useMyLessons,
   useMyProfile,
   useMyStudents,
-  useMyStudentsProgress,
   useTodaySchedule,
 } from "../../lib/queries.js";
 
@@ -63,7 +60,6 @@ export default function TeacherDashboard() {
   const { data: todaySchedule } = useTodaySchedule();
   const { data: myStudents }    = useMyStudents();
   const { data: lessons }       = useMyLessons();
-  const { data: progressData }  = useMyStudentsProgress("attendance");
   const { data: income }        = useMyIncome(currentPeriod());
 
   const todayLessons = useMemo(
@@ -100,30 +96,12 @@ export default function TeacherDashboard() {
 
   const joinTeacherLesson = useJoinTeacherLesson();
 
-  /* attendance for first slot */
+  /* first slot's group — used as a student-count fallback elsewhere on this page */
   const firstSlot = todaySchedule?.[0];
-  const { data: records } = useAttendance(firstSlot?.id ?? null, date);
-  const markAttendance = useMarkAttendance();
-
   const slotStudents = useMemo(
     () => (myStudents ?? []).filter(s => s.groups.some(g => g.id === firstSlot?.groupId)),
     [myStudents, firstSlot],
   );
-
-  const recordMap = useMemo(() => {
-    const m = new Map<string, "p" | "a" | "l" | "ae">();
-    for (const r of records ?? []) m.set(r.studentId, r.status);
-    return m;
-  }, [records]);
-
-  function setStatus(studentId: string, status: "p" | "a" | "l" | "ae") {
-    if (!firstSlot) return;
-    const next = slotStudents.map(s => ({
-      studentId: s.id,
-      status: s.id === studentId ? status : (recordMap.get(s.id) ?? "p"),
-    }));
-    markAttendance.mutate({ scheduleSlotId: firstSlot.id, date, records: next });
-  }
 
   const countdown = useCountdown(nextLesson?.startTime);
 
@@ -410,10 +388,8 @@ export default function TeacherDashboard() {
         ))}
       </div>
 
-      {/* ── Bottom 2 columns ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--gap)" }}>
-
-        {/* Today's schedule */}
+      {/* Today's schedule */}
+      <div>
         <Card style={{ padding:0 }}>
           <div style={{
             padding:"18px 22px 14px",
@@ -501,134 +477,7 @@ export default function TeacherDashboard() {
             )}
           </div>
         </Card>
-
-        {/* Quick attendance */}
-        <Card style={{ padding:0 }}>
-          <div style={{
-            padding:"18px 22px 14px",
-            display:"flex", alignItems:"center", gap:12,
-            borderBottom:"1px solid var(--border)",
-          }}>
-            <div style={{
-              width:36, height:36, borderRadius:10,
-              background:"#dbeafe", color:"#2563eb",
-              display:"flex", alignItems:"center", justifyContent:"center",
-            }}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-              </svg>
-            </div>
-            <div>
-              <div style={{ fontWeight:800, fontSize:15 }}>Tezkor davomat</div>
-              <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:1 }}>
-                {firstSlot?.groupName ?? "—"}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ padding:"6px 0" }}>
-            {slotStudents.length > 0 ? slotStudents.map(s => {
-              const status = recordMap.get(s.id);
-              return (
-                <div key={s.id} style={{
-                  display:"flex", alignItems:"center", gap:12, padding:"10px 22px",
-                }}>
-                  <Avatar name={s.fullName} size="sm" />
-                  <div style={{ flex:1, fontSize:13.5, fontWeight:650 }}>{s.fullName}</div>
-                  <div style={{ display:"flex", gap:6 }}>
-                    {(["p","l","a"] as const).map(k => (
-                      <button
-                        key={k}
-                        onClick={() => setStatus(s.id, k)}
-                        style={{
-                          width:30, height:30, borderRadius:8, border:"none",
-                          cursor:"pointer", fontSize:13, fontWeight:700,
-                          background: status === k
-                            ? k === "p" ? "#d1fae5" : k === "l" ? "#fef3c7" : "#fee2e2"
-                            : "var(--surface-2)",
-                          color: status === k
-                            ? k === "p" ? "#059669" : k === "l" ? "#d97706" : "#dc2626"
-                            : "var(--text-faint)",
-                          transition:"background .15s",
-                        }}
-                      >
-                        {{ p:"✓", l:"–", a:"✗" }[k]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            }) : (
-              <div style={{ padding:"36px 22px", textAlign:"center", color:"var(--text-faint)", fontSize:13 }}>
-                {firstSlot ? "O'quvchilar topilmadi" : "Bugun darslar yo'q"}
-              </div>
-            )}
-          </div>
-        </Card>
-
       </div>
-      {/* ── O'quvchilar natijasi ── */}
-      <Card style={{ padding:0 }}>
-        <div style={{
-          padding:"18px 24px 14px",
-          display:"flex", alignItems:"center", justifyContent:"space-between",
-          borderBottom:"1px solid var(--border)",
-        }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{
-              width:36, height:36, borderRadius:10,
-              background:"#dbeafe", color:"#2563eb",
-              display:"flex", alignItems:"center", justifyContent:"center",
-            }}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-              </svg>
-            </div>
-            <div>
-              <div style={{ fontWeight:800, fontSize:15 }}>O'quvchilar natijasi</div>
-              <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:1 }}>Top 6 ta o'quvchi</div>
-            </div>
-          </div>
-          <button className="btn" style={{ fontSize:13, padding:"6px 16px" }} onClick={() => navigate("/teacher/progress")}>
-            Batafsil
-          </button>
-        </div>
-
-        <div style={{ padding:"8px 0" }}>
-          {(progressData ?? []).length === 0 ? (
-            <div style={{ padding:"36px 22px", textAlign:"center", color:"var(--text-faint)", fontSize:13 }}>
-              O'quvchilar topilmadi
-            </div>
-          ) : (progressData ?? []).slice(0, 6).map((s) => (
-            <div key={s.id} style={{
-              display:"flex", alignItems:"center", gap:14, padding:"14px 24px",
-            }}>
-              <Avatar name={s.fullName} size="sm" />
-              <div style={{ width:200, flexShrink:0 }}>
-                <div style={{ fontWeight:700, fontSize:14 }}>{s.fullName}</div>
-                <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:2 }}>
-                  {s.level ?? "—"} daraja
-                </div>
-              </div>
-              <div style={{ flex:1, height:8, borderRadius:99, background:"var(--surface-2)", overflow:"hidden" }}>
-                <div style={{
-                  height:"100%", borderRadius:99,
-                  width:`${s.attendanceRate}%`,
-                  background:"#3b82f6",
-                  transition:"width .4s ease",
-                }}/>
-              </div>
-              <div style={{
-                width:44, textAlign:"right", flexShrink:0,
-                fontSize:14, fontWeight:800,
-                color: s.attendanceRate >= 85 ? "#16a34a" : "#d97706",
-              }}>
-                {s.attendanceRate}%
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
     </div>
   );
 }

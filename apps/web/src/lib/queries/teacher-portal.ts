@@ -16,16 +16,6 @@ export interface MyStudent {
   lastLessonDate: string | null;
 }
 
-export interface MyStudentProgress {
-  id: string;
-  fullName: string;
-  level: string | null;
-  xp: number;
-  level2: number;
-  streak: number;
-  attendanceRate: number;
-}
-
 export interface MyTeacherProfile {
   id: string;
   fullName: string;
@@ -43,13 +33,6 @@ export function useMyStudents() {
   return useQuery({
     queryKey: ["myStudents"],
     queryFn: async () => (await api.get<MyStudent[]>("/me/students")).data,
-  });
-}
-
-export function useMyStudentsProgress(sort: "xp" | "attendance" | "name" = "xp") {
-  return useQuery({
-    queryKey: ["myStudentsProgress", sort],
-    queryFn: async () => (await api.get<MyStudentProgress[]>("/me/students/progress", { params: { sort } })).data,
   });
 }
 

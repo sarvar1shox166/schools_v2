@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Card, Icon, showXp } from "@chess-school/ui";
 import {
   useTodaySchedule, useGroupStudents,
-  useEndLesson, useAwardXp, useJoinTeacherLesson,
+  useEndLesson, useJoinTeacherLesson,
 } from "../../lib/queries.js";
-
-const AVATAR_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#3b82f6", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
 
 function fmtCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.ceil(ms / 1000));
@@ -24,11 +21,8 @@ export default function TLiveLessonPage() {
 
   const joinTeacherLesson = useJoinTeacherLesson();
   const endLesson = useEndLesson();
-  const awardXp = useAwardXp();
 
-  const { data: students = [], isLoading: studLoading } = useGroupStudents(slot?.groupId ?? null);
-
-  const [xpAmounts, setXpAmounts] = useState<Record<string, string>>({});
+  const { data: students = [] } = useGroupStudents(slot?.groupId ?? null);
 
   const [ending, setEnding] = useState(false);
   const [err, setErr] = useState("");
@@ -60,18 +54,6 @@ export default function TLiveLessonPage() {
 
   const msRemaining = scheduledEndMs != null ? scheduledEndMs - Date.now() : 0;
   const canEnd = scheduledEndMs != null && msRemaining <= 0;
-
-  async function handleGiveXp(studentId: string) {
-    const amount = Number(xpAmounts[studentId]);
-    if (!amount || amount <= 0) return;
-    try {
-      const res = await awardXp.mutateAsync({ studentId, amount });
-      showXp(res.xpAwarded, "O'qituvchi XP berdi!");
-      setXpAmounts((prev) => ({ ...prev, [studentId]: "" }));
-    } catch {
-      setErr("XP berishda xatolik yuz berdi");
-    }
-  }
 
   async function handleEndLesson() {
     if (!scheduleSlotId) return;
@@ -107,7 +89,7 @@ export default function TLiveLessonPage() {
     <div style={{ padding: "24px 28px", minHeight: "100vh" }}>
       {/* Header */}
       <div style={{
-        borderRadius: 18, padding: "20px 24px", marginBottom: 20,
+        borderRadius: 18, padding: "20px 24px",
         background: "linear-gradient(135deg, #059669 0%, #047857 55%, #065f46 100%)",
         color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16,
       }}>
@@ -119,7 +101,7 @@ export default function TLiveLessonPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff", display: "inline-block" }} />
             <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", opacity: 0.85, textTransform: "uppercase" }}>
-              Jonli dars — jurnal
+              Jonli dars
             </span>
           </div>
           <div style={{ fontSize: 22, fontWeight: 800 }}>{displayName}</div>
@@ -155,65 +137,13 @@ export default function TLiveLessonPage() {
       </div>
 
       {err && (
-        <div style={{ padding: "10px 16px", borderRadius: 10, background: "#fee2e2", color: "#dc2626", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+        <div style={{ padding: "10px 16px", borderRadius: 10, background: "#fee2e2", color: "#dc2626", fontSize: 13, fontWeight: 600, marginTop: 16 }}>
           {err}
         </div>
       )}
 
-      <div style={{ maxWidth: 760 }}>
-        {/* Attendance + XP */}
-        <Card style={{ borderRadius: 16, overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "18px 22px 14px", borderBottom: "1px solid var(--border)" }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: "#3b82f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="zap" size={18} style={{ color: "#fff" }} />
-            </div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>XP berish</div>
-          </div>
-
-          {studLoading && (
-            <div style={{ padding: "32px 22px", textAlign: "center", color: "var(--text-faint)" }}>Yuklanmoqda...</div>
-          )}
-
-          {!studLoading && students.length === 0 && (
-            <div style={{ padding: "32px 22px", textAlign: "center", color: "var(--text-faint)" }}>
-              Bu darsda o'quvchilar yo'q (individual/diagnostika dars bo'lishi mumkin)
-            </div>
-          )}
-
-          {!studLoading && students.length > 0 && (
-            <div style={{ padding: "8px 0" }}>
-              {students.map((s) => (
-                <div key={s.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 22px", flexWrap: "wrap" }}>
-                    <div style={{ borderRadius: "50%", flexShrink: 0 }}>
-                      <Avatar name={s.fullName} size="sm" />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 120, fontWeight: 650, fontSize: 13.5 }}>{s.fullName}</div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <input
-                        type="number" min={1} max={500} placeholder="XP"
-                        value={xpAmounts[s.id] ?? ""}
-                        onChange={(e) => setXpAmounts((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                        style={{ width: 56, padding: "5px 6px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 12, textAlign: "center" }}
-                      />
-                      <button
-                        disabled={!xpAmounts[s.id] || awardXp.isPending}
-                        onClick={() => handleGiveXp(s.id)}
-                        style={{
-                          padding: "5px 10px", borderRadius: 8, border: "none", cursor: "pointer",
-                          background: "#f59e0b", color: "#fff", fontSize: 11.5, fontWeight: 700,
-                          opacity: !xpAmounts[s.id] ? 0.5 : 1,
-                        }}>
-                        ⚡ Berish
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+      <div style={{ marginTop: 16, color: "var(--text-faint)", fontSize: 13.5 }}>
+        Davomat va uy vazifasi berish "Uy vazifalari" bo'limidagi bugungi guruh kartasi orqali amalga oshiriladi.
       </div>
     </div>
   );

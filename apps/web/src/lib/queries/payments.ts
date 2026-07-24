@@ -209,6 +209,20 @@ export function useAssignPackage() {
   });
 }
 
+export function useUpdateStudentPackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: {
+      id: string; totalLessons?: number; usedLessons?: number;
+      status?: "active" | "finished" | "expired"; expiresAt?: string | null;
+    }) => (await api.patch(`/student-packages/${id}`, payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["studentPackages"] });
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
+  });
+}
+
 export function useStudentPackages(studentId: string | null) {
   return useQuery({
     queryKey: ["studentPackages", studentId],

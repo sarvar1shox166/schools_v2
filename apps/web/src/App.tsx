@@ -26,7 +26,6 @@ import PackagesPage from "./pages/admin/PackagesPage.js";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard.js";
 import TeacherIncomePage from "./pages/teacher/TeacherIncomePage.js";
 import TStudentsPage from "./pages/teacher/TStudentsPage.js";
-import TProgressPage from "./pages/teacher/TProgressPage.js";
 import TProfilePage from "./pages/teacher/TProfilePage.js";
 import TMaterialsPage from "./pages/teacher/TMaterialsPage.js";
 import TMessagesPage from "./pages/teacher/TMessagesPage.js";
@@ -34,7 +33,6 @@ import TNotificationsPage from "./pages/teacher/TNotificationsPage.js";
 import TPuzzlesPage from "./pages/teacher/TPuzzlesPage.js";
 import TPuzzleCreatePage from "./pages/teacher/TPuzzleCreatePage.js";
 import TSchedulePage from "./pages/teacher/TSchedulePage.js";
-import TAttendancePage from "./pages/teacher/TAttendancePage.js";
 import TLessonHistoryPage from "./pages/teacher/TLessonHistoryPage.js";
 import TLiveLessonPage from "./pages/teacher/TLiveLessonPage.js";
 import StudentDashboard from "./pages/student/StudentDashboard.js";
@@ -113,9 +111,7 @@ const TEACHER_NAV: NavSection[] = [
   {
     group: "Dars",
     items: [
-      { to: "/teacher/attendance", label: "Davomat belgilash", icon: "attendance" },
       { to: "/teacher/lesson-history", label: "Darslar tarixi", icon: "book" },
-      { to: "/teacher/progress",   label: "O'quvchi natijasi", icon: "target" },
       { to: "/teacher/materials",  label: "Uy vazifalari",     icon: "bookOpen" },
       { to: "/teacher/puzzles",    label: "Boshqotirmalar",    icon: "puzzle", locked: true },
     ],
@@ -200,11 +196,9 @@ export default function App() {
           <Route path="/teacher"                element={<TeacherDashboard />} />
           <Route path="/teacher/income"         element={<TeacherIncomePage />} />
           <Route path="/teacher/schedule"       element={<TSchedulePage />} />
-          <Route path="/teacher/attendance"     element={<TAttendancePage />} />
           <Route path="/teacher/lesson-history" element={<TLessonHistoryPage />} />
           <Route path="/teacher/live-lesson/:scheduleSlotId" element={<TLiveLessonPage />} />
           <Route path="/teacher/students"       element={<TStudentsPage />} />
-          <Route path="/teacher/progress"       element={<TProgressPage />} />
           <Route path="/teacher/materials"      element={<TMaterialsPage />} />
           <Route path="/teacher/puzzles"        element={<TPuzzlesPage />} />
           <Route path="/teacher/puzzles/new"   element={<TPuzzleCreatePage />} />
