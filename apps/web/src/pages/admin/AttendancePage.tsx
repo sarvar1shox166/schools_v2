@@ -158,20 +158,30 @@ export default function AttendancePage() {
       {/* Lesson chips for selected day */}
       {daySlots.length > 0 && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {daySlots.map((s) => (
-            <div key={s.scheduleSlotId} style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "7px 14px", borderRadius: 10,
-              border: "1px solid var(--border)", background: "var(--surface-2)",
-              fontSize: 12.5, fontWeight: 600, color: "var(--text-dim)",
-            }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
-              <span>{slotLabel(s)}</span>
-              {s.teacherName && <span style={{ color: "var(--text-faint)" }}>· {s.teacherName}</span>}
-              <span style={{ color: "var(--text-faint)" }}>· {s.startTime.slice(0, 5)}</span>
-              {s.lessonType === "guruh" && <span style={{ color: "var(--text-faint)" }}>· {s.studentsCount} o'q</span>}
-            </div>
-          ))}
+          {daySlots.map((s) => {
+            const local: AttStatus | null = s.status ? API_TO_LOCAL[s.status] : null;
+            const cfg = local ? ST[local] : null;
+            return (
+              <div key={s.scheduleSlotId} style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "7px 14px", borderRadius: 10,
+                border: cfg ? `1px solid ${cfg.color}44` : "1px solid var(--border)",
+                background: cfg ? `${cfg.bg}` : "var(--surface-2)",
+                fontSize: 12.5, fontWeight: 600, color: "var(--text-dim)",
+              }}>
+                {cfg ? (
+                  <Icon name={cfg.icon} size={12} style={{ color: cfg.color, flexShrink: 0 }} />
+                ) : (
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
+                )}
+                <span>{slotLabel(s)}</span>
+                {s.teacherName && <span style={{ color: "var(--text-faint)" }}>· {s.teacherName}</span>}
+                <span style={{ color: "var(--text-faint)" }}>· {s.startTime.slice(0, 5)}</span>
+                {s.lessonType === "guruh" && <span style={{ color: "var(--text-faint)" }}>· {s.studentsCount} o'q</span>}
+                {!cfg && <span style={{ color: "var(--text-faint)", fontStyle: "italic" }}>· belgilanmagan</span>}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -315,7 +325,7 @@ export default function AttendancePage() {
 
           {teacherMatLoading ? (
             <div style={{ padding: 40, textAlign: "center", color: "var(--text-faint)" }}>Yuklanmoqda...</div>
-          ) : !teacherMatrix || teacherMatrix.teachers.length === 0 ? (
+          ) : !teacherMatrix || teacherMatrix.rows.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: "var(--text-faint)" }}>Ma'lumot topilmadi</div>
           ) : (
             <div style={{ overflowX: "auto" }}>
@@ -323,7 +333,7 @@ export default function AttendancePage() {
                 <thead>
                   <tr>
                     <th style={{ minWidth: 180 }}>O'QITUVCHI</th>
-                    <th style={{ minWidth: 120 }}>UNVON</th>
+                    <th style={{ minWidth: 130 }}>GURUH</th>
                     {teacherMatrix.dates.map(d => (
                       <th key={d} style={{ textAlign: "center", minWidth: 60 }}>{fmtDate(d)}</th>
                     ))}
@@ -331,17 +341,20 @@ export default function AttendancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teacherMatrix.teachers.map(row => {
+                  {teacherMatrix.rows.map((row, idx) => {
                     const pctColor = row.percent >= 80 ? "#16a34a" : row.percent >= 60 ? "#b45309" : "#ef4444";
+                    const sameTeacherAsPrev = idx > 0 && teacherMatrix.rows[idx - 1].teacherId === row.teacherId;
                     return (
-                      <tr key={row.teacherId}>
-                        <td>
-                          <div className="with-av">
-                            <div style={{ borderRadius: 9, flexShrink: 0, display: "inline-flex" }}><Avatar name={row.fullName} size="sm" /></div>
-                            <span className="cell-main">{row.fullName}</span>
-                          </div>
+                      <tr key={row.scheduleSlotId}>
+                        <td style={{ borderTop: sameTeacherAsPrev ? "none" : undefined }}>
+                          {sameTeacherAsPrev ? null : (
+                            <div className="with-av">
+                              <div style={{ borderRadius: 9, flexShrink: 0, display: "inline-flex" }}><Avatar name={row.fullName} size="sm" /></div>
+                              <span className="cell-main">{row.fullName}</span>
+                            </div>
+                          )}
                         </td>
-                        <td style={{ fontSize: 13, color: "var(--text-faint)" }}>{row.title ?? row.spec ?? "–"}</td>
+                        <td style={{ fontSize: 13, color: "var(--text-faint)" }}>{row.groupLabel}</td>
                         {row.days.map((day, i) => {
                           const local: AttStatus | null = day ? API_TO_LOCAL[day] : null;
                           if (!local) {

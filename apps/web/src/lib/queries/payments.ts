@@ -146,7 +146,15 @@ export function useTeacherAttendanceStats(date?: string) {
 
 export interface TeacherAttendanceHistoryMatrix {
   dates: string[];
-  teachers: { teacherId: string; fullName: string; title: string | null; spec: string | null; days: ("p" | "a" | "l" | null)[]; percent: number }[];
+  // Har qator — bitta o'qituvchining bitta guruh/darsligi (schedule_slot).
+  // Bir kunda bir nechta guruhi bo'lgan o'qituvchi endi bir nechta qatorda ko'rinadi,
+  // shuning uchun qaysi guruhi o'tilib, qaysi biri o'tkazib yuborilgani aniq bo'ladi.
+  rows: {
+    teacherId: string; scheduleSlotId: string;
+    fullName: string; title: string | null; spec: string | null;
+    groupLabel: string;
+    days: ("p" | "a" | "l" | null)[]; percent: number;
+  }[];
 }
 
 export function useTeacherAttendanceHistoryMatrix(days = 8) {

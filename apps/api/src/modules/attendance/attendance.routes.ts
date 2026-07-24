@@ -343,58 +343,87 @@ export async function attendanceRoutes(app: FastifyInstance) {
       const { days } = request.query as { days?: string };
       const numDays = Math.min(Math.max(Number(days) || 8, 1), 31);
 
-      const teacherParams: unknown[] = [tenantId];
-      let teacherFilter = "";
-      if (role === "moderator") {
-        const ids = await assignedTeacherIds(tenantId!, sub);
-        teacherFilter = `AND t.id = ANY($2::uuid[])`;
-        teacherParams.push(ids);
-      }
-
-      const teachersRes = await pool.query(
-        `SELECT t.id, u.full_name AS "fullName", t.title, t.spec
-         FROM teachers t
-         JOIN users u ON u.id = t.user_id
-         WHERE t.tenant_id = $1 ${teacherFilter}
-         ORDER BY u.full_name`,
-        teacherParams
-      );
-
       const dates: string[] = [];
       for (let i = numDays - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         dates.push(d.toISOString().slice(0, 10));
       }
+      const fromDate = dates[0];
+      const toDate = dates[dates.length - 1];
 
-      const recordsRes = await pool.query(
-        `SELECT teacher_id AS "teacherId", date, status
-         FROM teacher_attendance
-         WHERE tenant_id = $1 AND date >= $2 AND date <= $3`,
-        [tenantId, dates[0], dates[dates.length - 1]]
-      );
-
-      const recordMap = new Map<string, Map<string, "p" | "a" | "l">>();
-      for (const r of recordsRes.rows) {
-        const dateKey = new Date(r.date).toISOString().slice(0, 10);
-        if (!recordMap.has(r.teacherId)) recordMap.set(r.teacherId, new Map());
-        recordMap.get(r.teacherId)!.set(dateKey, r.status);
+      const slotParams: unknown[] = [tenantId, fromDate, toDate];
+      let slotFilter = "";
+      if (role === "moderator") {
+        const ids = await assignedTeacherIds(tenantId!, sub);
+        slotFilter = `AND COALESCE(sl.teacher_id, g.teacher_id) = ANY($4::uuid[])`;
+        slotParams.push(ids);
       }
 
-      const teachers = teachersRes.rows.map((t) => {
-        const teacherRecords = recordMap.get(t.id) ?? new Map();
-        const days = dates.map((d) => teacherRecords.get(d) ?? null);
-        let present = 0;
-        let counted = 0;
-        for (const status of teacherRecords.values()) {
-          counted++;
-          if (status === "p") present++;
-        }
-        const percent = counted > 0 ? Math.round((present / counted) * 100) : 0;
-        return { teacherId: t.id, fullName: t.fullName, title: t.title, spec: t.spec, days, percent };
+      // Har bir haftalik (yoki bir martalik) slot alohida qator bo'ladi — bir
+      // o'qituvchining bir kunda bir nechta guruhi bo'lsa, ular endi bittasi
+      // ikkinchisini bekor qilib/yashirib qo'ymaydi (avvalgi xato shu edi).
+      const slotsRes = await pool.query(
+        `SELECT sl.id AS "scheduleSlotId", COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId",
+                u.full_name AS "fullName", t.title, t.spec,
+                sl.day_of_week AS "dayOfWeek", sl.specific_date AS "specificDate",
+                g.name AS "groupName", sl.custom_name AS "customName"
+         FROM schedule_slots sl
+         LEFT JOIN groups g ON g.id = sl.group_id
+         JOIN teachers t ON t.id = COALESCE(sl.teacher_id, g.teacher_id)
+         JOIN users u ON u.id = t.user_id
+         WHERE sl.tenant_id = $1
+           AND (sl.specific_date IS NULL OR (sl.specific_date >= $2 AND sl.specific_date <= $3))
+           ${slotFilter}
+         ORDER BY u.full_name, sl.day_of_week, sl.start_time`,
+        slotParams
+      );
+
+      const exceptionsRes = await pool.query(
+        `SELECT schedule_slot_id AS "scheduleSlotId", date, kind
+         FROM schedule_exceptions
+         WHERE tenant_id = $1 AND date >= $2 AND date <= $3 AND kind IN ('cancelled', 'holiday')`,
+        [tenantId, fromDate, toDate]
+      );
+      const holidaySet = new Set(
+        exceptionsRes.rows.filter((e) => e.kind === "holiday").map((e) => new Date(e.date).toISOString().slice(0, 10))
+      );
+      const cancelledSet = new Set(
+        exceptionsRes.rows.filter((e) => e.kind === "cancelled").map((e) => `${e.scheduleSlotId}:${new Date(e.date).toISOString().slice(0, 10)}`)
+      );
+
+      const recordsRes = await pool.query(
+        `SELECT teacher_id AS "teacherId", schedule_slot_id AS "scheduleSlotId", date, status
+         FROM teacher_attendance
+         WHERE tenant_id = $1 AND date >= $2 AND date <= $3`,
+        [tenantId, fromDate, toDate]
+      );
+      const recordMap = new Map<string, "p" | "a" | "l">();
+      for (const r of recordsRes.rows) {
+        recordMap.set(`${r.scheduleSlotId}:${new Date(r.date).toISOString().slice(0, 10)}`, r.status);
+      }
+
+      const rows = slotsRes.rows.map((slot) => {
+        const dayOfWeek: number = slot.dayOfWeek;
+        const specificDate: string | null = slot.specificDate ? new Date(slot.specificDate).toISOString().slice(0, 10) : null;
+        const dayStatuses = dates.map((d) => {
+          const occurs = specificDate ? specificDate === d : dayOfWeek === dowFromDate(d);
+          if (!occurs) return null;
+          if (holidaySet.has(d) || cancelledSet.has(`${slot.scheduleSlotId}:${d}`)) return null;
+          return recordMap.get(`${slot.scheduleSlotId}:${d}`) ?? null;
+        });
+        const marked = dayStatuses.filter((s): s is "p" | "a" | "l" => s !== null);
+        const present = marked.filter((s) => s === "p").length;
+        const percent = marked.length > 0 ? Math.round((present / marked.length) * 100) : 0;
+        return {
+          teacherId: slot.teacherId, scheduleSlotId: slot.scheduleSlotId,
+          fullName: slot.fullName, title: slot.title, spec: slot.spec,
+          groupLabel: slot.groupName ?? slot.customName ?? "Dars",
+          days: dayStatuses, percent,
+        };
       });
 
-      return { dates, teachers };
+      return { dates, rows };
     }
   );
 
