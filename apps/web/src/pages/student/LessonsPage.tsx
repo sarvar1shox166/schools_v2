@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon, showXp } from "@chess-school/ui";
 import {
   useAttendanceHistory,
+  useCancelledToday,
   useCompleteHomework,
   useHomework,
   useJoinLesson,
@@ -48,6 +49,7 @@ export default function LessonsPage() {
   const { data: attendance } = useAttendanceHistory();
   const { data: lessonHistory = [] } = useStudentLessonHistory();
   const { data: homework = [] } = useHomework();
+  const { data: cancelledToday = [] } = useCancelledToday();
   const completeHW = useCompleteHomework();
   const joinLesson = useJoinLesson();
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -84,6 +86,30 @@ export default function LessonsPage() {
 
   return (
     <div>
+      {/* ── Bugungi bekor qilingan darslar ────────────────────────────────── */}
+      {cancelledToday.map((s, i) => (
+        <div key={i} style={{
+          display: "flex", alignItems: "center", gap: 12, padding: "14px 18px",
+          background: "rgba(239,68,68,.08)", border: "1px solid rgba(239,68,68,.3)",
+          borderRadius: 14, marginBottom: 14,
+        }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10, background: "rgba(239,68,68,.15)",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>
+            <Icon name="x" size={17} style={{ color: "#f87171" }} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: "#fca5a5" }}>
+              Bugungi dars bekor qilindi
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: 2 }}>
+              {s.groupName ?? s.customName ?? "Dars"} · {s.startTime.slice(0, 5)}
+            </div>
+          </div>
+        </div>
+      ))}
+
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       {next ? (
         <div style={{

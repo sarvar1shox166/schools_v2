@@ -32,6 +32,19 @@ export function useNextLesson() {
   });
 }
 
+export interface CancelledLessonToday {
+  groupName: string | null;
+  customName: string | null;
+  startTime: string;
+}
+
+export function useCancelledToday() {
+  return useQuery({
+    queryKey: ["cancelledToday"],
+    queryFn: async () => (await api.get<CancelledLessonToday[]>("/me/schedule/cancelled-today")).data,
+  });
+}
+
 export interface AttendanceHistory {
   records: { date: string; status: "p" | "a" | "l" }[];
   totals: { p: number; a: number; l: number };

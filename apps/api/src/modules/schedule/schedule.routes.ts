@@ -184,6 +184,37 @@ export async function scheduleRoutes(app: FastifyInstance) {
     return rows;
   });
 
+  // Bugunga rejalashtirilgan, lekin bekor qilingan darslarni alohida qaytaradi —
+  // /me/schedule/next bekor qilingan kunni "keyingi hafta"ga o'tkazib yuboradi va bu
+  // aloqasiz bo'lib qoladi, shuning uchun mustaqil, oddiy endpoint ko'proq xavfsiz.
+  app.get("/me/schedule/cancelled-today", { onRequest: [app.requireRole("student")] }, async (request) => {
+    const { sub, tenantId } = request.user;
+    const today = todayStr();
+    const dow = dayOfWeekOf(new Date());
+
+    const { rows } = await pool.query(
+      `SELECT g.name AS "groupName", sl.custom_name AS "customName", sl.start_time AS "startTime"
+       FROM schedule_slots sl
+       LEFT JOIN groups g ON g.id = sl.group_id
+       JOIN schedule_exceptions se ON se.schedule_slot_id = sl.id
+       WHERE sl.tenant_id = $1 AND se.kind = 'cancelled' AND se.date = $2
+         AND (
+           (sl.specific_date IS NULL AND sl.day_of_week = $3)
+           OR sl.specific_date = $2
+         )
+         AND (
+           g.id IN (
+             SELECT gm.group_id FROM group_members gm
+             JOIN students s ON s.id = gm.student_id
+             WHERE s.user_id = $4
+           )
+           OR sl.student_id = (SELECT id FROM students WHERE user_id = $4)
+         )`,
+      [tenantId, today, dow, sub]
+    );
+    return rows;
+  });
+
   app.get("/me/schedule/next", { onRequest: [app.requireRole("student")] }, async (request) => {
     const { sub, tenantId } = request.user;
     const { rows } = await pool.query(

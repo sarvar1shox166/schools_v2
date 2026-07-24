@@ -112,6 +112,7 @@ export function useCreateScheduleException() {
       qc.invalidateQueries({ queryKey: ["daySlots"] });
       qc.invalidateQueries({ queryKey: ["unresolvedAbsences"] });
       qc.invalidateQueries({ queryKey: ["nextLesson"] });
+      qc.invalidateQueries({ queryKey: ["cancelledToday"] });
     },
   });
 }
