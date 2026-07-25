@@ -113,7 +113,7 @@ const TEACHER_NAV: NavSection[] = [
     items: [
       { to: "/teacher/lesson-history", label: "Darslar tarixi", icon: "book" },
       { to: "/teacher/materials",  label: "Uy vazifalari",     icon: "bookOpen" },
-      { to: "/teacher/puzzles",    label: "Boshqotirmalar",    icon: "puzzle", locked: true },
+      { to: "/teacher/puzzles",    label: "Boshqotirmalar",    icon: "puzzle" },
     ],
   },
   {
@@ -137,8 +137,8 @@ const STUDENT_NAV: NavSection[] = [
       { to: "/student",            label: "Bosh sahifa",    icon: "dashboard",   emoji: "🏠", navId: "home" },
       { to: "/student/lessons",    label: "Darslarim",      icon: "calendarCheck",emoji: "📅", navId: "schedule" },
       { to: "/student/videos",     label: "Video darslar",  icon: "video",       emoji: "🎬", navId: "video" },
-      { to: "/student/learn",      label: "O'rganish",      icon: "bookOpen",    emoji: "📚", navId: "learn",  locked: true },
-      { to: "/student/puzzles",    label: "Boshqotirmalar", icon: "pieces",      emoji: "🧩", navId: "puzzle", locked: true },
+      { to: "/student/learn",      label: "O'rganish",      icon: "bookOpen",    emoji: "📚", navId: "learn" },
+      { to: "/student/puzzles",    label: "Boshqotirmalar", icon: "pieces",      emoji: "🧩", navId: "puzzle" },
       { to: "/student/pvp",        label: "O'ynash",        icon: "zap",         emoji: "♟", navId: "chess" },
       { to: "/student/leaderboard",label: "Reyting",        icon: "award",       emoji: "🏆", navId: "leaderboard" },
       { to: "/student/profile",    label: "Profilim",       icon: "user",        emoji: "👤", navId: "profile" },
