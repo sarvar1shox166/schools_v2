@@ -213,17 +213,18 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const body = updateStudentPackageSchema.parse(request.body);
     const { tenantId } = request.user;
 
-    // total_lessons kamaytirilsa used_lessons dan kam bo'lib qolmasin — bu holatda
-    // "ishlatilgan darslar" mavjud paketdan ko'p bo'lib qoladi va UI buzilardi.
+    // Ishlatilgan darslar jami darslardan ko'p bo'lib qolmasligi kerak — bu tekshiruv
+    // ikkalasi alohida-alohida yuborilgan holatlarda ham (faqat biri o'zgartirilsa ham) ishlashi kerak.
     const currentRes = await pool.query(
-      `SELECT sp.used_lessons AS "usedLessons"
+      `SELECT sp.used_lessons AS "usedLessons", sp.total_lessons AS "totalLessons"
        FROM student_packages sp JOIN students s ON s.id = sp.student_id
        WHERE sp.id = $1 AND s.tenant_id = $2`,
       [id, tenantId]
     );
     if (currentRes.rows.length === 0) return reply.code(404).send({ error: "Paket topilmadi" });
     const usedLessons = body.usedLessons ?? currentRes.rows[0].usedLessons;
-    if (body.totalLessons != null && body.totalLessons < usedLessons) {
+    const totalLessons = body.totalLessons ?? currentRes.rows[0].totalLessons;
+    if (totalLessons < usedLessons) {
       return reply.code(400).send({ error: `Jami darslar soni ishlatilgan darslardan (${usedLessons}) kam bo'lishi mumkin emas` });
     }
 

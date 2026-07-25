@@ -68,7 +68,7 @@ export default function StudentDetailPage() {
   /* Delete confirm */
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingPkg, setEditingPkg] = useState<StudentPackage | null>(null);
-  const [editDraft, setEditDraft] = useState({ totalLessons: "", expiresAt: "", status: "active" as StudentPackage["status"] });
+  const [editDraft, setEditDraft] = useState({ totalLessons: "", usedLessons: "", expiresAt: "", status: "active" as StudentPackage["status"] });
 
   if (isLoading) {
     return (
@@ -146,6 +146,7 @@ export default function StudentDetailPage() {
     setEditingPkg(pkg);
     setEditDraft({
       totalLessons: String(pkg.totalLessons),
+      usedLessons: String(pkg.usedLessons),
       expiresAt: pkg.expiresAt ? pkg.expiresAt.slice(0, 10) : "",
       status: pkg.status,
     });
@@ -156,6 +157,7 @@ export default function StudentDetailPage() {
     await updateStudentPackage.mutateAsync({
       id: editingPkg.id,
       totalLessons: Number(editDraft.totalLessons),
+      usedLessons: Number(editDraft.usedLessons),
       expiresAt: editDraft.expiresAt || null,
       status: editDraft.status,
     });
@@ -574,16 +576,26 @@ export default function StudentDetailPage() {
             <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ fontSize: 13, color: "var(--text-faint)" }}>{editingPkg.packageName}</div>
 
-              <FieldWrap label="JAMI DARSLAR SONI">
-                <input
-                  type="number" min={editingPkg.usedLessons || 1} className="inp" style={{ width: "100%" }}
-                  value={editDraft.totalLessons}
-                  onChange={(e) => setEditDraft((d) => ({ ...d, totalLessons: e.target.value }))}
-                />
-                <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 5 }}>
-                  {editingPkg.usedLessons} dars allaqachon ishlatilgan — shundan kam qilib bo'lmaydi
-                </div>
-              </FieldWrap>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <FieldWrap label="JAMI DARSLAR SONI">
+                  <input
+                    type="number" min={1} className="inp" style={{ width: "100%" }}
+                    value={editDraft.totalLessons}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, totalLessons: e.target.value }))}
+                  />
+                </FieldWrap>
+                <FieldWrap label="ISHLATILGAN">
+                  <input
+                    type="number" min={0} className="inp" style={{ width: "100%" }}
+                    value={editDraft.usedLessons}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, usedLessons: e.target.value }))}
+                  />
+                </FieldWrap>
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: -8 }}>
+                Qoldiq: {Math.max(0, Number(editDraft.totalLessons || 0) - Number(editDraft.usedLessons || 0))} dars.
+                Masalan, o'quvchi darsga kirgan-u qatnasha olmagan bo'lsa, "ishlatilgan"ni 1 taga kamaytirib qoldig'ini qaytarishingiz mumkin.
+              </div>
 
               <FieldWrap label="HOLAT">
                 <select className="inp" style={{ width: "100%" }}
@@ -602,7 +614,11 @@ export default function StudentDetailPage() {
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => setEditingPkg(null)}>Bekor</button>
                 <button className="btn primary" style={{ flex: 2, justifyContent: "center" }}
-                  disabled={!editDraft.totalLessons || Number(editDraft.totalLessons) < editingPkg.usedLessons || updateStudentPackage.isPending}
+                  disabled={
+                    !editDraft.totalLessons || !editDraft.usedLessons ||
+                    Number(editDraft.totalLessons) < Number(editDraft.usedLessons) ||
+                    updateStudentPackage.isPending
+                  }
                   onClick={handleSaveEditPkg}>
                   <Icon name="check" size={14} />
                   {updateStudentPackage.isPending ? "Saqlanmoqda..." : "Saqlash"}
