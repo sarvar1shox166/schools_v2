@@ -51,11 +51,11 @@ const DIFF = [
 ];
 
 const SECTIONS: { v: PuzzleSection; label: string; icon: string; color: string }[] = [
-  { v:"mot1",   label:"1 xodlik motlar",     icon:"♛", color:"#22c55e" },
-  { v:"mot2",   label:"2 xodlik motlar",     icon:"♚", color:"#3b82f6" },
-  { v:"mot3",   label:"3 xodlik motlar",     icon:"♞", color:"#f59e0b" },
-  { v:"series", label:"Zadachalar seriyasi", icon:"🎯", color:"#ec4899" },
-  { v:"time",   label:"Time zadachalar",     icon:"⏱️", color:"#f87171" },
+  { v:"mot1", label:"1 xodlik motlar", icon:"♛", color:"#22c55e" },
+  { v:"mot2", label:"2 xodlik motlar", icon:"♚", color:"#3b82f6" },
+  { v:"mot3", label:"3 xodlik motlar", icon:"♞", color:"#f59e0b" },
+  { v:"mot4", label:"4 xodlik motlar", icon:"♜", color:"#ec4899" },
+  { v:"mot5", label:"5 xodlik motlar", icon:"♟", color:"#f87171" },
 ];
 
 /* ── FEN helpers ─────────────────────────────────────────────── */

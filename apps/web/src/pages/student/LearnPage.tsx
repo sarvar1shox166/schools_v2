@@ -1,213 +1,119 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useLearnTopics, type LearnCategory, type LearnTopic } from "../../lib/queries.js";
 
-/* ── Types ───────────────────────────────────────────────────────────────── */
-type LessonState = "progress" | "active" | "locked";
+const CARD_BG = "#111114";
+const CARD_BORDER = "#1e1e22";
 
-interface Lesson {
-  id: string;
-  title: string;
-  desc: string;
-  icon: string;
-  iconColor: string;
-  done: number;
-  total: number;
-  state: LessonState;
-}
-
-interface Section {
-  title: string;
-  lessons: Lesson[];
-}
-
-/* ── Data ────────────────────────────────────────────────────────────────── */
-const ASOSLAR: Section[] = [
-  {
-    title: "SHAXMAT DONALARI",
-    lessons: [
-      { id:"rux",      title:"Rux",              desc:"Rux to'g'ri chiziq bo'yicha harakatlanadi", icon:"♜", iconColor:"rgba(255,255,255,.55)", done:0, total:6, state:"active"   },
-      { id:"fil",      title:"Fil",              desc:"Fil diagonal bo'yicha harakatlanadi",        icon:"♝", iconColor:"rgba(255,255,255,.3)",  done:0, total:6, state:"locked"   },
-      { id:"farzin",   title:"Farzin",           desc:"Farzin = rux + fil",                         icon:"♛", iconColor:"rgba(255,255,255,.3)",  done:0, total:5, state:"locked"   },
-      { id:"shoh",     title:"Shoh",             desc:"Eng muhim dona",                              icon:"♚", iconColor:"rgba(255,255,255,.3)",  done:0, total:5, state:"locked"   },
-      { id:"ot",       title:"Ot",               desc:"Ot \"L\" shaklida harakatlanadi",             icon:"♞", iconColor:"rgba(255,255,255,.3)",  done:0, total:6, state:"locked"   },
-      { id:"piyoda",   title:"Piyoda",           desc:"Faqat oldinga yuradi",                        icon:"♟", iconColor:"rgba(255,255,255,.3)",  done:0, total:5, state:"locked"   },
-    ],
-  },
-  {
-    title: "ASOSIY PRINSIPLAR",
-    lessons: [
-      { id:"urib_olish",       title:"Urib olish",       desc:"Raqib donalarini urib oling",      icon:"⚔️", iconColor:"#e879a0", done:0, total:5, state:"locked" },
-      { id:"himoya",           title:"Himoya",           desc:"Muhim katakchalarni himoya qiling", icon:"🛡️", iconColor:"#60a5fa", done:0, total:4, state:"locked" },
-      { id:"jang",             title:"Jang",             desc:"Donalarni bir-bir urib oling",      icon:"⚡", iconColor:"#fb923c", done:0, total:4, state:"locked" },
-      { id:"shoh_berish",      title:"Shoh berish",      desc:"Dushman shohiga shoh bering",       icon:"👑", iconColor:"#fbbf24", done:0, total:4, state:"locked" },
-      { id:"shohdan_qutulish", title:"Shohdan qutulish", desc:"Shohingizni xavfdan oling",         icon:"🛡️", iconColor:"#3b82f6", done:0, total:4, state:"locked" },
-      { id:"mot_berish",       title:"Mot berish",       desc:"Dushmanga mat bering",              icon:"👑", iconColor:"#a78bfa", done:0, total:4, state:"locked" },
-    ],
-  },
-  {
-    title: "O'RTA DARAJA",
-    lessons: [
-      { id:"taxt",     title:"Taxtani terish",         desc:"O'yin qanday boshlanadi",       icon:"♟", iconColor:"rgba(255,255,255,.3)",  done:0, total:5, state:"locked" },
-      { id:"rok",      title:"Rokirovka",              desc:"Shohning maxsus yurishi",        icon:"🏰", iconColor:"#f87171", done:0, total:4, state:"locked" },
-      { id:"kesib",    title:"Kesib o'tish",           desc:"Piyodaning maxsus yurishi",      icon:"🔴", iconColor:"#f87171", done:0, total:5, state:"locked" },
-      { id:"pat",      title:"Pat",                    desc:"O'yin — durang",                 icon:"⚖️", iconColor:"#fbbf24", done:0, total:4, state:"locked" },
-    ],
-  },
-  {
-    title: "YUQORI DARAJA",
-    lessons: [
-      { id:"dona",     title:"Donalar qiymati",        desc:"Donalar kuchini baholang",       icon:"💎", iconColor:"#60a5fa", done:0, total:6, state:"locked" },
-      { id:"ikki",     title:"Ikki yurishda shoh berish", desc:"Shoh berish uchun ikki yurish", icon:"⚔️", iconColor:"#e879a0", done:0, total:5, state:"locked" },
-    ],
-  },
+const CATEGORY_TABS: { v: LearnCategory; label: string; emoji: string; color: string; desc: string }[] = [
+  { v: "piece", label: "Shaxmat donalari", emoji: "♟️", color: "#8b5cf6", desc: "Har bir dona qanday yurishini o'rganing — 10 bosqichda, avtomatik yangilanadigan mashqlar bilan." },
+  { v: "principle", label: "Asosiy prinsiplar", emoji: "🧠", color: "#f59e0b", desc: "Kuchli o'yinchidek o'ylang: urib olish, himoya, shoh berish va mat berish." },
+  { v: "intermediate", label: "O'rta daraja", emoji: "🎯", color: "#3b82f6", desc: "Rokirovka, en passant, pat va o'yin boshlanishi qoidalari." },
+  { v: "advanced", label: "Yuqori daraja", emoji: "🏆", color: "#ec4899", desc: "Donalar qiymati va shoh berish uchun taktik yurishlar." },
 ];
 
-const MASHQ: Section[] = [
-  {
-    title: "TAKTIK MASHQLAR",
-    lessons: [
-      { id:"fork",    title:"Vilka",         desc:"Bir vaqtda ikki donaga hujum",       icon:"⚡", iconColor:"#fb923c", done:0, total:10, state:"active"   },
-      { id:"pin",     title:"Mixlash",       desc:"Donani o'rnidan qimirlatma",         icon:"📌", iconColor:"#f87171", done:0, total:8,  state:"locked"   },
-      { id:"skewer",  title:"Cho'g'ir",      desc:"Qimmatli donani siqishtirish",       icon:"🎯", iconColor:"#60a5fa", done:0, total:7,  state:"locked"   },
-      { id:"disc",    title:"Kashf hujum",   desc:"Yashirin hujumni ochish",            icon:"👁️", iconColor:"#a78bfa", done:0, total:6,  state:"locked"   },
-    ],
-  },
-  {
-    title: "OXIRGI O'YIN",
-    lessons: [
-      { id:"kpawn",   title:"Shoh va piyoda", desc:"Piyodani malika qilish",            icon:"♟", iconColor:"rgba(255,255,255,.3)", done:0, total:6, state:"locked" },
-      { id:"rend",    title:"Rux endshpili",  desc:"Rux bilan g'alaba",                 icon:"♜", iconColor:"rgba(255,255,255,.3)", done:0, total:5, state:"locked" },
-    ],
-  },
-];
-
-const KOORDINATLAR: Section[] = [
-  {
-    title: "ASOSIY",
-    lessons: [
-      { id:"files",   title:"Ustunlar (a–h)",  desc:"Taxtaning vertikal chiziqlari",    icon:"🔤", iconColor:"#60a5fa", done:0, total:5, state:"active"  },
-      { id:"ranks",   title:"Qatorlar (1–8)",  desc:"Taxtaning gorizontal chiziqlari",  icon:"🔢", iconColor:"#34d399", done:0, total:5, state:"locked"  },
-      { id:"squares", title:"Katak nomi",      desc:"a1 dan h8 gacha",                  icon:"♟", iconColor:"rgba(255,255,255,.3)", done:0, total:8, state:"locked" },
-    ],
-  },
-  {
-    title: "MASHQ",
-    lessons: [
-      { id:"speed",   title:"Tezlik testi",   desc:"30 soniyada qancha katakni topasiz", icon:"⏱️", iconColor:"#f59e0b", done:0, total:5, state:"locked" },
-      { id:"blind",   title:"Ko'r o'yin",     desc:"Taxtasiz o'ynash",                   icon:"👁️", iconColor:"#a78bfa", done:0, total:4, state:"locked" },
-    ],
-  },
-];
-
-const TAB_DATA: Record<string, Section[]> = {
-  asoslar:       ASOSLAR,
-  mashq:         MASHQ,
-  koordinatlar:  KOORDINATLAR,
-};
-
-const TABS = [
-  { v:"asoslar",      label:"Shaxmat asoslari", emoji:"🟣" },
-  { v:"mashq",        label:"Mashq",            emoji:"⚡" },
-  { v:"koordinatlar", label:"Koordinatlar",     emoji:"📍" },
-];
-
-/* ── Card styles ─────────────────────────────────────────────────────────── */
-function cardStyle(state: LessonState): React.CSSProperties {
-  if (state === "active")
-    return { background:"linear-gradient(135deg,rgba(245,158,11,.22) 0%,rgba(251,191,36,.12) 100%)", border:"1.5px solid rgba(245,158,11,.45)", borderRadius:16, padding:"16px 18px", cursor:"pointer", position:"relative", overflow:"hidden" };
-  if (state === "progress")
-    return { background:"linear-gradient(135deg,rgba(63,140,255,.18) 0%,rgba(99,149,220,.1) 100%)", border:"1.5px solid rgba(63,140,255,.22)", borderRadius:16, padding:"16px 18px", cursor:"pointer", position:"relative", overflow:"hidden" };
-  return { background:"rgba(255,255,255,.025)", border:"1.5px solid rgba(255,255,255,.07)", borderRadius:16, padding:"16px 18px", cursor:"pointer", position:"relative", overflow:"hidden" };
-}
-
-function iconBoxStyle(state: LessonState): React.CSSProperties {
-  if (state === "active")   return { width:48, height:48, borderRadius:13, background:"rgba(245,158,11,.25)", border:"1px solid rgba(245,158,11,.35)", display:"grid", placeItems:"center", fontSize:22, flexShrink:0 };
-  if (state === "progress") return { width:48, height:48, borderRadius:13, background:"rgba(63,140,255,.18)", border:"1px solid rgba(63,140,255,.22)", display:"grid", placeItems:"center", fontSize:22, flexShrink:0 };
-  return { width:48, height:48, borderRadius:13, background:"rgba(255,255,255,.06)", border:"1px solid rgba(255,255,255,.08)", display:"grid", placeItems:"center", fontSize:22, flexShrink:0 };
-}
-
-/* ── Section header ──────────────────────────────────────────────────────── */
-function SectionHead({ title }: { title: string }) {
-  const spaced = title.split("").join(" ");
-  return (
-    <div style={{ textAlign:"center", padding:"28px 0 14px", fontSize:11, fontWeight:700, letterSpacing:"0.18em", color:"rgba(255,255,255,.3)", userSelect:"none" }}>
-      {spaced}
-    </div>
-  );
-}
-
-/* ── Lesson card ─────────────────────────────────────────────────────────── */
-function LessonCard({ lesson }: { lesson: Lesson }) {
+function TopicCard({ topic, color }: { topic: LearnTopic; color: string }) {
   const navigate = useNavigate();
-  const pct = lesson.total > 0 ? (lesson.done / lesson.total) * 100 : 0;
-  const isActive = lesson.state === "active";
+  const total = topic.totalLevels ?? 0;
+  const pct = total > 0 ? (topic.bestLevel / total) * 100 : 0;
+  const started = topic.bestLevel > 0;
+  const done = total > 0 && topic.bestLevel >= total;
+  const [hover, setHover] = useState(false);
+
+  const total0 = topic.totalLevels ?? 1;
+  const nextLevel = Math.min(topic.bestLevel + 1, total0) || 1;
 
   return (
-    <div style={cardStyle(lesson.state)} onClick={() => { if (lesson.state !== "locked") navigate(`/student/learn/${lesson.id}`); }}>
-      {/* top-right counter or sparkle */}
-      {isActive ? (
-        <div style={{ position:"absolute", top:12, right:14, fontSize:14 }}>✨</div>
-      ) : lesson.done > 0 ? (
-        <div style={{ position:"absolute", top:10, right:12, fontSize:11, fontWeight:800, color:"rgba(255,255,255,.35)" }}>
-          {lesson.done}/{lesson.total}
+    <div
+      onClick={() => navigate(`/student/learn/${topic.id}/${nextLevel}`)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        position: "relative", display: "flex", alignItems: "center", gap: 14,
+        padding: "14px 18px", borderRadius: 16, cursor: "pointer", transition: "all .15s",
+        background: started ? `linear-gradient(135deg,${color}24,${CARD_BG})` : CARD_BG,
+        border: `1.5px solid ${started ? color + "55" : hover ? "#2f2f36" : CARD_BORDER}`,
+      }}
+    >
+      <div style={{
+        width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 22, flexShrink: 0,
+        background: started ? `${color}33` : "#18181c",
+      }}>
+        {topic.icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.01em", color: started ? color : "#f5f5f6" }}>
+          {topic.title}
+        </div>
+        <div style={{ fontSize: 13, color: "#8b8d98", fontWeight: 500, marginTop: 3 }}>{topic.subtitle}</div>
+        {started && (
+          <div style={{ height: 3, background: `${color}33`, borderRadius: 3, marginTop: 12, overflow: "hidden" }}>
+            <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3 }} />
+          </div>
+        )}
+      </div>
+      {done ? (
+        <div style={{ alignSelf: "flex-start", color: "#4ade80", fontSize: 18, flexShrink: 0 }}>✓</div>
+      ) : started ? (
+        <div style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,.35)", flexShrink: 0 }}>
+          {topic.bestLevel}/{total}
         </div>
       ) : null}
-
-      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:lesson.done>0||isActive?12:0 }}>
-        <div style={iconBoxStyle(lesson.state)}>
-          <span style={{ color: lesson.iconColor, fontSize:20, lineHeight:1 }}>{lesson.icon}</span>
-        </div>
-        <div style={{ minWidth:0 }}>
-          <div style={{ fontWeight:800, fontSize:15, color: isActive ? "#fbbf24" : lesson.state==="locked" ? "rgba(255,255,255,.4)" : "#fff", marginBottom:3 }}>
-            {lesson.title}
-          </div>
-          <div style={{ fontSize:12, color:"rgba(255,255,255,.3)", lineHeight:1.4 }}>{lesson.desc}</div>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      {(lesson.done > 0 || isActive) && (
-        <div style={{ height:3, borderRadius:99, background:"rgba(255,255,255,.1)", overflow:"hidden" }}>
-          <div style={{ height:"100%", borderRadius:99, width:`${pct}%`,
-            background: isActive ? "linear-gradient(90deg,#f59e0b,#fbbf24)" : "linear-gradient(90deg,#3b82f6,#60a5fa)",
-            transition:"width .4s" }} />
-        </div>
-      )}
     </div>
   );
 }
 
-/* ── Page ────────────────────────────────────────────────────────────────── */
 export default function LearnPage() {
-  const [tab, setTab] = useState("asoslar");
-  const sections = TAB_DATA[tab] ?? [];
+  const [tab, setTab] = useState<LearnCategory>("piece");
+  const { data: topics = [], isLoading } = useLearnTopics(tab);
+  const active = CATEGORY_TABS.find((t) => t.v === tab)!;
 
   return (
     <div>
-      {/* Tabs */}
-      <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-        {TABS.map(t => (
-          <button key={t.v} onClick={()=>setTab(t.v)}
-            style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 20px", borderRadius:99, border:"none", cursor:"pointer", fontWeight:700, fontSize:13.5, transition:"background .15s",
-              background: tab===t.v ? "linear-gradient(135deg,#6d28d9,#7c3aed)" : "rgba(255,255,255,.07)",
-              color: tab===t.v ? "#fff" : "rgba(255,255,255,.45)" }}>
-            <span style={{ fontSize:15 }}>{t.emoji}</span>
-            {t.label}
-          </button>
-        ))}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        {CATEGORY_TABS.map((t) => {
+          const on = tab === t.v;
+          return (
+            <div key={t.v} onClick={() => setTab(t.v)}
+              style={{
+                display: "flex", alignItems: "center", gap: 9, padding: "11px 20px 11px 12px", borderRadius: 14,
+                fontSize: 14.5, fontWeight: 800, cursor: "pointer", transition: "all .15s",
+                background: on ? t.color : CARD_BG,
+                border: on ? "none" : `1px solid ${CARD_BORDER}`,
+                color: on ? "#fff" : "#c7c8d0",
+                boxShadow: on ? `0 6px 18px ${t.color}44` : undefined,
+              }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, background: on ? "rgba(255,255,255,.2)" : "#18181c",
+              }}>
+                {t.emoji}
+              </div>
+              {t.label}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Sections */}
-      {sections.map(section => (
-        <div key={section.title}>
-          <SectionHead title={section.title} />
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            {section.lessons.map(lesson => (
-              <LessonCard key={lesson.id} lesson={lesson} />
-            ))}
-          </div>
+      <div style={{
+        fontSize: 13, color: "#8b8d98", lineHeight: 1.5, marginBottom: 20, fontWeight: 500,
+        padding: "10px 14px", borderRadius: 12, background: `${active.color}14`, border: `1px solid ${active.color}2a`,
+      }}>
+        {active.desc}
+      </div>
+
+      <div style={{ textAlign: "center", fontSize: 11, fontWeight: 800, letterSpacing: "0.42em", color: "#5a5b64", margin: "2px 0 14px" }}>
+        {active.label.toUpperCase()}
+      </div>
+
+      {isLoading ? (
+        <div style={{ textAlign: "center", padding: 40, color: "rgba(255,255,255,.4)" }}>Yuklanmoqda...</div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {topics.map((topic) => <TopicCard key={topic.id} topic={topic} color={active.color} />)}
         </div>
-      ))}
+      )}
     </div>
   );
 }

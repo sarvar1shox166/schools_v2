@@ -12,9 +12,11 @@
   "dependencies": {
     "@chess-school/chess-engine": "*",
     "@chess-school/ui": "*",
+    "@lichess-org/chessground": "^10.1.1",
     "@sentry/react": "^10.66.0",
     "@tanstack/react-query": "^5.51.23",
     "axios": "^1.7.4",
+    "chessops": "^0.15.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.0",

@@ -44,7 +44,7 @@ import VideosPage from "./pages/student/VideosPage.js";
 import VideoWatchPage from "./pages/student/VideoWatchPage.js";
 import LessonsPage from "./pages/student/LessonsPage.js";
 import LearnPage from "./pages/student/LearnPage.js";
-import LearnLessonPage from "./pages/student/LearnLessonPage.js";
+import LearnLevelPage from "./pages/student/LearnLevelPage.js";
 import ProfilePage from "./pages/student/ProfilePage.js";
 import { RequireAuth } from "./layouts/RequireAuth.js";
 import { AppShell } from "./layouts/AppShell.js";
@@ -137,7 +137,7 @@ const STUDENT_NAV: NavSection[] = [
       { to: "/student",            label: "Bosh sahifa",    icon: "dashboard",   emoji: "🏠", navId: "home" },
       { to: "/student/lessons",    label: "Darslarim",      icon: "calendarCheck",emoji: "📅", navId: "schedule" },
       { to: "/student/videos",     label: "Video darslar",  icon: "video",       emoji: "🎬", navId: "video" },
-      { to: "/student/learn",      label: "O'rganish",      icon: "bookOpen",    emoji: "📚", navId: "learn" },
+      { to: "/student/learn",      label: "O'rganish",      icon: "bookOpen",    emoji: "📚", navId: "learn", locked: true },
       { to: "/student/puzzles",    label: "Boshqotirmalar", icon: "pieces",      emoji: "🧩", navId: "puzzle" },
       { to: "/student/pvp",        label: "O'ynash",        icon: "zap",         emoji: "♟", navId: "chess" },
       { to: "/student/leaderboard",label: "Reyting",        icon: "award",       emoji: "🏆", navId: "leaderboard" },
@@ -211,8 +211,8 @@ export default function App() {
       <Route element={<RequireAuth roles={["student"]} />}>
         <Route element={<AppShell title="O'quvchi paneli" nav={STUDENT_NAV} />}>
           <Route path="/student"                       element={<StudentDashboard />} />
-          <Route path="/student/learn"                 element={<LearnPage />} />
-          <Route path="/student/learn/:lessonId"       element={<LearnLessonPage />} />
+          <Route path="/student/learn"                       element={<LearnPage />} />
+          <Route path="/student/learn/:topicId/:levelNumber"  element={<LearnLevelPage />} />
           <Route path="/student/lessons"               element={<LessonsPage />} />
           <Route path="/student/puzzles"               element={<PuzzlesPage />} />
           <Route path="/student/videos"                element={<VideosPage />} />

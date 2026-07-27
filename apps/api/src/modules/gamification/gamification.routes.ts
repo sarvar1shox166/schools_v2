@@ -1,11 +1,19 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { checkPuzzleMove } from "@chess-school/chess-engine";
+import { checkPuzzleMove, validateAndApplyMateStep, findAnyMateMove } from "@chess-school/chess-engine";
 import { pool } from "../../db/pool.js";
+
+// mot1/mot2 — "erkin yechim" tekshiruvi (mate-solver): Lichess'ning bitta
+// kanonik yo'lidan tashqari, belgilangan xod sonida haqiqatan mot beruvchi
+// har qanday muqobil yurish ham qabul qilinadi. mot3'da bu qidiruv 3
+// chuqurlikda amaliy jihatdan juda sekin (o'nlab soniya) bo'lgani uchun
+// faqat kanonik yo'l (checkPuzzleMove) ishlatiladi.
+const MATE_SECTIONS = new Set(["mot1", "mot2"]);
+const MATE_SECTION_DEPTH: Record<string, number> = { mot1: 1, mot2: 2 };
 import { awardXp } from "./xp.js";
 import { notifyStudent } from "../notifications/notify.js";
 
-const PUZZLE_SECTIONS = ["mot1", "mot2", "mot3", "series", "time"] as const;
+const PUZZLE_SECTIONS = ["mot1", "mot2", "mot3", "mot4", "mot5"] as const;
 
 const createPuzzleSchema = z.object({
   fen: z.string().min(6),
@@ -24,8 +32,14 @@ async function getTeacherIdForUser(userId: string): Promise<string | null> {
 }
 
 const attemptSchema = z.object({
-  moveIndex: z.number().int().nonnegative(),
+  moveIndex: z.number().int().nonnegative().optional(),
   move: z.string().min(4),
+  // mot1/mot2 (erkin yechim) uchun — mijoz joriy taxta holatini va qolgan
+  // xod sonini kuzatib boradi (o'rganish/pvp-vs-kompyuter'dagi kabi
+  // "shaffof ishonch" naqshi — past xavfli mashq, to'liq server-tarafi
+  // qayta tekshiruv qurilmagan).
+  fen: z.string().optional(),
+  movesRemaining: z.number().int().positive().optional(),
 });
 
 const awardXpSchema = z.object({
@@ -47,13 +61,51 @@ export async function gamificationRoutes(app: FastifyInstance) {
     const { section } = request.query as { section?: string };
     const { rows } = await pool.query(
       section
-        ? `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, (created_by IS NOT NULL) AS "createdByTeacher"
-           FROM puzzles WHERE section = $1 ORDER BY created_at`
-        : `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, (created_by IS NOT NULL) AS "createdByTeacher"
-           FROM puzzles ORDER BY created_at`,
+        ? `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, rating,
+                  (created_by IS NOT NULL) AS "createdByTeacher",
+                  (SELECT count(*) FROM puzzle_attempts WHERE puzzle_id = puzzles.id)::int AS "attemptCount"
+           FROM puzzles WHERE section = $1 ORDER BY random()`
+        : `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, rating,
+                  (created_by IS NOT NULL) AS "createdByTeacher",
+                  (SELECT count(*) FROM puzzle_attempts WHERE puzzle_id = puzzles.id)::int AS "attemptCount"
+           FROM puzzles ORDER BY random()`,
       section ? [section] : []
     );
     return rows;
+  });
+
+  // Bo'limlar endi yuz minglab-millionlab qatorga ega bo'lishi mumkin
+  // (to'liq Lichess mateIn1..5 importi) — shuning uchun butun ro'yxatni
+  // yuklash o'rniga har safar FAQAT BITTA tasodifiy masala so'raladi.
+  // `excludeId` — ketma-ket ikki marta AYNAN bir xil masala qaytmasligi
+  // uchun (juda katta bo'limda amalda deyarli imkonsiz, lekin kichik
+  // bo'limlar — masalan mot5 — uchun ham himoya bo'lsin).
+  app.get("/puzzles/random", async (request, reply) => {
+    const { section, difficulty, excludeId } = request.query as {
+      section?: string; difficulty?: string; excludeId?: string;
+    };
+    if (!section) return reply.code(400).send({ error: "section required" });
+
+    const conditions = ["section = $1"];
+    const params: unknown[] = [section];
+    if (difficulty && difficulty !== "hammasi") {
+      params.push(difficulty);
+      conditions.push(`difficulty = $${params.length}`);
+    }
+    if (excludeId) {
+      params.push(excludeId);
+      conditions.push(`id != $${params.length}`);
+    }
+
+    const { rows } = await pool.query(
+      `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, rating,
+              (created_by IS NOT NULL) AS "createdByTeacher",
+              (SELECT count(*) FROM puzzle_attempts WHERE puzzle_id = puzzles.id)::int AS "attemptCount"
+       FROM puzzles WHERE ${conditions.join(" AND ")} ORDER BY random() LIMIT 1`,
+      params
+    );
+    if (rows.length === 0) return reply.code(404).send({ error: "No puzzles" });
+    return rows[0];
   });
 
   app.get("/puzzles/section-counts", async () => {
@@ -67,15 +119,35 @@ export async function gamificationRoutes(app: FastifyInstance) {
 
   app.get("/puzzles/:id/hint", { onRequest: [app.requireRole("student")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { moveIndex } = request.query as { moveIndex?: string };
-    const idx = Number(moveIndex ?? 0);
+    const { moveIndex, fen, movesRemaining } = request.query as { moveIndex?: string; fen?: string; movesRemaining?: string };
 
-    const { rows } = await pool.query(`SELECT solution FROM puzzles WHERE id = $1`, [id]);
+    const { rows } = await pool.query(`SELECT fen, solution, section FROM puzzles WHERE id = $1`, [id]);
     if (rows.length === 0) return reply.code(404).send({ error: "Not found" });
+    const puzzle = rows[0];
 
-    const move = rows[0].solution[idx];
+    if (MATE_SECTIONS.has(puzzle.section)) {
+      const currentFen = fen ?? puzzle.fen;
+      const remaining = movesRemaining ? Number(movesRemaining) : MATE_SECTION_DEPTH[puzzle.section];
+      const move = findAnyMateMove(currentFen, remaining);
+      if (!move) return reply.code(404).send({ error: "No hint" });
+      return { from: move.slice(0, 2) };
+    }
+
+    const idx = Number(moveIndex ?? 0);
+    const move = puzzle.solution[idx];
     if (!move) return reply.code(404).send({ error: "No hint" });
     return { from: move.slice(0, 2) };
+  });
+
+  // "Yechimni ko'rish" — saqlangan yechimning TO'LIQ ketma-ketligini
+  // ochib beradi. Bu urinish emas, taslim bo'lish — puzzle_attempts'ga
+  // yozilmaydi va XP berilmaydi (mavjud "hint" faqat bitta yurishning
+  // boshlanish katagini ochadi, bu esa butun yechimni).
+  app.get("/puzzles/:id/solution", { onRequest: [app.requireRole("student")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { rows } = await pool.query(`SELECT fen, solution FROM puzzles WHERE id = $1`, [id]);
+    if (rows.length === 0) return reply.code(404).send({ error: "Not found" });
+    return { fen: rows[0].fen, moves: rows[0].solution as string[] };
   });
 
   app.get("/puzzles/daily", async () => {
@@ -175,13 +247,24 @@ export async function gamificationRoutes(app: FastifyInstance) {
     if (!studentId) return reply.code(404).send({ error: "Student not found" });
 
     const puzzleRes = await pool.query(
-      `SELECT fen, solution, xp_reward AS "xpReward" FROM puzzles WHERE id = $1`,
+      `SELECT fen, solution, xp_reward AS "xpReward", section FROM puzzles WHERE id = $1`,
       [id]
     );
     if (puzzleRes.rows.length === 0) return reply.code(404).send({ error: "Puzzle not found" });
     const puzzle = puzzleRes.rows[0];
 
-    const result = checkPuzzleMove(puzzle.fen, puzzle.solution, body.moveIndex, body.move);
+    const isMate = MATE_SECTIONS.has(puzzle.section);
+    let result: { correct: boolean; finished: boolean; fenAfter: string };
+    let movesRemainingAfter: number | undefined;
+
+    if (isMate) {
+      const currentFen = body.fen ?? puzzle.fen;
+      const movesRemaining = body.movesRemaining ?? MATE_SECTION_DEPTH[puzzle.section];
+      result = validateAndApplyMateStep(currentFen, body.move, movesRemaining);
+      if (result.correct && !result.finished) movesRemainingAfter = movesRemaining - 1;
+    } else {
+      result = checkPuzzleMove(puzzle.fen, puzzle.solution, body.moveIndex ?? 0, body.move);
+    }
 
     if (!result.correct) {
       await pool.query(
@@ -192,8 +275,17 @@ export async function gamificationRoutes(app: FastifyInstance) {
     }
 
     if (!result.finished) {
-      return { correct: true, finished: false, fenAfter: result.fenAfter };
+      return { correct: true, finished: false, fenAfter: result.fenAfter, movesRemaining: movesRemainingAfter };
     }
+
+    // Bu masalani ilgari to'g'ri yechgan bo'lsa — qayta XP berilmaydi
+    // (masalar random tartibda takrorlanishi mumkin, lekin XP faqat
+    // birinchi marta yechilganda beriladi).
+    const priorSolveRes = await pool.query(
+      `SELECT 1 FROM puzzle_attempts WHERE student_id = $1 AND puzzle_id = $2 AND correct = true LIMIT 1`,
+      [studentId, id]
+    );
+    const alreadySolved = priorSolveRes.rows.length > 0;
 
     const client = await pool.connect();
     try {
@@ -202,14 +294,14 @@ export async function gamificationRoutes(app: FastifyInstance) {
         `INSERT INTO puzzle_attempts (student_id, puzzle_id, correct) VALUES ($1, $2, true)`,
         [studentId, id]
       );
-      const xpResult = await awardXp(client, studentId, puzzle.xpReward);
+      const xpResult = alreadySolved ? null : await awardXp(client, studentId, puzzle.xpReward);
       await client.query("COMMIT");
 
       return {
         correct: true,
         finished: true,
         fenAfter: result.fenAfter,
-        xpAwarded: puzzle.xpReward,
+        xpAwarded: alreadySolved ? 0 : puzzle.xpReward,
         ...xpResult,
       };
     } catch (err) {

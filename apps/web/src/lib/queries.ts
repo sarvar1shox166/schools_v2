@@ -16,3 +16,4 @@ export * from "./queries/videos.js";
 export * from "./queries/homework.js";
 export * from "./queries/applications.js";
 export * from "./queries/admin.js";
+export * from "./queries/learn.js";

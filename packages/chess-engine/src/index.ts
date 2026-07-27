@@ -1,6 +1,9 @@
 import { Chess } from "chess.js";
 
 export { Chess };
+export { pieceDestinations, fileOf, rankOf, toSquare, type SimplePiece } from "./pieceMoves.js";
+export { buildFenPlacement, parseFenPlacement, squaresFromFen } from "./boardFen.js";
+export { isMateAchievableIn, findAnyMateMove, validateAndApplyMateStep, type MateStepResult } from "./mateSolver.js";
 
 export interface PuzzleCheckResult {
   correct: boolean;

@@ -11,11 +11,11 @@ const FILTER_TABS = [
 ];
 
 const SECTION_LABELS: Record<string, string> = {
-  mot1:   "1 xodlik",
-  mot2:   "2 xodlik",
-  mot3:   "3 xodlik",
-  series: "Seriya",
-  time:   "Time",
+  mot1: "1 xodlik",
+  mot2: "2 xodlik",
+  mot3: "3 xodlik",
+  mot4: "4 xodlik",
+  mot5: "5 xodlik",
 };
 
 const DIFF_COLOR: Record<string, { bg: string; text: string; label: string }> = {

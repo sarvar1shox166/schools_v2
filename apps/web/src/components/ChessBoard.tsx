@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Chess } from "@chess-school/chess-engine";
+import { Chess, parseFenPlacement } from "@chess-school/chess-engine";
 
 const PIECE_FILE: Record<string, string> = {
   K: "oq-shox.svg",   Q: "oq-farzin.svg", R: "oq-rux.svg",
@@ -49,18 +49,6 @@ function PieceImg({ piece, dimmed }: { piece: string; dimmed?: boolean }) {
 }
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
-
-function fenToBoard(fen: string): (string | null)[][] {
-  const placement = fen.split(" ")[0];
-  return placement.split("/").map((row) => {
-    const cells: (string | null)[] = [];
-    for (const ch of row) {
-      if (/\d/.test(ch)) for (let i = 0; i < Number(ch); i++) cells.push(null);
-      else cells.push(ch);
-    }
-    return cells;
-  });
-}
 
 // Find king square + attacker squares when in check
 function findCheckInfo(fen: string): { king: string; attackers: Set<string> } | null {
@@ -139,7 +127,7 @@ export function ChessBoard({
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
 
-  const board = fenToBoard(fen);
+  const board = parseFenPlacement(fen);
   const rows = flipped ? [...board].reverse() : board;
   const checkInfo = useMemo(() => findCheckInfo(fen), [fen]);
 

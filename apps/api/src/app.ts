@@ -34,6 +34,7 @@ import { settingsRoutes } from "./modules/settings/settings.routes.js";
 import { staffRoutes } from "./modules/staff/staff.routes.js";
 import { lessonsRoutes } from "./modules/lessons/lessons.routes.js";
 import { homeworkRoutes } from "./modules/homework/homework.routes.js";
+import { learnRoutes } from "./modules/learn/learn.routes.js";
 
 const UPLOADS_ROOT = path.resolve(process.cwd(), "uploads");
 
@@ -118,6 +119,7 @@ export async function buildApp() {
   app.register(staffRoutes, { prefix: "/api/v1" });
   app.register(lessonsRoutes, { prefix: "/api/v1" });
   app.register(homeworkRoutes, { prefix: "/api/v1" });
+  app.register(learnRoutes, { prefix: "/api/v1" });
 
   return app;
 }

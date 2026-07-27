@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api.js";
 
-export type PuzzleSection = "mot1" | "mot2" | "mot3" | "series" | "time";
+export type PuzzleSection = "mot1" | "mot2" | "mot3" | "mot4" | "mot5";
 
 export interface Puzzle {
   id: string;
@@ -11,6 +11,8 @@ export interface Puzzle {
   title?: string | null;
   section: PuzzleSection;
   createdByTeacher?: boolean;
+  rating: number | null;
+  attemptCount: number;
 }
 
 export interface MyPuzzle {
@@ -52,6 +54,7 @@ export interface AttemptResult {
   correct: boolean;
   finished: boolean;
   fenAfter: string;
+  movesRemaining?: number;
   xpAwarded?: number;
   xp?: number;
   level?: number;
@@ -81,6 +84,21 @@ export function usePuzzles(section?: PuzzleSection) {
     queryKey: ["puzzles", section],
     queryFn: async () => (await api.get<Puzzle[]>("/puzzles", { params: section ? { section } : undefined })).data,
     enabled: !!section,
+  });
+}
+
+// Bo'limlar endi yuz minglab-millionlab masalaga ega bo'lishi mumkin (to'liq
+// Lichess mateIn1..5 importi) — shuning uchun butun ro'yxatni yuklash o'rniga
+// har safar (bo'lim/qiyinlik o'zgarganda yoki "Keyingisi" bosilganda) serverdan
+// FAQAT bitta tasodifiy masala so'raladi.
+export function useFetchRandomPuzzle() {
+  return useMutation({
+    mutationFn: async ({ section, difficulty, excludeId }: {
+      section: PuzzleSection; difficulty?: string; excludeId?: string;
+    }) =>
+      (await api.get<Puzzle>("/puzzles/random", {
+        params: { section, difficulty: difficulty && difficulty !== "hammasi" ? difficulty : undefined, excludeId },
+      })).data,
   });
 }
 
@@ -135,16 +153,27 @@ export function usePuzzleAnalytics(id: string | null) {
 
 export function usePuzzleHint() {
   return useMutation({
-    mutationFn: async ({ puzzleId, moveIndex }: { puzzleId: string; moveIndex: number }) =>
-      (await api.get<{ from: string }>(`/puzzles/${puzzleId}/hint`, { params: { moveIndex } })).data,
+    mutationFn: async ({ puzzleId, moveIndex, fen, movesRemaining }: {
+      puzzleId: string; moveIndex?: number; fen?: string; movesRemaining?: number;
+    }) =>
+      (await api.get<{ from: string }>(`/puzzles/${puzzleId}/hint`, { params: { moveIndex, fen, movesRemaining } })).data,
+  });
+}
+
+export function useRevealSolution() {
+  return useMutation({
+    mutationFn: async (puzzleId: string) =>
+      (await api.get<{ fen: string; moves: string[] }>(`/puzzles/${puzzleId}/solution`)).data,
   });
 }
 
 export function useAttemptPuzzle() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ puzzleId, moveIndex, move }: { puzzleId: string; moveIndex: number; move: string }) =>
-      (await api.post<AttemptResult>(`/puzzles/${puzzleId}/attempt`, { moveIndex, move })).data,
+    mutationFn: async ({ puzzleId, moveIndex, move, fen, movesRemaining }: {
+      puzzleId: string; moveIndex?: number; move: string; fen?: string; movesRemaining?: number;
+    }) =>
+      (await api.post<AttemptResult>(`/puzzles/${puzzleId}/attempt`, { moveIndex, move, fen, movesRemaining })).data,
     onSuccess: (data) => {
       if (data.finished && data.correct) {
         qc.invalidateQueries({ queryKey: ["myXp"] });
