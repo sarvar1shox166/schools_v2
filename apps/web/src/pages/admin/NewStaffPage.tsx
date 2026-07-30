@@ -9,7 +9,7 @@ export default function NewStaffPage() {
   const assignTeachers = useAssignModeratorTeachers();
   const { data: teachers = [] } = useTeachers();
 
-  const [form, setForm] = useState({ fullName: "", phone: "", role: "operator" as StaffRole });
+  const [form, setForm] = useState({ fullName: "", phone: "", login: "", role: "operator" as StaffRole });
   const [moderatorTeacherIds, setModeratorTeacherIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ tempPassword: string } | null>(null);
@@ -23,7 +23,10 @@ export default function NewStaffPage() {
   async function handleSubmit() {
     setError(null);
     try {
-      const res = await createStaff.mutateAsync(form);
+      const res = await createStaff.mutateAsync({
+        ...form,
+        login: form.login.trim() || undefined,
+      });
       if (form.role === "moderator" && moderatorTeacherIds.length > 0) {
         await assignTeachers.mutateAsync({ id: res.id, teacherIds: moderatorTeacherIds });
       }
@@ -47,7 +50,7 @@ export default function NewStaffPage() {
           }}>
             {result.tempPassword}
           </div>
-          <p style={{ color: "var(--text-dim)", fontSize: 12, marginBottom: 20 }}>Login: telefon raqami</p>
+          <p style={{ color: "var(--text-dim)", fontSize: 12, marginBottom: 20 }}>Login: {form.login.trim() || form.phone}</p>
           <button className="btn primary" style={{ width: "100%", justifyContent: "center" }}
             onClick={() => navigate("/admin/staff")}>
             Xodimlar ro'yxatiga qaytish
@@ -80,9 +83,14 @@ export default function NewStaffPage() {
             value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>TELEFON / LOGIN</label>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>TELEFON</label>
           <input className="input" style={{ width: "100%", boxSizing: "border-box" }} placeholder="+998901234567"
             value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>LOGIN (ixtiyoriy)</label>
+          <input className="input" style={{ width: "100%", boxSizing: "border-box" }} placeholder="Bo'sh qoldirilsa telefon ishlatiladi"
+            value={form.login} onChange={e => setForm({ ...form, login: e.target.value })} />
         </div>
         <div>
           <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 6 }}>ROL</label>

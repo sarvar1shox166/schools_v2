@@ -182,7 +182,7 @@ export function useStaff() {
 export function useCreateStaff() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { fullName: string; phone: string; role: StaffRole }) =>
+    mutationFn: async (body: { fullName: string; phone: string; login?: string; role: StaffRole }) =>
       (await api.post("/staff", body)).data as { id: string; tempPassword: string },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
   });
@@ -191,7 +191,7 @@ export function useCreateStaff() {
 export function useUpdateStaff() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; isActive?: boolean }) =>
+    mutationFn: async ({ id, ...body }: { id: string; fullName?: string; phone?: string; login?: string; isActive?: boolean }) =>
       (await api.patch(`/staff/${id}`, body)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
   });

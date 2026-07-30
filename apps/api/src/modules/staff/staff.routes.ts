@@ -8,12 +8,14 @@ const STAFF_ROLES = ["operator", "accountant", "moderator", "assistant_admin", "
 const createSchema = z.object({
   fullName: z.string().min(2),
   phone: z.string().min(5),
+  login: z.string().min(3).optional(),
   role: z.enum(STAFF_ROLES),
 });
 
 const updateSchema = z.object({
   fullName: z.string().min(2).optional(),
   phone: z.string().min(5).optional(),
+  login: z.string().min(3).optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -58,9 +60,9 @@ export async function staffRoutes(app: FastifyInstance) {
 
     const { rows } = await pool.query(
       `INSERT INTO users (tenant_id, role, full_name, phone, login, password_hash)
-       VALUES ($1, $2, $3, $4, $4, $5)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [tenantId, body.role, body.fullName, body.phone, passwordHash]
+      [tenantId, body.role, body.fullName, body.phone, body.login ?? body.phone, passwordHash]
     );
     return reply.code(201).send({ id: rows[0].id, tempPassword });
   });
@@ -84,13 +86,14 @@ export async function staffRoutes(app: FastifyInstance) {
       `UPDATE users
        SET full_name  = COALESCE($1, full_name),
            phone      = COALESCE($2, phone),
-           is_active  = COALESCE($3, is_active),
+           login      = COALESCE($3, login),
+           is_active  = COALESCE($4, is_active),
            -- Hisob o'chirilganda barcha refresh-tokenlar ham bekor qilinadi
-           token_version = CASE WHEN $3 = false THEN token_version + 1 ELSE token_version END,
+           token_version = CASE WHEN $4 = false THEN token_version + 1 ELSE token_version END,
            updated_at = now()
-       WHERE id = $4 AND tenant_id = $5
+       WHERE id = $5 AND tenant_id = $6
          AND role IN ('operator', 'accountant', 'moderator', 'assistant_admin', 'admin')`,
-      [body.fullName ?? null, body.phone ?? null, body.isActive ?? null, id, tenantId]
+      [body.fullName ?? null, body.phone ?? null, body.login ?? null, body.isActive ?? null, id, tenantId]
     );
     return { ok: true };
   });
