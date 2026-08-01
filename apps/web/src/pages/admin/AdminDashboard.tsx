@@ -82,40 +82,42 @@ export default function AdminDashboard() {
               <button className="btn sm">Barchasi &rarr;</button>
             }
           />
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>ISM</th>
-                <th>TELEFON</th>
-                <th>VAQT</th>
-                <th>HOLAT</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(applications ?? []).length === 0 ? (
+          <div style={{ overflowX: "auto" }}>
+            <table className="tbl">
+              <thead>
                 <tr>
-                  <td colSpan={4} style={{ textAlign: "center", padding: "24px 16px", color: "var(--text-faint)", fontSize: 13 }}>
-                    Yangi arizalar yo'q
-                  </td>
+                  <th>ISM</th>
+                  <th>TELEFON</th>
+                  <th>VAQT</th>
+                  <th>HOLAT</th>
                 </tr>
-              ) : (applications ?? []).map((a) => (
-                <tr key={a.id}>
-                  <td>
-                    <div className="with-av">
-                      <Avatar name={a.fullName} size="sm" />
-                      <div>
-                        <div className="cell-main">{a.fullName}</div>
-                        <div className="cell-sub">{a.note ?? a.level ?? "—"}</div>
+              </thead>
+              <tbody>
+                {(applications ?? []).length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: "center", padding: "24px 16px", color: "var(--text-faint)", fontSize: 13 }}>
+                      Yangi arizalar yo'q
+                    </td>
+                  </tr>
+                ) : (applications ?? []).map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <div className="with-av">
+                        <Avatar name={a.fullName} size="sm" />
+                        <div>
+                          <div className="cell-main">{a.fullName}</div>
+                          <div className="cell-sub">{a.note ?? a.level ?? "—"}</div>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="mono" style={{ fontSize: 13 }}>{a.phone}</td>
-                  <td className="cell-sub">{formatRelativeDate(a.createdAt)}</td>
-                  <td><StatusBadge status={a.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="mono" style={{ fontSize: 13 }}>{a.phone}</td>
+                    <td className="cell-sub">{formatRelativeDate(a.createdAt)}</td>
+                    <td><StatusBadge status={a.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         <Card>

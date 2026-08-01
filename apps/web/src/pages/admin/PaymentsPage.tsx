@@ -61,7 +61,7 @@ export default function PaymentsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>To'lovlar</h2>
         <button className="btn primary" onClick={() => setShowModal(true)}>
           <Icon name="plus" size={15} /> To'lov
@@ -93,7 +93,7 @@ export default function PaymentsPage() {
       {/* Table card */}
       <Card style={{ padding: 0 }}>
         {/* Filter tabs */}
-        <div style={{ padding: "16px 20px 12px", display: "flex", gap: 8 }}>
+        <div style={{ padding: "16px 20px 12px", display: "flex", gap: 8, flexWrap: "wrap" }}>
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               padding: "5px 18px", borderRadius: 99, fontSize: 13, fontWeight: 700,

@@ -78,7 +78,7 @@ export default function TNotificationsPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Bildirishnomalar</h1>
           {unreadCnt > 0 && (

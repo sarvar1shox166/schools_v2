@@ -109,7 +109,7 @@ export default function AttendancePage() {
       </div>
 
       {/* Tab toggle */}
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
           onClick={() => setTab("student")}
           style={{
@@ -556,7 +556,7 @@ function MarkModal({
         </div>
 
         {/* Guruh selector + date */}
-        <div style={{ padding: "0 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ padding: "0 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-dim)" }}>Guruh:</span>
             <div style={{ position: "relative" }}>
@@ -611,11 +611,12 @@ function MarkModal({
             return (
               <div key={s.id} style={{
                 display: "flex", alignItems: "center", gap: 12,
+                flexWrap: "wrap", rowGap: 8,
                 padding: "12px 14px", borderRadius: 12,
                 border: "1px solid var(--border)", background: "var(--surface-2)",
               }}>
                 <div style={{ borderRadius: 10, flexShrink: 0, display: "inline-flex" }}><Avatar name={s.fullName} size="sm" /></div>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 120 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{s.fullName}</div>
                   <div style={{ fontSize: 12, color: "var(--text-faint)" }}>{s.level ?? ""}</div>
                 </div>
@@ -732,6 +733,7 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
             return (
               <div key={s.scheduleSlotId} style={{
                 display: "flex", alignItems: "center", gap: 12,
+                flexWrap: "wrap", rowGap: 8,
                 padding: "12px 14px", borderRadius: 12,
                 border: "1px solid var(--border)", background: "var(--surface-2)",
                 opacity: isSaving ? 0.6 : 1,
@@ -739,7 +741,7 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
                 <div style={{ borderRadius: 10, flexShrink: 0, display: "inline-flex" }}>
                   <Avatar name={s.teacherName ?? "?"} size="sm" />
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 120 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{s.teacherName}</div>
                   <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
                     {s.teacherTitle ?? s.teacherSpec ?? ""} · {slotLabel(s)}({s.startTime.slice(0, 5)})

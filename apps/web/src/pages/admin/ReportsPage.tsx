@@ -105,7 +105,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Charts row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--gap)" }}>
+      <div className="grid cols-2">
 
         {/* Income chart */}
         <Card>
@@ -137,7 +137,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Income breakdown + group fill */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--gap)" }}>
+      <div className="grid cols-2">
 
         {/* Income by package */}
         <Card>

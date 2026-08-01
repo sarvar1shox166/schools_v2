@@ -200,7 +200,7 @@ export default function NewStudentPage() {
       </div>
 
       {/* Two-column layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--gap)", alignItems: "start" }}>
+      <div className="grid cols-2" style={{ alignItems: "start" }}>
 
         {/* ── Section 1: Student info ── */}
         <Card style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>

@@ -174,12 +174,12 @@ export default function StudentDetailPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", rowGap: 10 }}>
         <button className="iconbtn" style={{ width: 38, height: 38, flexShrink: 0 }}
           onClick={() => navigate("/admin/students")}>
           <Icon name="chevronLeft" size={18} />
         </button>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 160 }}>
           <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>
             {student.fullName}
           </h2>
@@ -187,7 +187,7 @@ export default function StudentDetailPage() {
             O'quvchi profili
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn" style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
             onClick={() => setShowDeleteConfirm(true)}>
             <Icon name="trash" size={14} /> O'chirish
@@ -208,7 +208,7 @@ export default function StudentDetailPage() {
       </div>
 
       {/* ── Main grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "var(--gap)", alignItems: "start" }}>
+      <div className="student-detail-grid" style={{ alignItems: "start" }}>
 
         {/* ── Left column ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -401,7 +401,7 @@ export default function StudentDetailPage() {
 
           {/* Packages */}
           <Card style={{ padding: "24px 28px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
               <div style={{ fontWeight: 800, fontSize: 15 }}>To'lov tarixi</div>
               <button className="btn primary" onClick={() => setShowPayModal(true)}>
                 <Icon name="plus" size={14} /> Paket qo'shish
@@ -423,7 +423,7 @@ export default function StudentDetailPage() {
                       border: "1px solid var(--border)", borderRadius: 12,
                       padding: "14px 16px",
                     }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", rowGap: 8, marginBottom: 10 }}>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: 14 }}>{pkg.packageName}</div>
                           <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>

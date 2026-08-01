@@ -75,8 +75,30 @@ const S: Record<string, React.CSSProperties> = {
   },
 };
 
+/* Mobilda: chap dekorativ panel yashiriladi, faqat forma to'liq kenglikda ko'rinadi */
+function useLoginResponsiveStyles() {
+  useEffect(() => {
+    const id = "login-responsive";
+    if (document.getElementById(id)) return;
+    const el = document.createElement("style");
+    el.id = id;
+    el.textContent = `
+      @media (max-width: 768px) {
+        .login-card { grid-template-columns: 1fr !important; }
+        .login-left { display: none !important; }
+        .login-right { padding: 36px 24px !important; max-width: 420px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+      }
+      @media (max-width: 420px) {
+        .login-right { padding: 28px 18px !important; }
+      }
+    `;
+    document.head.appendChild(el);
+  }, []);
+}
+
 export default function LoginPage() {
   useLoginStyles();
+  useLoginResponsiveStyles();
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -148,10 +170,10 @@ export default function LoginPage() {
 
   return (
     <div style={S.body}>
-      <div style={{ ...S.card, animation: "lg-card .55s cubic-bezier(.16,1,.3,1) both" }}>
+      <div className="login-card" style={{ ...S.card, animation: "lg-card .55s cubic-bezier(.16,1,.3,1) both" }}>
 
         {/* ── LEFT ─────────────────────────────────────────────────────── */}
-        <div style={{ ...S.left, animation: "lg-left .6s .08s cubic-bezier(.16,1,.3,1) both" }}>
+        <div className="login-left" style={{ ...S.left, animation: "lg-left .6s .08s cubic-bezier(.16,1,.3,1) both" }}>
           {/* Floating chess glyphs */}
           <span style={{ position:"absolute", color:"rgba(255,255,255,.10)", zIndex:1, userSelect:"none", pointerEvents:"none", fontSize:120, right:30, top:-14, animation:"lg-glyph1 6s ease-in-out infinite" }}>♞</span>
           <span style={{ position:"absolute", color:"rgba(255,255,255,.08)", zIndex:1, userSelect:"none", pointerEvents:"none", fontSize:70, right:130, bottom:30, animation:"lg-glyph2 5s 1s ease-in-out infinite" }}>♟</span>
@@ -206,7 +228,7 @@ export default function LoginPage() {
         </div>
 
         {/* ── RIGHT ────────────────────────────────────────────────────── */}
-        <div style={{ ...S.right, animation: "lg-right .6s .14s cubic-bezier(.16,1,.3,1) both" }}>
+        <div className="login-right" style={{ ...S.right, animation: "lg-right .6s .14s cubic-bezier(.16,1,.3,1) both" }}>
           {/* Logo */}
           <div style={{ display:"flex", justifyContent:"center", marginBottom:26 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>

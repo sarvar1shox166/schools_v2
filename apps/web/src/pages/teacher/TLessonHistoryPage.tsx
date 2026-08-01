@@ -47,7 +47,7 @@ export default function TLessonHistoryPage() {
                 )}
               </div>
 
-              <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-faint)", marginBottom: l.reviews.length > 0 ? 10 : 0 }}>
+              <div style={{ display: "flex", gap: 14, rowGap: 4, flexWrap: "wrap", fontSize: 12, color: "var(--text-faint)", marginBottom: l.reviews.length > 0 ? 10 : 0 }}>
                 <span style={{ color: ATT_COLOR.presentCount }}>✓ {l.presentCount} keldi</span>
                 <span style={{ color: ATT_COLOR.lateCount }}>! {l.lateCount} kechikdi</span>
                 <span style={{ color: ATT_COLOR.absentCount }}>− {l.absentCount} kelmadi</span>

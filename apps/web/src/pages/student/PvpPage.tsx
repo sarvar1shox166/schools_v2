@@ -395,10 +395,10 @@ function LobbyScreen({ status, onlinePlayers, myElo, onJoinQueue, onChallenge, o
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       {/* My ELO + Queue button */}
-      <div style={{ display:"flex", alignItems:"center", gap:12,
+      <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap",
         background:"rgba(255,255,255,.04)", border:"1.5px solid rgba(255,255,255,.08)",
         borderRadius:16, padding:"16px 20px" }}>
-        <div style={{ flex:1 }}>
+        <div style={{ flex:1, minWidth:150 }}>
           <div style={{ fontSize:13, color:"rgba(255,255,255,.45)", marginBottom:3 }}>Sizning reytingiz</div>
           <div style={{ fontSize:24, fontWeight:900, color:"#fff" }}>{myElo} <span style={{ fontSize:14, color:"rgba(255,255,255,.4)" }}>ELO</span></div>
         </div>
@@ -668,12 +668,14 @@ export default function PvpPage() {
       {(status === "playing" || status === "finished") && (() => {
         const captured = getCaptured(fen);
         return (
-        <div style={{ display:"grid",gridTemplateColumns:"70px 1fr 340px",gap:16,height:"calc(100vh - 220px)",overflow:"hidden" }}>
+        <div className="pvp-game-grid">
           {/* Left column — material advantage + captured pieces */}
-          <MaterialColumn diff={captured.diff} byWhite={captured.byWhite} byBlack={captured.byBlack} />
+          <div className="pvp-material-col">
+            <MaterialColumn diff={captured.diff} byWhite={captured.byWhite} byBlack={captured.byBlack} />
+          </div>
 
           {/* Board column */}
-          <div ref={boardColRef} style={{ minWidth:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
+          <div ref={boardColRef} className="pvp-board-col" style={{ minWidth:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
             <div style={{ width:boardSize,height:boardSize,flexShrink:0 }}>
               <PvpBoardWithCoords
                 fen={fen}
@@ -689,7 +691,7 @@ export default function PvpPage() {
           </div>
 
           {/* Right panel */}
-          <div style={{ width:340,flexShrink:0,display:"flex",flexDirection:"column",gap:10,overflowY:"auto" }}>
+          <div className="pvp-panel-col" style={{ display:"flex",flexDirection:"column",gap:10,overflowY:"auto" }}>
             {/* Opponent card */}
             <PvpPlayerCard
               name={opponent ?? "Raqib"}

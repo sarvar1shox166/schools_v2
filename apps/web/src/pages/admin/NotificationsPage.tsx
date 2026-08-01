@@ -92,7 +92,7 @@ export default function NotificationsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Bildirishnomalar</h2>
         {unreadCnt > 0 && (
           <button className="btn" onClick={() => markAllRead.mutate()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -125,7 +125,7 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "var(--gap)" }}>
+      <div className="grid l-2-1">
 
         {/* Notifications list */}
         <Card style={{ padding: 0 }}>

@@ -100,9 +100,9 @@ function TeacherPayrollRow({ teacher }: { teacher: TeacherPayrollSummary }) {
 
   return (
     <div style={{ borderBottom: "1px solid var(--border)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 22px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", rowGap: 10, padding: "14px 22px" }}>
         <Avatar name={teacher.teacherName} size="sm" />
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ fontWeight: 750, fontSize: 14.5 }}>{teacher.teacherName}</div>
           <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
             Bu oy ishlagani: {fmtSom(teacher.earnedThisPeriod)} so'm · Jami to'langan: {fmtSom(teacher.totalPaid)} so'm

@@ -140,6 +140,7 @@ export default function ModeratorDashboard() {
           {lessons.map((l) => (
             <div key={l.id} style={{
               display: "flex", alignItems: "center", gap: 14,
+              flexWrap: "wrap", rowGap: 10,
               padding: "14px 20px", borderBottom: "1px solid var(--border)",
               opacity: l.status === "done" ? 0.55 : 1,
             }}>

@@ -65,7 +65,7 @@ export default function TSchedulePage() {
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Dars jadvali</h1>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: "var(--gap)", alignItems: "start" }}>
+      <div className="grid l-2-1" style={{ alignItems: "start" }}>
         {/* Slots list */}
         <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)", overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "18px 20px", borderBottom: "1px solid var(--border)" }}>

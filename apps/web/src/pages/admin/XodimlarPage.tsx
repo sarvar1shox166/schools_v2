@@ -78,7 +78,7 @@ export default function XodimlarPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontWeight: 800 }}>Xodimlar</h2>
           <p style={{ margin: "4px 0 0", color: "var(--text-dim)", fontSize: 14 }}>

@@ -208,7 +208,7 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,auto)", gap: 10, flexShrink: 0 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, flexShrink: 0 }}>
             {[
               { v: elo, l: "ELO" },
               { v: solvedCount, l: "MASALA" },
@@ -345,7 +345,7 @@ export default function StudentDashboard() {
 
           {/* Haftalik jadval */}
           <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, padding: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(59,130,246,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 3v4M16 3v4" /></svg>

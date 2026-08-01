@@ -202,7 +202,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── 4 KPI cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
+      <div className="grid cols-4" style={{ gap: 14, marginBottom: 20 }}>
         <KpiCard tint="#3b82f6" value={myElo} label="ELO Reyting"
           icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><path d="M12 2l2.5 6.5H21l-5 4 2 7-6-4-6 4 2-7-5-4h6.5z" /></svg>} />
         <KpiCard tint="#22c55e" value={wins} label="Yutuq" delta={totalGames > 0 ? `${wins}—${losses}` : undefined}
@@ -214,7 +214,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Row: ELO chart + Level/Achievements ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 20, marginBottom: 20, alignItems: "start" }}>
+      <div className="grid l-2-1" style={{ gap: 20, marginBottom: 20, alignItems: "start" }}>
         <EloChart points={eloHistory} currentElo={myElo} />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -273,7 +273,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Row: game stats + recent games ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 20 }}>
+      <div className="grid l-1-2" style={{ gap: 20 }}>
         <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 16, padding: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(34,197,94,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>

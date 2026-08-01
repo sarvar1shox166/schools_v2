@@ -56,7 +56,7 @@ export default function LeaderboardPage() {
       </div>
 
       {/* ── Top-3 + siz paneli ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr", gap: 20, marginBottom: 20, alignItems: "start" }}>
+      <div className="grid l-2-1" style={{ gap: 20, marginBottom: 20, alignItems: "start" }}>
 
         <div style={{ background: "linear-gradient(135deg,#141417 0%,#161620 100%)", border: "1px solid #232328", borderRadius: 22, padding: "34px 40px", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: -40, right: -40, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle,rgba(234,179,8,0.14),transparent 70%)" }} />
@@ -142,7 +142,8 @@ export default function LeaderboardPage() {
         </div>
 
         <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 16, overflow: "hidden" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "56px 1.7fr 0.9fr 1fr 0.7fr", padding: "14px 22px", background: "#18181c", color: "#8b8d98", fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: "0.15em", borderBottom: "1px solid #232328" }}>
+         <div style={{ overflowX: "auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "56px 1.7fr 0.9fr 1fr 0.7fr", minWidth: 480, padding: "14px 22px", background: "#18181c", color: "#8b8d98", fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: "0.15em", borderBottom: "1px solid #232328" }}>
             <div>#</div><div>O'QUVCHI</div><div>ELO</div><div>XP</div><div>STREAK</div>
           </div>
 
@@ -154,7 +155,7 @@ export default function LeaderboardPage() {
             const online = onlineIds.has(e.userId);
             return (
               <div key={e.userId} style={{
-                display: "grid", gridTemplateColumns: "56px 1.7fr 0.9fr 1fr 0.7fr", padding: "14px 22px", alignItems: "center",
+                display: "grid", gridTemplateColumns: "56px 1.7fr 0.9fr 1fr 0.7fr", minWidth: 480, padding: "14px 22px", alignItems: "center",
                 borderBottom: i < rest.length - 1 ? "1px solid #1a1a1e" : "none",
                 background: isMe ? "linear-gradient(90deg,rgba(34,197,94,0.08),transparent)" : "transparent",
                 borderLeft: isMe ? "3px solid #22c55e" : "3px solid transparent",
@@ -183,6 +184,7 @@ export default function LeaderboardPage() {
           {!isLoading && data.length === 0 && (
             <div style={{ padding: 40, textAlign: "center", color: "#54555e", fontSize: 14 }}>Hali ma'lumot yo'q</div>
           )}
+         </div>
         </div>
 
         <div style={{ color: "#65666f", fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: "0.05em", marginTop: 14 }}>

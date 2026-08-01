@@ -181,7 +181,7 @@ export default function VideoCoursesPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Video darsliklar</h2>
         <button className="btn primary" onClick={() => setShowModal(true)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Icon name="plus" size={13} /> Kurs qo'shish

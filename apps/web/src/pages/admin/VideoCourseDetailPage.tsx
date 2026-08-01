@@ -431,7 +431,7 @@ export default function VideoCourseDetailPage() {
 
       <CourseSettingsCard course={course} />
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>Video darslar</h3>
         <button className="btn primary" onClick={() => setShowAddLesson(true)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Icon name="plus" size={13} /> Video qo'shish

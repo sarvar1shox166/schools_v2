@@ -390,7 +390,7 @@ function UmumiyTab() {
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--gap)", alignItems: "start" }}>
+    <div className="grid cols-2" style={{ alignItems: "start" }}>
       <Card style={{ padding: "24px 28px" }}>
         <h3 style={{ margin: "0 0 20px", fontWeight: 800, fontSize: 16 }}>Tizim sozlamalari</h3>
         {isError && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>Yuklab bo'lmadi.</div>}
@@ -707,13 +707,13 @@ export default function SettingsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Sozlamalar</h2>
 
         {/* Tab switcher */}
         <div style={{
           display: "flex", background: "var(--surface-2)", borderRadius: 10,
-          padding: 3, gap: 2,
+          padding: 3, gap: 2, flexWrap: "wrap",
         }}>
           {TABS.map(t => (
             <button

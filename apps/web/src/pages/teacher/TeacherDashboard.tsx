@@ -139,42 +139,42 @@ export default function TeacherDashboard() {
         <div style={{ position:"absolute", right:-50, top:-70, width:240, height:240, borderRadius:"50%", background:"rgba(255,255,255,0.08)", pointerEvents:"none" }}/>
         <div style={{ position:"absolute", right:100, bottom:-90, width:180, height:180, borderRadius:"50%", background:"rgba(255,255,255,0.05)", pointerEvents:"none" }}/>
 
-        {/* admin panel button */}
-        <button
-          onClick={() => navigate("/admin")}
-          style={{
-            position:"absolute", top:22, right:24,
-            background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.35)",
-            borderRadius:10, padding:"7px 16px", color:"#fff", fontSize:13, fontWeight:700,
-            cursor:"pointer", display:"flex", alignItems:"center", gap:7,
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
-          </svg>
-          Admin panel
-        </button>
-
-        {/* profile row */}
-        <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:22 }}>
-          <div style={{
-            width:52, height:52, borderRadius:16, flexShrink:0,
-            background:"rgba(255,255,255,0.22)", border:"2px solid rgba(255,255,255,0.45)",
-            display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:18, fontWeight:800,
-          }}>{initials}</div>
-          <div>
-            <div style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.02em" }}>
-              Assalomu alaykum, {firstName}! 👋
-            </div>
-            <div style={{ fontSize:14, opacity:0.85, marginTop:4 }}>
-              Bugun {dayShort} — {todayLessonsCount} ta darsing bor
+        {/* profile row + admin button */}
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", flexWrap:"wrap", gap:12, marginBottom:22 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:16, minWidth:0 }}>
+            <div style={{
+              width:52, height:52, borderRadius:16, flexShrink:0,
+              background:"rgba(255,255,255,0.22)", border:"2px solid rgba(255,255,255,0.45)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:18, fontWeight:800,
+            }}>{initials}</div>
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.02em" }}>
+                Assalomu alaykum, {firstName}! 👋
+              </div>
+              <div style={{ fontSize:14, opacity:0.85, marginTop:4 }}>
+                Bugun {dayShort} — {todayLessonsCount} ta darsing bor
+              </div>
             </div>
           </div>
+
+          <button
+            onClick={() => navigate("/admin")}
+            style={{
+              background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.35)",
+              borderRadius:10, padding:"7px 16px", color:"#fff", fontSize:13, fontWeight:700,
+              cursor:"pointer", display:"flex", alignItems:"center", gap:7, flexShrink:0,
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+            Admin panel
+          </button>
         </div>
 
         {/* stats row */}
-        <div style={{ display:"flex", gap:0 }}>
+        <div style={{ display:"flex", gap:0, flexWrap:"wrap", rowGap:14 }}>
           {[
             { v: String(totalStudents),                                          l: "O'quvchilar" },
             { v: String(profile?.groupsCount ?? 0),                             l: "Guruhlar"    },
@@ -212,7 +212,7 @@ export default function TeacherDashboard() {
         <div style={{
           borderRadius:18, padding:"22px 28px",
           background:"linear-gradient(135deg, #1e3a8a 0%, #1e40af 55%, #2563eb 100%)",
-          color:"#fff", display:"flex", alignItems:"center", gap:24,
+          color:"#fff", display:"flex", alignItems:"center", gap:24, flexWrap:"wrap",
         }}>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.09em", opacity:0.65, marginBottom:8, textTransform:"uppercase" }}>
@@ -337,7 +337,7 @@ export default function TeacherDashboard() {
       })()}
 
       {/* ── 4 KPI cards ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"var(--gap)" }}>
+      <div className="grid cols-4">
         {[
           {
             bg:"#dbeafe", color:"#2563eb",
@@ -394,6 +394,7 @@ export default function TeacherDashboard() {
           <div style={{
             padding:"18px 22px 14px",
             display:"flex", alignItems:"center", justifyContent:"space-between",
+            flexWrap:"wrap", rowGap:10,
             borderBottom:"1px solid var(--border)",
           }}>
             <div style={{ display:"flex", alignItems:"center", gap:12 }}>

@@ -244,7 +244,7 @@ export default function PackagesPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Paketlar</h2>
           <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 3 }}>

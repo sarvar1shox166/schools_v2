@@ -48,7 +48,7 @@ function AnalyticsDrawer({ puzzle, onClose }: { puzzle: MyPuzzle; onClose: () =>
           <div style={{ textAlign:"center", padding:"32px 0", color:"var(--text-faint)" }}>Yuklanmoqda...</div>
         ) : data ? (
           <>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:20 }}>
+            <div className="grid cols-3" style={{ gap:10, marginBottom:20 }}>
               <div style={{ padding:"14px", borderRadius:10, background:"#dbeafe", textAlign:"center" }}>
                 <div style={{ fontSize:22, fontWeight:800, color:"#1d4ed8" }}>{data.total}</div>
                 <div style={{ fontSize:12, color:"#2563eb", marginTop:2 }}>Jami urinish</div>
@@ -121,7 +121,7 @@ export default function TPuzzlesPage() {
       </div>
 
       {/* Stat cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"var(--gap)" }}>
+      <div className="grid cols-4">
         <Card style={{ padding:20 }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ width:40,height:40,borderRadius:10,background:"#dbeafe",display:"flex",alignItems:"center",justifyContent:"center" }}>

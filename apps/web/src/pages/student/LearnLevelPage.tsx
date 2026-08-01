@@ -134,7 +134,7 @@ export default function LearnLevelPage() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 300px", gap: 20, alignItems: "start" }}>
+      <div className="learn-level-grid" style={{ gap: 20, alignItems: "start" }}>
         {/* Board column */}
         <div>
           {totalTargets > 1 && (

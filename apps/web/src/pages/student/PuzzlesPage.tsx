@@ -47,10 +47,14 @@ const CrownIcon = () => (
 );
 
 /* ── Responsive hook ─────────────────────────────────────────────────────── */
+// Desktop ko'rinishda ikkita fixed-kenglik panel bor (250px + 280px = 530px) —
+// taxtaga yetarli joy qolishi uchun oddiy mobil chegaradan (768px) kengroq
+// nuqtada stacked (mobil) ko'rinishga o'tkazamiz, aks holda planshetlarda
+// (768-1000px) taxta siqilib qoladi.
 function useNarrow() {
-  const [narrow, setNarrow] = useState(() => window.innerWidth < 768);
+  const [narrow, setNarrow] = useState(() => window.innerWidth < 1000);
   useEffect(() => {
-    const h = () => setNarrow(window.innerWidth < 768);
+    const h = () => setNarrow(window.innerWidth < 1000);
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
   }, []);

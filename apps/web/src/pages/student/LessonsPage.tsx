@@ -251,7 +251,7 @@ export default function LessonsPage() {
       )}
 
       {/* ── 2-col grid ───────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
+      <div className="grid l-2-1" style={{ gap: 16 }}>
 
         {/* LEFT: uy vazifalari */}
         <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 14, overflow: "hidden" }}>

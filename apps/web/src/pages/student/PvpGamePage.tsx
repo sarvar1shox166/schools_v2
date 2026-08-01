@@ -437,16 +437,14 @@ export default function PvpGamePage() {
       </div>
 
       {/* Main layout */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "70px 1fr 340px", gap: 16,
-        height: "calc(100vh - 220px)",
-        overflow: "hidden",
-      }}>
+      <div className="pvp-game-grid">
         {/* Left column — material advantage + captured pieces */}
-        <MaterialColumn diff={captured.diff} byWhite={captured.byWhite} byBlack={captured.byBlack} />
+        <div className="pvp-material-col">
+          <MaterialColumn diff={captured.diff} byWhite={captured.byWhite} byBlack={captured.byBlack} />
+        </div>
 
         {/* Board column — fills remaining space */}
-        <div ref={boardColRef} style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div ref={boardColRef} className="pvp-board-col" style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ width: boardSize, height: boardSize, flexShrink: 0 }}>
             <BoardWithCoords
               fen={fen}
@@ -463,7 +461,7 @@ export default function PvpGamePage() {
         </div>
 
         {/* Right panel */}
-        <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+        <div className="pvp-panel-col" style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
           {/* Computer card */}
           <PlayerCard
             name={compName}

@@ -87,7 +87,7 @@ export default function IncomeReportPage() {
       </div>
 
       {/* Charts row */}
-      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: "var(--gap)" }}>
+      <div className="grid l-2-1">
 
         {/* Bar chart */}
         <Card style={{ padding: 0 }}>

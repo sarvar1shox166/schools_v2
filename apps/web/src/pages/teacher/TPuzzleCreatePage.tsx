@@ -100,7 +100,7 @@ function PieceBar({ pcs, active, onSelect }: {
     <button key={t} onClick={() => onSelect(t)}
       title={t === "cursor" ? "Ko'chirish" : t === "eraser" ? "O'chirish" : t}
       style={{
-        width:58, height:58, border:"none", borderRadius:5, cursor:"pointer",
+        width:58, height:58, flexShrink:0, border:"none", borderRadius:5, cursor:"pointer",
         display:"flex", alignItems:"center", justifyContent:"center",
         background: active===t ? "#568a5d" : "transparent",
         color: t==="eraser" ? "#ff8080" : "#eee",
@@ -113,7 +113,7 @@ function PieceBar({ pcs, active, onSelect }: {
     <div style={{
       display:"flex", background:"#302e2c",
       border:"1px solid #484440", borderRadius:6,
-      padding:"3px 5px", gap:1, maxWidth:580,
+      padding:"3px 5px", gap:1, maxWidth:580, overflowX:"auto",
     }}>
       {btn("cursor", <span style={{ fontSize:22 }}>✋</span>)}
       {pcs.map(p => btn(p,
@@ -408,17 +408,17 @@ export default function TPuzzleCreatePage() {
     }}>
       {/* Top bar */}
       <div style={{
-        display:"flex", alignItems:"center", gap:12,
+        display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", rowGap:8,
         padding:"12px 18px", borderBottom:"1px solid #333",
         background:"#262421",
       }}>
         <button onClick={() => navigate("/teacher/puzzles")}
           style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #555",
             background:"transparent", color:"#ccc", cursor:"pointer", fontSize:13,
-            display:"flex", alignItems:"center", gap:6 }}>
+            display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
           ← Orqaga
         </button>
-        <div style={{ flex:1 }}>
+        <div style={{ flex:1, minWidth:150 }}>
           <span style={{ fontWeight:800, fontSize:16 }}>Yangi boshqotirma</span>
           <span style={{ marginLeft:12, fontSize:13, color:"#888" }}>
             {mode === "setup" ? "Pozitsiya sozlash" : "Yechim yozish"}
@@ -436,7 +436,7 @@ export default function TPuzzleCreatePage() {
       </div>
 
       {/* Main layout */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 310px", gap:0, flex:1, alignItems:"start" }}>
+      <div className="puzzle-editor-grid" style={{ flex:1 }}>
 
         {/* LEFT — board column */}
         <div style={{ padding:18, display:"flex", flexDirection:"column", gap:8 }}>
@@ -509,7 +509,7 @@ export default function TPuzzleCreatePage() {
         </div>
 
         {/* RIGHT — settings column */}
-        <div style={{
+        <div className="puzzle-editor-right" style={{
           borderLeft:"1px solid #333", padding:16,
           display:"flex", flexDirection:"column", gap:12, minHeight:"calc(100vh - 110px)",
         }}>

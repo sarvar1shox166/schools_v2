@@ -128,7 +128,7 @@ export default function ApplicationsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>
           Arizalar — {total} ta
         </h2>
@@ -187,45 +187,47 @@ export default function ApplicationsPage() {
         {/* Diagnostic teacher stats */}
         <Card>
           <CardHead icon="teacher" title="O'qituvchi statistikasi" sub="Diagnostika bo'yicha" />
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>O'QITUVCHI</th>
-                <th style={{ textAlign: "center" }}>JAMI</th>
-                <th style={{ textAlign: "center", color: "var(--info)" }}>DIAGNOSTIKA</th>
-                <th style={{ textAlign: "center", color: "var(--success)" }}>QOLDI ✓</th>
-                <th style={{ textAlign: "center", color: "var(--danger)" }}>KETDI ✗</th>
-                <th>KONVERSIYA</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teacherStats.map(t => (
-                <tr key={t.name}>
-                  <td>
-                    <div className="with-av">
-                      <Avatar name={t.name} size="sm" />
-                      <span style={{ fontWeight: 650, fontSize: 13.5 }}>{t.name}</span>
-                    </div>
-                  </td>
-                  <td style={{ textAlign: "center" }}><CountBubble n={t.jami} /></td>
-                  <td style={{ textAlign: "center" }}><CountBubble n={t.diagnostika} color="var(--info)" /></td>
-                  <td style={{ textAlign: "center" }}><CountBubble n={t.qoldi} color="var(--success)" /></td>
-                  <td style={{ textAlign: "center", fontSize: 13.5, fontWeight: 700 }}>{t.ketdi}</td>
-                  <td><MiniBar pct={t.conv} /></td>
+          <div style={{ overflowX: "auto" }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>O'QITUVCHI</th>
+                  <th style={{ textAlign: "center" }}>JAMI</th>
+                  <th style={{ textAlign: "center", color: "var(--info)" }}>DIAGNOSTIKA</th>
+                  <th style={{ textAlign: "center", color: "var(--success)" }}>QOLDI ✓</th>
+                  <th style={{ textAlign: "center", color: "var(--danger)" }}>KETDI ✗</th>
+                  <th>KONVERSIYA</th>
                 </tr>
-              ))}
-              {teacherStats.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>–</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {teacherStats.map(t => (
+                  <tr key={t.name}>
+                    <td>
+                      <div className="with-av">
+                        <Avatar name={t.name} size="sm" />
+                        <span style={{ fontWeight: 650, fontSize: 13.5 }}>{t.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ textAlign: "center" }}><CountBubble n={t.jami} /></td>
+                    <td style={{ textAlign: "center" }}><CountBubble n={t.diagnostika} color="var(--info)" /></td>
+                    <td style={{ textAlign: "center" }}><CountBubble n={t.qoldi} color="var(--success)" /></td>
+                    <td style={{ textAlign: "center", fontSize: 13.5, fontWeight: 700 }}>{t.ketdi}</td>
+                    <td><MiniBar pct={t.conv} /></td>
+                  </tr>
+                ))}
+                {teacherStats.length === 0 && (
+                  <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>–</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
 
       {/* Applications table */}
       <Card>
         {/* Filter tabs */}
-        <div style={{ padding: "14px 22px", borderBottom: "1px solid var(--border)", display: "flex", gap: 6 }}>
+        <div style={{ padding: "14px 22px", borderBottom: "1px solid var(--border)", display: "flex", gap: 6, flexWrap: "wrap" }}>
           {FILTER_TABS.map(t => (
             <button
               key={t.v}

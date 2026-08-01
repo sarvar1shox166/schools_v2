@@ -47,7 +47,7 @@ export default function TeachersPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>
           O'qituvchilar — {teachers.length} ta
         </h2>
@@ -60,7 +60,7 @@ export default function TeachersPage() {
       {showForm && (
         <Card>
           <div style={{ padding: "18px 22px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 12 }}>
+            <div className="grid cols-4" style={{ gap: 10, marginBottom: 12 }}>
               <input className="inp" placeholder="F.I.Sh" value={form.fullName}
                 onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
               <input className="inp" placeholder="Telefon" value={form.phone}

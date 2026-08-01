@@ -193,7 +193,7 @@ function ExamCard({ courseId, exam }: { courseId: string; exam: { questionCount:
 
   return (
     <div style={{
-      marginTop: 20, display: "flex", alignItems: "center", gap: 14,
+      marginTop: 20, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
       background: exam.completed ? "linear-gradient(135deg,rgba(34,197,94,0.14) 0%,#141417 60%)" : "linear-gradient(135deg,rgba(234,179,8,0.14) 0%,#141417 60%)",
       border: `1px solid ${exam.completed ? "rgba(34,197,94,.35)" : "rgba(234,179,8,0.35)"}`, borderRadius: 16, padding: "18px 20px",
     }}>
@@ -235,7 +235,7 @@ function LessonRow({ lesson, num, xp, onOpen }: { lesson: VideoLessonItem; num: 
   return (
     <div
       onClick={onOpen}
-      style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "#141417", border: "1px solid #232328", borderRadius: 14, cursor: "pointer" }}
+      style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "12px 14px", background: "#141417", border: "1px solid #232328", borderRadius: 14, cursor: "pointer" }}
     >
       <div style={{ width: 32, height: 32, borderRadius: 9, background: numBg, color: "#fff", fontSize: 13, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {done ? "✓" : num}
@@ -246,7 +246,7 @@ function LessonRow({ lesson, num, xp, onOpen }: { lesson: VideoLessonItem; num: 
           <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>
         </div>
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 140 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
           <div style={{ color: "#f5f5f6", fontSize: 13.5, fontWeight: 800, lineHeight: 1.2 }}>{lesson.title}</div>
           <div style={{ background: pillBg, border: `1px solid ${pillBorder}`, color: pillColor, fontSize: 10.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, letterSpacing: "0.02em" }}>{pillText}</div>

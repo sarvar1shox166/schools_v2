@@ -25,7 +25,7 @@ export default function TMessagesPage() {
     <div>
       <PageHead title="Xabarlar" />
       <div className="grid l-1-2" style={{ alignItems: "stretch" }}>
-        <Card className="fade-up">
+        <Card className={"fade-up" + (activeId ? " msg-list-mobile-hidden" : "")}>
           <div className="card-head"><div className="ttl">Suhbatlar</div></div>
           <div className="list">
             {threads?.map((t) => (
@@ -50,7 +50,14 @@ export default function TMessagesPage() {
         </Card>
 
         <Card className="fade-up" style={{ display: "flex", flexDirection: "column" }}>
-          <div className="card-head"><div className="ttl">{active?.fullName ?? "Suhbatni tanlang"}</div></div>
+          <div className="card-head">
+            {activeId && (
+              <button className="iconbtn msg-back-btn" onClick={() => setActiveId(null)} aria-label="Orqaga">
+                <Icon name="chevronLeft" size={16} />
+              </button>
+            )}
+            <div className="ttl">{active?.fullName ?? "Suhbatni tanlang"}</div>
+          </div>
           {activeId ? (
             <>
               <div style={{ flex: 1, padding: "16px", minHeight: 280, display: "flex", flexDirection: "column", overflowY: "auto" }}>

@@ -50,7 +50,7 @@ export default function BroadcastPage() {
         Ommaviy xabar yuborish
       </h2>
 
-      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: "var(--gap)" }}>
+      <div className="grid l-2-1">
 
         {/* Left: compose */}
         <Card style={{ padding: 0 }}>
@@ -106,7 +106,7 @@ export default function BroadcastPage() {
               <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-faint)", letterSpacing: "0.07em", marginBottom: 10 }}>
                 KANAL
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {CHANNELS.map(c => (
                   <button key={c.key} onClick={() => setChannel(c.key)} style={{
                     display: "flex", alignItems: "center", gap: 7,
@@ -173,8 +173,8 @@ export default function BroadcastPage() {
             )}
 
             {/* Footer */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 4, borderTop: "1px solid var(--border)" }}>
-              <div style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--text-faint)", display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", paddingTop: 4, borderTop: "1px solid var(--border)" }}>
+              <div style={{ flex: 1, minWidth: 150, fontSize: 13.5, fontWeight: 600, color: "var(--text-faint)", display: "flex", alignItems: "center", gap: 6 }}>
                 <Icon name="users" size={14} />
                 {targetRole === "all" ? "Barcha foydalanuvchilar" : targetRole === "student" ? "O'quvchilar" : "O'qituvchilar"}
               </div>

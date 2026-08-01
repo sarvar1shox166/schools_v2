@@ -86,10 +86,10 @@ export default function TLiveLessonPage() {
   }
 
   return (
-    <div style={{ padding: "24px 28px", minHeight: "100vh" }}>
+    <div className="live-lesson-page" style={{ minHeight: "100vh" }}>
       {/* Header */}
-      <div style={{
-        borderRadius: 18, padding: "20px 24px",
+      <div className="live-lesson-header" style={{
+        borderRadius: 18,
         background: "linear-gradient(135deg, #059669 0%, #047857 55%, #065f46 100%)",
         color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16,
       }}>

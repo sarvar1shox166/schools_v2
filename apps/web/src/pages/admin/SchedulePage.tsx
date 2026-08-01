@@ -203,7 +203,7 @@ export default function SchedulePage() {
 
       {/* Dam olish kunlari (bayramlar) */}
       <Card style={{ padding: "18px 22px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: holidays.length ? 14 : 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: holidays.length ? 14 : 0 }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 15 }}>Dam olish kunlari</div>
             <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
@@ -321,7 +321,7 @@ function WeeklyView({ teacherFilter, onOpenAdd, onOpenView }: {
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-dim)" }}>
           {fmtDisplayDate(from)} — {fmtDisplayDate(to)}
         </div>
@@ -423,7 +423,7 @@ function CalendarView({ teacherFilter, onOpenAdd, onOpenView }: {
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <div style={{ fontSize: 15, fontWeight: 800 }}>
           {MONTH_NAMES[monthAnchor.getMonth()]} {monthAnchor.getFullYear()}
         </div>
@@ -1123,7 +1123,7 @@ function HolidayAddButton({ onAdd, isPending }: { onAdd: (date: string, reason?:
   }
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       <input className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       <input className="inp" style={{ width: 140 }} placeholder="Sabab" value={reason} onChange={(e) => setReason(e.target.value)} />
       <button className="btn primary" disabled={isPending}

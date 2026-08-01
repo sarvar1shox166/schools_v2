@@ -108,7 +108,7 @@ export default function VideoWatchPage() {
   const lessons = course?.lessons ?? [];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: lessons.length > 0 ? "1fr 340px" : "1fr", gap: 20, alignItems: "start" }}>
+    <div className={lessons.length > 0 ? "video-watch-grid" : undefined} style={{ display: "grid", gridTemplateColumns: lessons.length > 0 ? undefined : "1fr", gap: 20, alignItems: "start" }}>
       <div>
         <button onClick={() => navigate(-1)}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "#18181c", border: "1px solid #232328", borderRadius: 10, color: "#c7d0e8", cursor: "pointer", fontSize: 12.5, fontWeight: 700, marginBottom: 16, padding: "8px 12px 8px 10px" }}>

@@ -49,8 +49,8 @@ function tabStyle(active: boolean): React.CSSProperties {
 function RichToolbar() {
   const btn: React.CSSProperties = { width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)" };
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--surface-2)", overflowX: "auto" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
         <div style={btn}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 20L18 8a2.8 2.8 0 000-4 2.8 2.8 0 00-4 0L2 16v4z" /><path d="M14.5 5.5L18.5 9.5" /></svg></div>
         <div style={{ ...btn, fontWeight: 800, fontSize: 13, color: "var(--text)" }}>B</div>
         <div style={{ ...btn, fontStyle: "italic", fontSize: 13, color: "var(--text)" }}>I</div>
@@ -163,6 +163,7 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden", borderLeft: ended ? `3px solid ${accentColor}` : "3px solid transparent" }}>
       <div onClick={toggleExpand} style={{
         padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        flexWrap: "wrap", rowGap: 10,
         cursor: ended ? "pointer" : "not-allowed", opacity: ended ? 1 : .5,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -192,7 +193,7 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
 
       {expanded && (
         <div style={{ borderTop: "1px solid var(--border)", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <div onClick={() => setStep(0)} style={tabStyle(step === 0)}>1. Davomat</div>
             <div onClick={() => setStep(1)} style={tabStyle(step === 1)}>2. Vazifa berish</div>
             <div onClick={() => setStep(2)} style={tabStyle(step === 2)}>3. XP berish</div>
@@ -203,14 +204,14 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
               {students.map((st, i) => {
                 const status = attendance[st.id] ?? "p";
                 return (
-                  <div key={st.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 4px", borderBottom: "1px solid var(--border)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 9, background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div key={st.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 4px", borderBottom: "1px solid var(--border)", flexWrap: "wrap", rowGap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 9, background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         {initialsOf(st.fullName)}
                       </div>
                       <div style={{ color: "var(--text)", fontSize: 13.5, fontWeight: 500 }}>{st.fullName}</div>
                     </div>
-                    <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {ATT_LABELS.map((a) => (
                         <div key={a.key} onClick={() => setAttendance((s) => ({ ...s, [st.id]: a.key }))} style={pillStyle(status === a.key, a.color)}>{a.label}</div>
                       ))}
@@ -271,9 +272,9 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
           {step === 2 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {students.map((st, i) => (
-                <div key={st.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 4px", borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 9, background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div key={st.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 4px", borderBottom: "1px solid var(--border)", flexWrap: "wrap", rowGap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 9, background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       {initialsOf(st.fullName)}
                     </div>
                     <div style={{ color: "var(--text)", fontSize: 13.5, fontWeight: 500 }}>{st.fullName}</div>
@@ -346,9 +347,9 @@ function HomeworkListItem({ hw }: { hw: Homework }) {
 
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
-      <div onClick={() => setExpanded((e) => !e)} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div onClick={() => setExpanded((e) => !e)} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", rowGap: 10, cursor: "pointer" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v15H6.5A2.5 2.5 0 004 15.5v-10z" /><path d="M4 15.5A2.5 2.5 0 016.5 18H20" /></svg>
           </div>
           <div>

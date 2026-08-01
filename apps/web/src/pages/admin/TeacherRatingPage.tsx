@@ -109,9 +109,9 @@ function StudentReviewsCard({ rankings }: { rankings: TeacherRanking[] }) {
 
   return (
     <Card style={{ padding: 0 }}>
-      <div style={{ padding: "18px 22px 14px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)" }}>
+      <div style={{ padding: "18px 22px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontSize: 18 }}>🎓</span>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 140 }}>
           <div style={{ fontWeight: 800, fontSize: 15.5 }}>O'quvchi izohlari</div>
           <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: 2 }}>Faqat admin ko'radi</div>
         </div>
@@ -169,9 +169,9 @@ function ModerationQueueCard() {
 
   return (
     <Card style={{ padding: 0 }}>
-      <div style={{ padding: "18px 22px 14px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)" }}>
+      <div style={{ padding: "18px 22px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontSize: 18 }}>🚦</span>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 140 }}>
           <div style={{ fontWeight: 800, fontSize: 15.5 }}>Moderatsiya navbati</div>
           <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: 2 }}>
             Yangi izohlar — o'qituvchiga ko'rsatishdan oldin tekshiring
@@ -243,7 +243,7 @@ export default function TeacherRatingPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Ustoz reytingi</h2>
         <button className="btn primary" onClick={() => setShowAddModal(true)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Icon name="plus" size={14} /> Ichki baho qo'shish
@@ -281,6 +281,7 @@ export default function TeacherRatingPage() {
             ) : rankings.map((t, i) => (
               <div key={t.id} style={{
                 display: "flex", alignItems: "center", gap: 14,
+                flexWrap: "wrap", rowGap: 8,
                 padding: "14px 22px",
                 borderBottom: i < rankings.length - 1 ? "1px solid var(--border)" : "none",
               }}>
@@ -288,7 +289,7 @@ export default function TeacherRatingPage() {
                   {MEDALS[i] ?? `#${i + 1}`}
                 </div>
                 <Avatar name={t.fullName} size="sm" />
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 140 }}>
                   <div style={{ fontWeight: 750, fontSize: 15 }}>{t.fullName}</div>
                   <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: 2 }}>
                     {t.studentsCount} o'quvchi · {t.groupsCount} guruh
@@ -306,9 +307,9 @@ export default function TeacherRatingPage() {
 
         {/* Reviews */}
         <Card style={{ padding: 0 }}>
-          <div style={{ padding: "18px 22px 14px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)" }}>
+          <div style={{ padding: "18px 22px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderBottom: "1px solid var(--border)" }}>
             <span style={{ fontSize: 18 }}>💬</span>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 140 }}>
               <div style={{ fontWeight: 800, fontSize: 15.5 }}>Admin ichki baholari</div>
               <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: 2 }}>
                 Faqat admin ko'radi va reytingga ta'sir qilmaydi — ichki hisobot uchun

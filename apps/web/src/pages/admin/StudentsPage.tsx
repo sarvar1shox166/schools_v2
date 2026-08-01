@@ -99,7 +99,7 @@ export default function StudentsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>
           O'quvchilar — {(students as Student[]).length} ta
         </h2>
@@ -114,7 +114,7 @@ export default function StudentsPage() {
       <Card style={{ padding: 0 }}>
         {/* Toolbar */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 8,
+          display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
           padding: "14px 22px", borderBottom: "1px solid var(--border)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, overflowX: "auto", minWidth: 0 }}>

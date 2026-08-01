@@ -110,7 +110,7 @@ export default function LearnPage() {
       {isLoading ? (
         <div style={{ textAlign: "center", padding: 40, color: "rgba(255,255,255,.4)" }}>Yuklanmoqda...</div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="grid cols-2" style={{ gap: 12 }}>
           {topics.map((topic) => <TopicCard key={topic.id} topic={topic} color={active.color} />)}
         </div>
       )}
