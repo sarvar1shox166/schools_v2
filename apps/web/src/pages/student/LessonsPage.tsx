@@ -5,9 +5,9 @@ import {
   useCancelledToday,
   useCompleteHomework,
   useHomework,
-  useJoinLesson,
   useNextLesson,
   useStudentLessonHistory,
+  type Homework,
 } from "../../lib/queries.js";
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
@@ -43,6 +43,100 @@ function fmtDayLabel(iso: string): string {
   return `${DAY_SHORT[(d.getDay() + 6) % 7]}, ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 }
 
+// `[matn](https://...)` va oddiy "https://..." havolalarni bosiladigan
+// <a> elementlarga aylantiradi — qolgan matn o'zgarishsiz qoladi.
+const LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
+function renderTextWithLinks(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  LINK_RE.lastIndex = 0;
+  while ((m = LINK_RE.exec(text))) {
+    if (m.index > lastIndex) nodes.push(text.slice(lastIndex, m.index));
+    const label = m[1] ?? m[3];
+    const url = m[2] ?? m[3];
+    nodes.push(
+      <a key={key++} href={url} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", textDecoration: "underline" }}>
+        {label}
+      </a>
+    );
+    lastIndex = LINK_RE.lastIndex;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+/* ── Uy vazifasi qatori — bosilsa "matn" (tavsifdan tashqari yozilgan
+   qo'shimcha matn/havola) ochilib ko'rinadi ─────────────────────────────── */
+function HomeworkRow({ hw, onComplete }: { hw: Homework; onComplete: (id: string, xp: number) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasDescription = !!hw.description?.trim();
+
+  return (
+    <div style={{
+      borderTop: "1px solid #1e1e22", padding: "14px 22px",
+      background: hw.done ? "linear-gradient(90deg,rgba(34,197,94,.05),transparent)" : "transparent",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+          <div onClick={(e) => { e.stopPropagation(); if (!hw.done) onComplete(hw.id, hw.xpReward); }} style={{
+            width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: hw.done ? "default" : "pointer",
+            background: hw.done ? "linear-gradient(135deg,#22c55e,#16a34a)" : "#18181c", border: hw.done ? "none" : "1px solid #232328",
+            boxShadow: hw.done ? "0 4px 12px rgba(34,197,94,.35)" : "none",
+          }}>
+            {hw.done && <Icon name="check" size={16} style={{ color: "#fff" }} />}
+          </div>
+          <div
+            onClick={() => hasDescription && setExpanded((v) => !v)}
+            style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, cursor: hasDescription ? "pointer" : "default" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <div style={{
+                color: hw.done ? "#65666f" : "#f5f5f6", fontSize: 13.5, fontWeight: 600, textDecoration: hw.done ? "line-through" : "none", lineHeight: 1.3,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,
+              }}>
+                {hw.title}
+              </div>
+              {hasDescription && (
+                <Icon name="chevronDown" size={12} style={{ color: "#65666f", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+              )}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, lineHeight: 1.3 }}>
+              {hw.dueDate && (
+                <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#8b8d98", fontSize: 11.5 }}>
+                  <Icon name="clock" size={11} />
+                  {fmtDueDate(hw.dueDate)}
+                </div>
+              )}
+              {hw.dueDate && <div style={{ color: "#4a4b52", fontSize: 11.5 }}>·</div>}
+              <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#fbbf24", fontSize: 11.5, fontWeight: 700 }}>
+                +{hw.xpReward} XP
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 20, whiteSpace: "nowrap",
+          background: hw.done ? "rgba(34,197,94,.12)" : "rgba(255,255,255,.06)", color: hw.done ? "#4ade80" : "#8b8d98",
+        }}>
+          {hw.done && <Icon name="check" size={12} />}
+          {hw.done ? "Bajarildi" : "Qilinmagan"}
+        </div>
+      </div>
+
+      {expanded && hasDescription && (
+        <div style={{
+          marginTop: 10, marginLeft: 46, padding: "10px 12px", background: "#18181c", border: "1px solid #232328",
+          borderRadius: 10, fontSize: 12.5, color: "#c7c8d0", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+        }}>
+          {renderTextWithLinks(hw.description!)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Page ───────────────────────────────────────────────────────────────── */
 export default function LessonsPage() {
   const { data: next } = useNextLesson();
@@ -51,7 +145,6 @@ export default function LessonsPage() {
   const { data: homework = [] } = useHomework();
   const { data: cancelledToday = [] } = useCancelledToday();
   const completeHW = useCompleteHomework();
-  const joinLesson = useJoinLesson();
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const [tick, setTick] = useState(0);
@@ -67,8 +160,8 @@ export default function LessonsPage() {
     d: Math.floor(countdownMs / 86400000),
     h: Math.floor((countdownMs % 86400000) / 3600000),
     m: Math.floor((countdownMs % 3600000) / 60000),
+    s: Math.floor((countdownMs % 60000) / 1000),
   };
-  const canJoinNext = !!next && !next.endedToday && countdownMs <= 5 * 60 * 1000;
   const isToday = next ? new Date(next.nextAt).toDateString() === new Date().toDateString() : false;
   // Ko'chirilgan darsda haftalik kun emas, aynan yangi sananing kuni ko'rsatilishi kerak.
   const nextDow = next ? (new Date(next.nextAt).getDay() + 6) % 7 : 0;
@@ -155,34 +248,22 @@ export default function LessonsPage() {
                 {next.groupName ?? next.customName ?? "Individual dars"}
               </div>
 
-              {!canJoinNext && (
-                <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 22, flexWrap: "wrap" }}>
-                  {([
-                    countdown.d > 0 ? { v: countdown.d, l: "KUN" } : null,
-                    { v: countdown.h, l: "SOAT" },
-                    { v: countdown.m, l: "DAQIQA" },
-                  ] as ({ v: number; l: string } | null)[]).filter(Boolean).map((item, i) =>
-                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "12px 16px", minWidth: 72 }}>
-                      <div style={{ color: "#fff", fontSize: 32, fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{String(item!.v).padStart(2, "0")}</div>
-                      <div style={{ color: "#8b93b0", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", marginTop: 6 }}>{item!.l}</div>
-                    </div>
-                  )}
-                  <div style={{ color: "#c7d0e8", fontSize: 14 }}>qoldi</div>
-                </div>
-              )}
-
-              {/* Tugma faqat dars boshlanish vaqti kelgandan keyin (yoki 5 daqiqa qolganda) ko'rinadi. */}
-              {canJoinNext && next.meetingUrl && next.meetingUrl !== "null" && (
-                <button onClick={() => {
-                  if (isToday) joinLesson.mutate(next.id);
-                  window.open(next.meetingUrl!, "_blank", "noreferrer");
-                }} style={{
-                  display: "flex", alignItems: "center", gap: 6, marginTop: 22, fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer",
-                  background: "#3b82f6", color: "#fff",
-                }}>
-                  🎥 Darsga kirish
-                </button>
-              )}
+              {/* Vaqt doim to'liq (soniyagacha) ko'rsatiladi — dars boshlanib, "00:00:00"ga
+                  yetgach ham dars tugashigacha shu holatda qoladi, alohida tugma yo'q. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 22, flexWrap: "wrap" }}>
+                {([
+                  countdown.d > 0 ? { v: countdown.d, l: "KUN" } : null,
+                  { v: countdown.h, l: "SOAT" },
+                  { v: countdown.m, l: "DAQIQA" },
+                  { v: countdown.s, l: "SONIYA" },
+                ] as ({ v: number; l: string } | null)[]).filter(Boolean).map((item, i) =>
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "12px 16px", minWidth: 72 }}>
+                    <div style={{ color: "#fff", fontSize: 32, fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{String(item!.v).padStart(2, "0")}</div>
+                    <div style={{ color: "#8b93b0", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", marginTop: 6 }}>{item!.l}</div>
+                  </div>
+                )}
+                <div style={{ color: "#c7d0e8", fontSize: 14 }}>qoldi</div>
+              </div>
             </div>
 
             {next.teacherName && (
@@ -246,7 +327,7 @@ export default function LessonsPage() {
           background: "#141417", border: "1px solid #232328", borderRadius: 16,
           padding: 24, marginBottom: 16, textAlign: "center", color: "#65666f", fontSize: 14,
         }}>
-          📅 Kelgusi dars topilmadi — jadval admin tomonidan tuziladi
+          📅 Sizda mavjud darslar yo'q
         </div>
       )}
 
@@ -285,44 +366,7 @@ export default function LessonsPage() {
               Hali uy vazifasi yo'q
             </div>
           ) : homework.map((hw) => (
-            <div key={hw.id} style={{
-              borderTop: "1px solid #1e1e22", padding: "14px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-              background: hw.done ? "linear-gradient(90deg,rgba(34,197,94,.05),transparent)" : "transparent",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                <div onClick={() => !hw.done && handleComplete(hw.id, hw.xpReward)} style={{
-                  width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: hw.done ? "default" : "pointer",
-                  background: hw.done ? "linear-gradient(135deg,#22c55e,#16a34a)" : "#18181c", border: hw.done ? "none" : "1px solid #232328",
-                  boxShadow: hw.done ? "0 4px 12px rgba(34,197,94,.35)" : "none",
-                }}>
-                  {hw.done && <Icon name="check" size={16} style={{ color: "#fff" }} />}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                  <div style={{ color: hw.done ? "#65666f" : "#f5f5f6", fontSize: 13.5, fontWeight: 600, textDecoration: hw.done ? "line-through" : "none", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {hw.title}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, lineHeight: 1.3 }}>
-                    {hw.dueDate && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#8b8d98", fontSize: 11.5 }}>
-                        <Icon name="clock" size={11} />
-                        {fmtDueDate(hw.dueDate)}
-                      </div>
-                    )}
-                    {hw.dueDate && <div style={{ color: "#4a4b52", fontSize: 11.5 }}>·</div>}
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#fbbf24", fontSize: 11.5, fontWeight: 700 }}>
-                      +{hw.xpReward} XP
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div style={{
-                display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 20, whiteSpace: "nowrap",
-                background: hw.done ? "rgba(34,197,94,.12)" : "rgba(255,255,255,.06)", color: hw.done ? "#4ade80" : "#8b8d98",
-              }}>
-                {hw.done && <Icon name="check" size={12} />}
-                {hw.done ? "Bajarildi" : "Qilinmagan"}
-              </div>
-            </div>
+            <HomeworkRow key={hw.id} hw={hw} onComplete={handleComplete} />
           ))}
         </div>
 

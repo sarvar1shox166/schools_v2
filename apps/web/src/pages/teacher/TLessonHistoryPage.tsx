@@ -58,7 +58,7 @@ export default function TLessonHistoryPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {l.reviews.filter((r) => r.comment).map((r, i) => (
                     <div key={i} style={{ padding: "8px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", fontSize: 12.5 }}>
-                      <span style={{ fontWeight: 700 }}>{r.studentName}:</span> «{r.comment}»
+                      «{r.comment}»
                     </div>
                   ))}
                 </div>

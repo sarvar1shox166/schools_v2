@@ -318,7 +318,6 @@ export async function lessonsRoutes(app: FastifyInstance) {
                 COALESCE(
                   json_agg(
                     json_build_object(
-                      'studentName', su.full_name,
                       'rating', r.rating,
                       'comment', CASE WHEN r.moderation_status = 'approved' THEN r.comment ELSE NULL END
                     ) ORDER BY r.created_at DESC
@@ -326,8 +325,6 @@ export async function lessonsRoutes(app: FastifyInstance) {
                   '[]'::json
                 ) AS reviews
          FROM lesson_student_reviews r
-         JOIN students s ON s.id = r.student_id
-         JOIN users su ON su.id = s.user_id
          WHERE r.lesson_id = l.id
        ) rev ON true
        WHERE l.teacher_id = $1

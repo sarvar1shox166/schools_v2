@@ -22,9 +22,10 @@ export async function recordLessonSession(client: PoolClient, scheduleSlotId: st
 
   const lessonType = UZ_TO_EN_LESSON_TYPE[rawLessonType] ?? "group";
 
-  // Group lessons are paid per attending student; individual/diagnostic lessons are
-  // a flat per-session rate (no per-student attendance is tracked for these — see
-  // /me/teacher-attendance/join, the only trigger point for non-group sessions).
+  // students_count faqat statistika/hisobot uchun saqlanadi — barcha dars turlari
+  // (guruh, individual, diagnostika) bir xil mantiq bilan flat stavka bo'yicha
+  // to'lanadi: 1 dars o'tilsa, o'qituvchi qatnashgan o'quvchilar soniga qaramay
+  // bitta belgilangan stavkani oladi.
   let studentsCount = 0;
   if (lessonType === "group" && groupId) {
     const countRes = await client.query(
@@ -36,20 +37,16 @@ export async function recordLessonSession(client: PoolClient, scheduleSlotId: st
   }
 
   let rate = 0;
-  let retentionCoef = 1;
   const rateRes = await client.query(
-    `SELECT group_rate, individual_rate, diagnostic_rate, retention_coef FROM teacher_rates WHERE teacher_id = $1`,
+    `SELECT group_rate, individual_rate, diagnostic_rate FROM teacher_rates WHERE teacher_id = $1`,
     [teacherId]
   );
   if (rateRes.rows.length > 0) {
     const r = rateRes.rows[0];
     rate = lessonType === "individual" ? r.individual_rate : lessonType === "diagnostic" ? r.diagnostic_rate : r.group_rate;
-    retentionCoef = r.retention_coef;
   }
 
-  const amount = lessonType === "group"
-    ? rate * studentsCount * retentionCoef
-    : rate * retentionCoef;
+  const amount = rate;
 
   await client.query(
     `INSERT INTO lesson_sessions (schedule_slot_id, teacher_id, group_id, lesson_type, date, students_count, rate, amount)

@@ -30,7 +30,6 @@ const salaryTypeSchema = z.object({
   groupRate: z.number().nonnegative().optional(),
   individualRate: z.number().nonnegative().optional(),
   diagnosticRate: z.number().nonnegative().optional(),
-  retentionCoef: z.number().positive().optional(),
 });
 
 async function getSetting(tenantId: string, key: string) {
@@ -109,7 +108,6 @@ export async function settingsRoutes(app: FastifyInstance) {
               COALESCE(tr.group_rate, 0) AS "groupRate",
               COALESCE(tr.individual_rate, 0) AS "individualRate",
               COALESCE(tr.diagnostic_rate, 0) AS "diagnosticRate",
-              COALESCE(tr.retention_coef, 1) AS "retentionCoef",
               COALESCE(tr.monthly_amount, 0) AS "monthlyAmount",
               COALESCE(tr.income_percent, 0) AS "incomePercent"
        FROM teachers t
@@ -130,19 +128,18 @@ export async function settingsRoutes(app: FastifyInstance) {
     await pool.query(
       `INSERT INTO teacher_rates
          (teacher_id, salary_type, monthly_amount, income_percent,
-          group_rate, individual_rate, diagnostic_rate, retention_coef)
-       VALUES ($1, $2, $3, $4, COALESCE($5, 0), COALESCE($6, 0), COALESCE($7, 0), COALESCE($8, 1))
+          group_rate, individual_rate, diagnostic_rate)
+       VALUES ($1, $2, $3, $4, COALESCE($5, 0), COALESCE($6, 0), COALESCE($7, 0))
        ON CONFLICT (teacher_id) DO UPDATE SET
          salary_type = $2, monthly_amount = $3, income_percent = $4,
          group_rate = COALESCE($5, teacher_rates.group_rate),
          individual_rate = COALESCE($6, teacher_rates.individual_rate),
-         diagnostic_rate = COALESCE($7, teacher_rates.diagnostic_rate),
-         retention_coef = COALESCE($8, teacher_rates.retention_coef)`,
+         diagnostic_rate = COALESCE($7, teacher_rates.diagnostic_rate)`,
       [
         body.teacherId, body.salaryType,
         body.monthlyAmount ?? 0, body.incomePercent ?? 0,
         body.groupRate ?? null, body.individualRate ?? null,
-        body.diagnosticRate ?? null, body.retentionCoef ?? null,
+        body.diagnosticRate ?? null,
       ]
     );
     return reply.send({ ok: true });

@@ -7,7 +7,6 @@ const rateSchema = z.object({
   groupRate: z.number().nonnegative().optional(),
   individualRate: z.number().nonnegative().optional(),
   diagnosticRate: z.number().nonnegative().optional(),
-  retentionCoef: z.number().positive().optional(),
 });
 
 const periodSchema = z.object({
@@ -31,11 +30,11 @@ export async function payrollRoutes(app: FastifyInstance) {
     if (!teacherRes.rows[0]) return reply.code(404).send({ error: "Not found" });
     const { rows } = await pool.query(
       `SELECT group_rate AS "groupRate", individual_rate AS "individualRate",
-              diagnostic_rate AS "diagnosticRate", retention_coef AS "retentionCoef"
+              diagnostic_rate AS "diagnosticRate"
        FROM teacher_rates WHERE teacher_id = $1`,
       [id]
     );
-    return rows[0] ?? { groupRate: 0, individualRate: 0, diagnosticRate: 0, retentionCoef: 1 };
+    return rows[0] ?? { groupRate: 0, individualRate: 0, diagnosticRate: 0 };
   });
 
   app.patch("/teachers/:id/rate", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
@@ -45,14 +44,13 @@ export async function payrollRoutes(app: FastifyInstance) {
     const teacherRes = await pool.query(`SELECT id FROM teachers WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
     if (!teacherRes.rows[0]) return reply.code(404).send({ error: "Not found" });
     await pool.query(
-      `INSERT INTO teacher_rates (teacher_id, group_rate, individual_rate, diagnostic_rate, retention_coef)
-       VALUES ($1, COALESCE($2, 0), COALESCE($3, 0), COALESCE($4, 0), COALESCE($5, 1))
+      `INSERT INTO teacher_rates (teacher_id, group_rate, individual_rate, diagnostic_rate)
+       VALUES ($1, COALESCE($2, 0), COALESCE($3, 0), COALESCE($4, 0))
        ON CONFLICT (teacher_id) DO UPDATE SET
          group_rate = COALESCE($2, teacher_rates.group_rate),
          individual_rate = COALESCE($3, teacher_rates.individual_rate),
-         diagnostic_rate = COALESCE($4, teacher_rates.diagnostic_rate),
-         retention_coef = COALESCE($5, teacher_rates.retention_coef)`,
-      [id, body.groupRate ?? null, body.individualRate ?? null, body.diagnosticRate ?? null, body.retentionCoef ?? null]
+         diagnostic_rate = COALESCE($4, teacher_rates.diagnostic_rate)`,
+      [id, body.groupRate ?? null, body.individualRate ?? null, body.diagnosticRate ?? null]
     );
     return { ok: true };
   });

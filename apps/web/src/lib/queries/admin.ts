@@ -21,7 +21,6 @@ export interface SalarySetting {
   groupRate: number;
   individualRate: number;
   diagnosticRate: number;
-  retentionCoef: number;
   monthlyAmount: number;
   incomePercent: number;
 }

@@ -6,7 +6,6 @@ export interface TeacherRate {
   groupRate: number;
   individualRate: number;
   diagnosticRate: number;
-  retentionCoef: number;
 }
 
 export interface LessonSession {

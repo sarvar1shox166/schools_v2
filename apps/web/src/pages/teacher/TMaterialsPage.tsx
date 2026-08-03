@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Icon, StatCard } from "@chess-school/ui";
 import {
   useHomework, useCreateHomework, useUpdateHomework, useDeleteHomework,
@@ -45,8 +45,8 @@ function tabStyle(active: boolean): React.CSSProperties {
     : { background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-faint)", fontSize: 12.5, fontWeight: 500, padding: "8px 14px", borderRadius: 9, cursor: "pointer", whiteSpace: "nowrap" };
 }
 
-/* ── Matn muharriri asboblar paneli — dizayndagi kabi (dekorativ) ──────── */
-function RichToolbar() {
+/* ── Matn muharriri asboblar paneli — "havola qo'shish" ishlaydi, qolgani dizayn uchun (dekorativ) ──────── */
+function RichToolbar({ onInsertLink }: { onInsertLink?: () => void }) {
   const btn: React.CSSProperties = { width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)" };
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--surface-2)", overflowX: "auto" }}>
@@ -65,7 +65,7 @@ function RichToolbar() {
         <div style={btn}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h10M4 18h16" /></svg></div>
         <div style={btn}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h9" /></svg></div>
         <div style={{ width: 1, height: 18, background: "var(--border)", margin: "0 6px" }} />
-        <div style={btn}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 15l6-6" /><path d="M11 6l1-1a3.5 3.5 0 015 5l-1 1" /><path d="M13 18l-1 1a3.5 3.5 0 01-5-5l1-1" /></svg></div>
+        <div onClick={onInsertLink} title="Havola qo'shish" style={{ ...btn, cursor: onInsertLink ? "pointer" : "default" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 15l6-6" /><path d="M11 6l1-1a3.5 3.5 0 015 5l-1 1" /><path d="M13 18l-1 1a3.5 3.5 0 01-5-5l1-1" /></svg></div>
         <div style={btn}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8.5" cy="9.5" r="1.5" /><path d="M21 16l-5-5-9 9" /></svg></div>
         <div style={btn}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M9 10h.01M15 10h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2" /></svg></div>
         <div style={btn}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="14" height="10" rx="1" /><path d="M17 9l4-2v8l-4-2" /></svg></div>
@@ -99,6 +99,7 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
   const [attendance, setAttendance] = useState<Record<string, AttStatus>>({});
   const [hwItems, setHwItems] = useState<{ id: number; title: string; text: string }[]>([]);
   const [nextItemId, setNextItemId] = useState(1);
+  const hwTextareaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
   const [xpAmounts, setXpAmounts] = useState<Record<string, number>>({});
   const markAttendance = useMarkAttendance();
   const createHomework = useCreateHomework();
@@ -117,6 +118,29 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
 
   function addItem() { setHwItems((items) => [...items, { id: nextItemId, title: "", text: "" }]); setNextItemId((n) => n + 1); }
   function removeItem(id: number) { setHwItems((items) => items.filter((it) => it.id !== id)); }
+
+  // Matn ichidagi kursor o'rniga `[matn](havola)` shaklida havola qo'shadi —
+  // o'quvchi tomonida shu format bosiladigan havolaga aylantiriladi.
+  function insertLink(itemId: number) {
+    const url = window.prompt("Havola manzilini kiriting (https://...)")?.trim();
+    if (!url) return;
+    const label = window.prompt("Havola matni (ixtiyoriy)", url)?.trim() || url;
+    const snippet = `[${label}](${url})`;
+    const el = hwTextareaRefs.current[itemId];
+    const start = el?.selectionStart ?? undefined;
+    const end = el?.selectionEnd ?? undefined;
+    setHwItems((items) => items.map((it) => {
+      if (it.id !== itemId) return it;
+      const s = start ?? it.text.length;
+      const e = end ?? it.text.length;
+      return { ...it, text: it.text.slice(0, s) + snippet + it.text.slice(e) };
+    }));
+    const newPos = (start ?? 0) + snippet.length;
+    setTimeout(() => {
+      const el2 = hwTextareaRefs.current[itemId];
+      if (el2) { el2.focus(); el2.setSelectionRange(newPos, newPos); }
+    }, 0);
+  }
 
   async function handleAttendanceContinue() {
     const records = students.map((s) => ({ studentId: s.id, status: attendance[s.id] ?? "p" as const }));
@@ -245,8 +269,9 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <div style={{ color: "var(--text-faint)", fontSize: 12 }}>Matn</div>
                     <div style={{ border: "1px solid var(--border)", borderRadius: 9, overflow: "hidden", background: "var(--surface)" }}>
-                      <RichToolbar />
+                      <RichToolbar onInsertLink={() => insertLink(item.id)} />
                       <textarea value={item.text} placeholder="Vazifa matnini shu yerga yozing..."
+                        ref={(el) => { hwTextareaRefs.current[item.id] = el; }}
                         onChange={(e) => setHwItems((items) => items.map((it) => it.id === item.id ? { ...it, text: e.target.value } : it))}
                         style={{ width: "100%", boxSizing: "border-box", background: "var(--surface)", border: "none", padding: 16, color: "var(--text)", fontSize: 13.5, fontFamily: "inherit", minHeight: 150, resize: "vertical", outline: "none" }} />
                     </div>

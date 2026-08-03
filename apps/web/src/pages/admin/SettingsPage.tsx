@@ -455,7 +455,7 @@ function IshHaqiTab() {
   const { data: settings = [], isLoading, isError } = useSalarySettings();
   const updateMut = useUpdateSalarySetting();
 
-  const NUM_FIELDS = ["groupRate", "individualRate", "diagnosticRate", "monthlyAmount", "incomePercent", "retentionCoef"] as const;
+  const NUM_FIELDS = ["groupRate", "individualRate", "diagnosticRate", "monthlyAmount", "incomePercent"] as const;
   type NumField = (typeof NUM_FIELDS)[number];
 
   const [editId, setEditId] = useState<string | null>(null);
@@ -473,7 +473,7 @@ function IshHaqiTab() {
     setRawInputs({
       groupRate: String(s.groupRate), individualRate: String(s.individualRate),
       diagnosticRate: String(s.diagnosticRate), monthlyAmount: String(s.monthlyAmount),
-      incomePercent: String(s.incomePercent), retentionCoef: String(s.retentionCoef),
+      incomePercent: String(s.incomePercent),
     });
   }
 
@@ -505,7 +505,6 @@ function IshHaqiTab() {
         diagnosticRate: numValue("diagnosticRate", s.diagnosticRate),
         monthlyAmount: numValue("monthlyAmount", s.monthlyAmount),
         incomePercent: numValue("incomePercent", s.incomePercent),
-        retentionCoef: Math.max(0.01, numValue("retentionCoef", s.retentionCoef)),
       },
       { onSuccess: () => { setEditId(null); setSalaryType(null); setRawInputs({}); } }
     );
@@ -548,7 +547,6 @@ function IshHaqiTab() {
               <th style={thStyle}>O'QITUVCHI</th>
               <th style={thStyle}>ISH HAQI TURI</th>
               <th style={thStyle}>STAVKA / MIQDOR</th>
-              <th style={thStyle}>KOEFFITSIENT</th>
               <th style={{ ...thStyle, width: 90 }}></th>
             </tr>
           </thead>
@@ -634,19 +632,6 @@ function IshHaqiTab() {
                             : `${s.incomePercent}%`
                         }
                       </span>
-                    )}
-                  </td>
-                  <td style={tdStyle}>
-                    {isEditing ? (
-                      currentType === "per_lesson" ? (
-                        <input className="input" type="number" style={{ width: 80 }}
-                          value={rawInputs.retentionCoef ?? ""}
-                          onChange={e => setRawInputs(f => ({ ...f, retentionCoef: e.target.value }))} />
-                      ) : <span style={{ color: "var(--text-dim)", fontSize: 13 }}>—</span>
-                    ) : (
-                      s.salaryType === "per_lesson"
-                        ? <span style={{ fontWeight: 600 }}>{s.retentionCoef}x</span>
-                        : <span style={{ color: "var(--text-dim)" }}>—</span>
                     )}
                   </td>
                   <td style={{ ...tdStyle, textAlign: "right", paddingRight: 16 }}>

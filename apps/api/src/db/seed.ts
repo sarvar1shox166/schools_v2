@@ -75,9 +75,9 @@ async function seed() {
     const teacher2Id = t2Res.rows[0].id as string;
 
     await client.query(
-      `INSERT INTO teacher_rates (teacher_id, group_rate, individual_rate, diagnostic_rate, retention_coef)
-       VALUES ($1, 15000, 50000, 35000, 1.10),
-              ($2, 18000, 65000, 40000, 1.15)`,
+      `INSERT INTO teacher_rates (teacher_id, group_rate, individual_rate, diagnostic_rate)
+       VALUES ($1, 15000, 50000, 35000),
+              ($2, 18000, 65000, 40000)`,
       [teacher1Id, teacher2Id]
     );
 

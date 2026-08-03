@@ -182,6 +182,7 @@ svg.ic { display: block; flex: none; }
   display: flex; align-items: center; gap: 12px;
   padding: 9.5px 12px; border-radius: var(--r-sm); margin-bottom: 2px;
   font-size: 14px; font-weight: 600; text-align: left;
+  text-decoration: none; cursor: pointer;
   position: relative; transition: background .15s, color .15s;
 }
 .app.collapsed .nav-item { justify-content: center; padding: 10px 0; }

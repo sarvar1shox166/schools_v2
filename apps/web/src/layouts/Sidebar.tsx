@@ -100,11 +100,11 @@ export function Sidebar({ sections, brandSub, gender, onGenderChange }: SidebarP
       <div className="brand">
         <div className="brand-mark">♞</div>
         <div className="brand-text">
-          <div className="brand-name">Shaxmat Online</div>
-          {isStudent
+          <div className="brand-name">Chesson</div>
+          {/* {isStudent
             ? <div className="brand-sub">● {brandSub}</div>
             : <div className="brand-sub"><Icon name="crown" size={12} /> {brandSub}</div>
-          }
+          } */}
         </div>
       </div>
 

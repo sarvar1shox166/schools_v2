@@ -127,7 +127,6 @@ export function useStudentLessonHistory() {
 }
 
 export interface TeacherLessonReviewItem {
-  studentName: string;
   rating: number;
   comment: string | null;
 }
