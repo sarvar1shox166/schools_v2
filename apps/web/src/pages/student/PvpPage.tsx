@@ -97,15 +97,19 @@ function PvpBoardWithCoords({ fen, onMove, flipped, disabled, getMoves }: {
 }
 
 const RESULT_LABELS: Record<string, string> = {
-  white_wins:           "Oq g'alaba qozondi (mat)",
-  black_wins:           "Qora g'alaba qozondi (mat)",
-  white_wins_resign:    "Oq g'alaba qozondi (raqib taslim bo'ldi)",
-  black_wins_resign:    "Qora g'alaba qozondi (raqib taslim bo'ldi)",
-  draw_stalemate:       "Durang (pat)",
-  draw_repetition:      "Durang (takrorlanish)",
-  draw_material:        "Durang (yetarli material yo'q)",
-  draw:                 "Durang",
-  opponent_disconnected:"Raqib o'yindan chiqdi",
+  white_wins:              "Oq g'alaba qozondi (mat)",
+  black_wins:              "Qora g'alaba qozondi (mat)",
+  white_wins_resign:       "Oq g'alaba qozondi (raqib taslim bo'ldi)",
+  black_wins_resign:       "Qora g'alaba qozondi (raqib taslim bo'ldi)",
+  white_wins_time:         "Oq g'alaba qozondi (Qora vaqti tugadi)",
+  black_wins_time:         "Qora g'alaba qozondi (Oq vaqti tugadi)",
+  white_wins_disconnect:   "Oq g'alaba qozondi (raqib ulanmadi)",
+  black_wins_disconnect:   "Qora g'alaba qozondi (raqib ulanmadi)",
+  draw_stalemate:          "Durang (pat)",
+  draw_repetition:         "Durang (takrorlanish)",
+  draw_material:           "Durang (yetarli material yo'q)",
+  draw:                    "Durang",
+  opponent_disconnected:   "Raqib o'yindan chiqdi",
 };
 
 const TIME_CONTROLS = [
@@ -550,7 +554,7 @@ export default function PvpPage() {
   const {
     status, myElo, onlinePlayers, incomingChallenge, challengeSent,
     color, opponent, opponentElo, fen, gameTc, gameTcType, moves, turn,
-    mySeconds, opSeconds, result, error,
+    mySeconds, opSeconds, result, error, opponentDisconnected,
     joinQueue, leaveQueue, sendChallenge, respondChallenge, handleMove, resign, playAgain, reconnect,
   } = usePvpSocket();
   const [challengeTarget, setChallengeTarget] = useState<OnlinePlayer | null>(null);
@@ -734,6 +738,15 @@ export default function PvpPage() {
                 </div>
               )}
             </div>
+
+            {/* Raqib ulanishi uzilgan — qayta ulanish uchun muddat berilmoqda */}
+            {opponentDisconnected && status === "playing" && (
+              <div style={{ padding:"10px 14px",borderRadius:12,
+                background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.3)",
+                color:"#fbbf24",fontSize:12.5,fontWeight:700,textAlign:"center" }}>
+                📡 Raqib ulanishi uzildi — qaytmasa siz g'alaba qozonasiz
+              </div>
+            )}
 
             {/* Result */}
             {result && (

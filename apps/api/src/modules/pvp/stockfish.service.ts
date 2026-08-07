@@ -11,6 +11,19 @@ export function difficultyToSkill(difficulty: number): number {
   return Math.round((difficulty - 1) * 2); // 1→0, 5→8, 10→18
 }
 
+// Bot "kuchi" (ELO) — mijoz UI'sidagi DIFF_ELO bilan bir xil (apps/web/.../PvpPage.tsx).
+// ELO hisob-kitobi uchun serverda ISHONCH BILAN qayta hisoblanadi — mijozdan
+// kelgan opponentElo hech qachon ishlatilmaydi (aks holda soxta yuqori ELO
+// yuborib reyting sun'iy oshirilishi mumkin edi).
+const DIFF_ELO: Record<number, number> = {
+  1: 720, 2: 840, 3: 960, 4: 1080, 5: 1200, 6: 1320, 7: 1440, 8: 1560, 9: 1680, 10: 1800,
+};
+
+export function computerOpponentElo(difficulty: number, unbeatable?: boolean): number {
+  if (unbeatable) return 3500;
+  return DIFF_ELO[difficulty] ?? 960;
+}
+
 function getStockfishPath(): string {
   // Resolve the stockfish package dir, then point to the single-threaded JS engine
   const indexPath = _require.resolve("stockfish");

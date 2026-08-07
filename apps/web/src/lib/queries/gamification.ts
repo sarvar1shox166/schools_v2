@@ -271,7 +271,9 @@ export function useGameStats() {
 export function useRecordGameResult() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { opponentName: string; result: "win"|"draw"|"loss"; opponentElo: number }) =>
+    // opponentElo mijozdan qabul qilinmaydi — server difficulty/unbeatable'dan
+    // o'zi hisoblaydi (aks holda mijoz soxta ELO yuborib reytingni oshirishi mumkin edi).
+    mutationFn: async (payload: { opponentName: string; result: "win"|"draw"|"loss"; difficulty: number; unbeatable?: boolean }) =>
       (await api.post<{ newElo: number; eloChange: number }>("/pvp/game-result", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["myXp"] });

@@ -233,7 +233,9 @@ export default function PvpGamePage() {
   const [thinking, setThinking] = useState(false);
   const [gameOver, setGameOver] = useState<string | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
   const resultRecordedRef = useRef(false);
+  const computerRetryRef = useRef(0);
 
   const totalSeconds = tcToSeconds(tc);
   const [playerSeconds, setPlayerSeconds] = useState(totalSeconds);
@@ -275,14 +277,22 @@ export default function PvpGamePage() {
   }
 
   /* ── Computer move ───────────────────────────────────────────────────── */
+  // Tarmoq xatosi, server qayta ishga tushishi yoki rate-limit (429) o'quvchiga
+  // mag'lubiyat sifatida YOZILMAYDI — bu server bilan aloqa muammosi, o'yin
+  // holati emas. Bunday holda bir necha marta avtomatik qayta urinamiz, doim
+  // muvaffaqiyatsiz bo'lsa xabar ko'rsatamiz va o'quvchiga qo'lda "Qayta
+  // urinish" imkonini beramiz (o'yinni yo'qotmasdan).
+  const MAX_COMPUTER_RETRIES = 3;
   const requestComputerMove = useCallback(async (currentFen: string) => {
     setThinking(true);
+    setMoveError(null);
     try {
       const res = await api.post<{ move: string | null }>("/pvp/computer-move", {
         fen: currentFen,
         difficulty,
         unbeatable,
       });
+      computerRetryRef.current = 0;
       const uciMove = res.data.move;
       if (!uciMove) return;
 
@@ -306,7 +316,12 @@ export default function PvpGamePage() {
       const status = checkStatus(chess);
       if (status) setGameOver(status);
     } catch {
-      setGameOver(resolvedColor === "white" ? "black_wins_resign" : "white_wins_resign");
+      computerRetryRef.current += 1;
+      if (computerRetryRef.current <= MAX_COMPUTER_RETRIES) {
+        setTimeout(() => requestComputerMove(currentFen), 1000 * computerRetryRef.current);
+      } else {
+        setMoveError("Kompyuter bilan aloqa qilib bo'lmadi. Qayta urinib ko'ring.");
+      }
     } finally {
       setThinking(false);
     }
@@ -314,10 +329,10 @@ export default function PvpGamePage() {
 
   /* ── Trigger computer move when it's their turn ──────────────────────── */
   useEffect(() => {
-    if (!isPlayerTurn && !gameOver && !thinking) {
+    if (!isPlayerTurn && !gameOver && !thinking && !moveError) {
       requestComputerMove(fen);
     }
-  }, [isPlayerTurn, gameOver, thinking, fen, requestComputerMove]);
+  }, [isPlayerTurn, gameOver, thinking, moveError, fen, requestComputerMove]);
 
   /* ── Player move ─────────────────────────────────────────────────────── */
   function commitMove(from: string, to: string, promotion: "q" | "r" | "b" | "n" = "q") {
@@ -374,8 +389,18 @@ export default function PvpGamePage() {
       result = "loss";
     }
 
-    recordResult.mutate({ opponentName: compName, result, opponentElo: computerElo });
+    recordResult.mutate({ opponentName: compName, result, difficulty, unbeatable });
   }, [gameOver]);
+
+  /* ── Chiqib ketish / qayta boshlash orqali natijadan qochishning oldini
+   *  olish — kim boshlangan o'yinni tark etsa, mag'lubiyat sifatida
+   *  yoziladi (avval ELO/leaderboard'da natijasiz "yo'qolib ketardi"). */
+  function forfeitIfActive() {
+    if (gameOver || moves.length === 0 || resultRecordedRef.current) return;
+    resultRecordedRef.current = true;
+    const compName = unbeatable ? "Yengilmas kompyuter" : `Kompyuter · ${difficulty}-daraja`;
+    recordResult.mutate({ opponentName: compName, result: "loss", difficulty, unbeatable });
+  }
 
   /* ── Rematch ─────────────────────────────────────────────────────────── */
   function handleRematch() {
@@ -385,6 +410,8 @@ export default function PvpGamePage() {
     setMoves([]);
     setGameOver(null);
     setThinking(false);
+    setMoveError(null);
+    computerRetryRef.current = 0;
     setPlayerSeconds(totalSeconds);
     setComputerSeconds(totalSeconds);
     resultRecordedRef.current = false;
@@ -397,7 +424,7 @@ export default function PvpGamePage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#111114", border: "1px solid #1e1e22", borderRadius: 14, padding: "10px 14px" }}>
-        <button onClick={() => navigate("/student/pvp")}
+        <button onClick={() => { forfeitIfActive(); navigate("/student/pvp"); }}
           style={{
             display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 8px 10px",
             borderRadius: 10, border: "1px solid #232328",
@@ -473,6 +500,25 @@ export default function PvpGamePage() {
             isLow={computerSeconds <= 30}
           />
 
+          {/* Aloqa xatosi — o'yin mag'lubiyat deb hisoblanmaydi, qo'lda qayta urinish */}
+          {moveError && (
+            <div style={{
+              padding: "12px 16px", background: "rgba(239,68,68,.1)",
+              border: "1px solid rgba(239,68,68,.3)", borderRadius: 12,
+              display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 13, color: "#f87171",
+            }}>
+              <span style={{ flex: 1 }}>{moveError}</span>
+              <button
+                onClick={() => { computerRetryRef.current = 0; setMoveError(null); requestComputerMove(fen); }}
+                style={{
+                  padding: "6px 12px", borderRadius: 8, border: "none",
+                  background: "#ef4444", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer",
+                }}>
+                Qayta urinish
+              </button>
+            </div>
+          )}
+
           {/* Turn / thinking indicator */}
           <div style={{
             padding: "12px 16px", background: "#141417",
@@ -528,12 +574,15 @@ export default function PvpGamePage() {
             )}
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+          {/* Action buttons — "Durang" tugmasi olib tashlandi: bot bilan durang
+           *  faqat haqiqiy pozitsiyadan kelib chiqishi kerak (pat, takrorlanish,
+           *  yetarli material yo'qligi) — bular checkStatus() orqali avtomatik
+           *  aniqlanadi, qo'lda "durang" deb belgilash faqat ELO'ni sun'iy
+           *  oshirish uchun ishlatilardi. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
             {[
               { icon: "🏳", label: "Taslim", color: "#f87171", bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.25)", action: () => setGameOver(resolvedColor === "white" ? "black_wins_resign" : "white_wins_resign") },
-              { icon: "½", label: "Durang", color: "#facc15", bg: "rgba(234,179,8,0.12)", border: "rgba(234,179,8,0.25)", action: () => setGameOver("draw") },
-              { icon: "🔄", label: "Yangi", color: "#60a5fa", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.25)", action: handleRematch },
+              { icon: "🔄", label: "Yangi", color: "#60a5fa", bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.25)", action: () => { forfeitIfActive(); handleRematch(); } },
             ].map(btn => (
               <button key={btn.label} onClick={btn.action}
                 style={{

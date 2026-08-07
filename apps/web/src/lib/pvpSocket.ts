@@ -25,6 +25,9 @@ interface PvpState {
   opSeconds: number;
   result: string | null;
   error: string | null;
+  // Raqib ulanishi uzilganda "N soniya ichida qaytmasa yutasiz" bannerini
+  // ko'rsatish uchun — soatning o'zi serverda davom etadi.
+  opponentDisconnected: boolean;
 }
 
 function initialState(): PvpState {
@@ -32,6 +35,7 @@ function initialState(): PvpState {
     status: "disconnected", myElo: 1200, onlinePlayers: [], incomingChallenge: null, challengeSent: null,
     color: null, opponent: null, opponentElo: 1200, fen: START_FEN, gameTc: null, gameTcType: null,
     moves: [], turn: "w", mySeconds: 300, opSeconds: 300, result: null, error: null,
+    opponentDisconnected: false,
   };
 }
 
@@ -49,24 +53,26 @@ function stopTimer() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 }
 
+// Bu faqat soniyama-soniya vizual sanoq uchun — soatni tugatish (flag)
+// qarori serverda qabul qilinadi (har bir yurishda serverdan kelgan
+// whiteMs/blackMs bilan sinxronlanadi), shuning uchun bu yerda 0 ga
+// yetganda resign() chaqirilmaydi — mijoz sekinlashgan/fon tabda bo'lsa ham
+// noto'g'ri natija yozilmaydi.
 function ensureTimer() {
   if (timerInterval) return;
   timerInterval = setInterval(() => {
     if (state.status !== "playing") { stopTimer(); return; }
     const isMyTurn = state.turn === state.color;
     if (isMyTurn) {
-      const next = state.mySeconds - 1;
-      if (next <= 0) { setState({ mySeconds: 0 }); resign(); return; }
-      setState({ mySeconds: next });
+      setState({ mySeconds: Math.max(0, state.mySeconds - 1) });
     } else {
       setState({ opSeconds: Math.max(0, state.opSeconds - 1) });
     }
   }, 1000);
 }
 
-function tcToSeconds(tc: string): number {
-  const [min, inc = "0"] = tc.split("+");
-  return parseInt(min) * 60 + parseInt(inc);
+function msToSeconds(ms: number): number {
+  return Math.max(0, Math.round(ms / 1000));
 }
 
 function wsUrl(): string {
@@ -136,23 +142,62 @@ function connect(token: string) {
         setTimeout(() => setState({ error: null }), 3000);
         break;
       case "matched": {
-        const secs = tcToSeconds((msg.tc as string) ?? "5+0");
+        const color = msg.color as "w" | "b";
+        const whiteMs = (msg.whiteMs as number) ?? 300_000;
+        const blackMs = (msg.blackMs as number) ?? 300_000;
         setState({
           incomingChallenge: null, challengeSent: null,
-          color: msg.color as "w" | "b", opponent: (msg.opponent as string) ?? null,
+          color, opponent: (msg.opponent as string) ?? null,
           opponentElo: (msg.opponentElo as number) ?? 1200, fen: (msg.fen as string) ?? START_FEN,
           gameTc: (msg.tc as string) ?? null, gameTcType: (msg.tcType as string) ?? null,
           status: "playing", result: null, error: null, moves: [], turn: "w",
-          mySeconds: secs, opSeconds: secs,
+          opponentDisconnected: false,
+          mySeconds: msToSeconds(color === "w" ? whiteMs : blackMs),
+          opSeconds: msToSeconds(color === "w" ? blackMs : whiteMs),
         });
         ensureTimer();
         break;
       }
+      // Sahifa yangilandi yoki tarmoq qisqa uzilgandan keyin serverga qayta
+      // ulanilganda, agar o'yin hali davom etayotgan bo'lsa shu xabar keladi —
+      // butun holatni (yurishlar, soat) serverdan qayta tiklaymiz.
+      case "resume": {
+        const color = msg.color as "w" | "b";
+        const whiteMs = (msg.whiteMs as number) ?? 300_000;
+        const blackMs = (msg.blackMs as number) ?? 300_000;
+        setState({
+          color, opponent: (msg.opponent as string) ?? null,
+          opponentElo: (msg.opponentElo as number) ?? 1200, fen: (msg.fen as string) ?? START_FEN,
+          gameTc: (msg.tc as string) ?? null, gameTcType: (msg.tcType as string) ?? null,
+          status: "playing", result: null, error: null,
+          moves: (msg.moves as string[]) ?? [], turn: (msg.turn as "w" | "b") ?? "w",
+          opponentDisconnected: false,
+          mySeconds: msToSeconds(color === "w" ? whiteMs : blackMs),
+          opSeconds: msToSeconds(color === "w" ? blackMs : whiteMs),
+        });
+        ensureTimer();
+        break;
+      }
+      case "opponent_disconnected_grace":
+        setState({ opponentDisconnected: true });
+        break;
+      case "opponent_reconnected":
+        setState({ opponentDisconnected: false });
+        break;
       case "move": {
         const gameOver = !!msg.gameOver;
+        const whiteMs = msg.whiteMs as number | undefined;
+        const blackMs = msg.blackMs as number | undefined;
+        const clockPatch = whiteMs !== undefined && blackMs !== undefined
+          ? {
+              mySeconds: msToSeconds(state.color === "w" ? whiteMs : blackMs),
+              opSeconds: msToSeconds(state.color === "w" ? blackMs : whiteMs),
+            }
+          : {};
         setState({
           fen: msg.fen as string, turn: (msg.turn as "w" | "b") ?? "w",
           moves: [...state.moves, `${msg.from as string}${msg.to as string}`],
+          ...clockPatch,
           ...(gameOver ? { result: msg.result as string, status: "finished" as PvpStatus } : {}),
         });
         if (gameOver) stopTimer();
@@ -160,7 +205,7 @@ function connect(token: string) {
       }
       case "ended":
         stopTimer();
-        setState({ result: msg.reason as string, status: "finished" });
+        setState({ result: msg.reason as string, status: "finished", opponentDisconnected: false });
         break;
       case "error":
         setState({ error: msg.message as string });

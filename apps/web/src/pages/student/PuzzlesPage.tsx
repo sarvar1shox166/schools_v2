@@ -10,6 +10,8 @@ import {
   useRevealSolution, type PuzzleSection, type Puzzle,
 } from "../../lib/queries.js";
 import { PuzzleBoard } from "../../components/PuzzleBoard.js";
+import { PromotionModal } from "../../components/PromotionModal.js";
+import { isPromotionMove, pieceAt } from "../../lib/chessMaterial.js";
 
 const CARD_BG = "#111114";
 const CARD_BORDER = "#1e1e22";
@@ -79,6 +81,23 @@ function findReplyMove(pos: Chess, targetFen: string): { from: Square; to: Squar
     }
   }
   return null;
+}
+
+/** Chessground/chessops rokirovkani "shoh → o'z roki katagi" (masalan e1h1)
+ *  ko'rinishida ham taklif qiladi (Lichess uslubi), lekin server tomondagi
+ *  chess.js faqat standart UCI (e1g1/e1c1) ni qabul qiladi — shu yerda
+ *  normalizatsiya qilamiz. Shoh o'z rokini "olishi" oddiy shaxmatda mumkin
+ *  emas, shuning uchun bu holat bir ma'noli rokirovka belgisi. */
+function normalizeCastling(fen: string, from: string, to: string): string {
+  const moving = pieceAt(fen, from);
+  if (!moving || moving.toLowerCase() !== "k") return to;
+  const target = pieceAt(fen, to);
+  if (!target || target.toLowerCase() !== "r") return to;
+  const sameColor = (moving === moving.toUpperCase()) === (target === target.toUpperCase());
+  if (!sameColor) return to;
+  const kingFile = from.charCodeAt(0);
+  const rookFile = to.charCodeAt(0);
+  return (rookFile > kingFile ? "g" : "c") + from[1];
 }
 
 interface MovePair { num: number; white?: string; black?: string }
@@ -217,6 +236,7 @@ function PuzzleCenter({ section, puzzle, isLoading, notFound, autoAdvance, showM
   const [moveIndex, setMoveIndex] = useState(0);
   const [sanList, setSanList] = useState<string[]>([]);
   const [revertKey, setRevertKey] = useState(0);
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
   const posRef = useRef<Chess | null>(null);
   const revealTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -246,6 +266,7 @@ function PuzzleCenter({ section, puzzle, isLoading, notFound, autoAdvance, showM
     setRevealed(false);
     setHintSquare(undefined);
     setSanList([]);
+    setPendingPromotion(null);
     if (!puzzle) { posRef.current = null; return; }
     try {
       const setup = parseFen(puzzle.fen).unwrap();
@@ -256,10 +277,14 @@ function PuzzleCenter({ section, puzzle, isLoading, notFound, autoAdvance, showM
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puzzle?.id]);
 
-  function applyStudentMove(from: string, to: string): string | null {
+  function applyStudentMove(from: string, to: string, promotion?: "q" | "r" | "b" | "n"): string | null {
     if (!posRef.current) return null;
+    const promoMap = { q: "queen", r: "rook", b: "bishop", n: "knight" } as const;
     try {
-      const san = makeSanAndPlay(posRef.current, { from: parseSquare(from)!, to: parseSquare(to)! });
+      const san = makeSanAndPlay(posRef.current, {
+        from: parseSquare(from)!, to: parseSquare(to)!,
+        promotion: promotion ? promoMap[promotion] : undefined,
+      });
       return san;
     } catch { return null; }
   }
@@ -282,6 +307,7 @@ function PuzzleCenter({ section, puzzle, isLoading, notFound, autoAdvance, showM
     setRevealed(false);
     setHintSquare(undefined);
     setSanList([]);
+    setPendingPromotion(null);
   }
 
   function goNext() {
@@ -291,11 +317,24 @@ function PuzzleCenter({ section, puzzle, isLoading, notFound, autoAdvance, showM
 
   async function handleMove(from: string, to: string) {
     if (solved || !puzzle) return;
+    // Rokirovka "shoh → rok" ko'rinishida kelgan bo'lsa standart UCI'ga o'tkazamiz
+    to = normalizeCastling(activeFen, from, to);
+    // Piyoda oxirgi qatorga yetdi — avval dona tanlatamiz, serverga keyin yuboramiz
+    if (isPromotionMove(activeFen, from, to)) {
+      setPendingPromotion({ from, to });
+      return;
+    }
+    await submitMove(from, to);
+  }
+
+  async function submitMove(from: string, to: string, promotion?: "q" | "r" | "b" | "n") {
+    if (solved || !puzzle) return;
     setHintSquare(undefined);
+    const uci = `${from}${to}${promotion ?? ""}`;
     const res = await attempt.mutateAsync(
       isMateSection
-        ? { puzzleId: puzzle.id, move: `${from}${to}`, fen: activeFen, movesRemaining }
-        : { puzzleId: puzzle.id, moveIndex, move: `${from}${to}` }
+        ? { puzzleId: puzzle.id, move: uci, fen: activeFen, movesRemaining }
+        : { puzzleId: puzzle.id, moveIndex, move: uci }
     );
     if (!res.correct) {
       setFeedback("Noto'g'ri yurish. Yana urinib ko'ring.");
@@ -305,7 +344,7 @@ function PuzzleCenter({ section, puzzle, isLoading, notFound, autoAdvance, showM
       setRevertKey((k) => k + 1);
       return;
     }
-    const studentSan = applyStudentMove(from, to);
+    const studentSan = applyStudentMove(from, to, promotion);
     const newSans = studentSan ? [studentSan] : [];
     setFen(res.fenAfter);
     if (res.finished) {
@@ -336,12 +375,28 @@ function PuzzleCenter({ section, puzzle, isLoading, notFound, autoAdvance, showM
     if (!puzzle || solved) return;
     const res = await reveal.mutateAsync(puzzle.id);
     const moves = [...res.moves];
+    // Yechim har doim masalaning BOSHIdan yoziladi — o'quvchi allaqachon
+    // yurgan (yoki mot bo'limlarida taxta kanonik yo'ldan chetlashgan)
+    // bo'lishi mumkin, shuning uchun avval pozitsiyani boshlang'ich FEN'ga
+    // qaytaramiz, aks holda yechim yurishlari noqonuniy bo'lib, jimgina
+    // yutilib ketar edi (taxta "qotib qolgan"dek ko'rinardi).
+    try {
+      const setup = parseFen(puzzle.fen).unwrap();
+      posRef.current = Chess.fromSetup(setup).unwrap();
+    } catch { return; }
+    setFen(puzzle.fen);
+    setSanList([]);
+    setHintSquare(undefined);
+    setPendingPromotion(null);
+    // Ko'rsatish davomida taxta qulflanadi (solved → disabled) va XP ham,
+    // avto-o'tish ham bo'lmaydi (revealed guard).
+    setSolved(true);
+    setRevealed(true);
+    setFeedback("👁️ Yechim ko'rsatilmoqda...");
     revealTimerRef.current = setInterval(() => {
       const uci = moves.shift();
       if (!uci || !posRef.current) {
         if (revealTimerRef.current) clearInterval(revealTimerRef.current);
-        setSolved(true);
-        setRevealed(true);
         setFeedback("👁️ Yechim ko'rsatildi");
         return;
       }
@@ -448,6 +503,22 @@ function PuzzleCenter({ section, puzzle, isLoading, notFound, autoAdvance, showM
             </div>
           ) : null}
         </div>
+
+        {/* Piyoda aylantirish (promotion) tanlovi */}
+        {pendingPromotion && (
+          <PromotionModal
+            color={turnColor}
+            onPick={(piece) => {
+              const { from, to } = pendingPromotion;
+              setPendingPromotion(null);
+              submitMove(from, to, piece);
+            }}
+            onCancel={() => {
+              setPendingPromotion(null);
+              setRevertKey((k) => k + 1);
+            }}
+          />
+        )}
 
         {/* "Siz yurasiz" ko'rsatma qutisi */}
         {puzzle && !solved && (

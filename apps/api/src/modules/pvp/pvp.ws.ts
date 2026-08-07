@@ -3,7 +3,7 @@ import type { WebSocket } from "ws";
 import { Chess } from "@chess-school/chess-engine";
 import { pool } from "../../db/pool.js";
 import type { JwtPayload } from "../../plugins/auth.js";
-import { getComputerMove, difficultyToSkill } from "./stockfish.service.js";
+import { getComputerMove, difficultyToSkill, computerOpponentElo } from "./stockfish.service.js";
 
 interface OnlinePlayer {
   socket: WebSocket;
@@ -33,6 +33,19 @@ interface Game {
   chess: Chess;
   white: GamePlayer;
   black: GamePlayer;
+  tc: string;
+  tcType: string;
+  // Soat serverda yuritiladi — mijozdagi setInterval fon tabda sekinlashishi,
+  // qoldiq vaqtni soxtalashtirish yoki tarmoq bilan mos kelmasligi mumkin edi.
+  whiteMs: number;
+  blackMs: number;
+  incrementMs: number;
+  turnStartedAt: number;
+  flagTimer: ReturnType<typeof setTimeout> | null;
+  // Ulanish uzilganda darhol mag'lubiyat YOZILMAYDI — qayta ulanish uchun
+  // muddat beriladi (RECONNECT_GRACE_SECONDS), aks holda oddiy sahifa
+  // yangilash yoki qisqa internet uzilishi o'yinni notekis tugatardi.
+  disconnectTimers: Map<"w" | "b", ReturnType<typeof setTimeout>>;
 }
 
 interface Challenge {
@@ -48,8 +61,20 @@ interface Challenge {
 const queue: QueuedPlayer[] = [];
 const games = new Map<string, Game>();
 const socketGames = new Map<WebSocket, string>();
+// studentId → gameId: socketdan mustaqil, shuning uchun qayta ulanishda
+// (yangi socket bilan) o'quvchining faol o'yinini topa olamiz.
+const studentGames = new Map<string, string>();
 const onlinePlayers = new Map<WebSocket, OnlinePlayer>();
 const challenges = new Map<string, Challenge>();
+
+const RECONNECT_GRACE_SECONDS = 30;
+
+function tcToMs(tc?: string): { totalMs: number; incrementMs: number } {
+  const [min, inc = "0"] = (tc ?? "5+0").split("+");
+  const totalMs = (parseInt(min, 10) || 5) * 60_000;
+  const incrementMs = (parseInt(inc, 10) || 0) * 1000;
+  return { totalMs, incrementMs };
+}
 
 // Har bir foydalanuvchi bir vaqtda cheklangan sondagina Stockfish jarayonini
 // ishga tushira olsin — aks holda cheksiz parallel chaqiruv orqali DoS mumkin.
@@ -77,21 +102,42 @@ function broadcastOnlineList() {
   }
 }
 
+// O'yin faol tomon soati tugashiga qadar bir martalik timeout rejalashtiradi.
+// Yurish qilinganda (yoki o'yin boshqa sabab bilan tugaganda) bu timer bekor
+// qilinib, yangi qoldiq vaqt uchun qayta rejalashtiriladi.
+function scheduleFlagTimer(game: Game) {
+  if (game.flagTimer) clearTimeout(game.flagTimer);
+  const turn = game.chess.turn();
+  const remaining = turn === "w" ? game.whiteMs : game.blackMs;
+  game.flagTimer = setTimeout(() => {
+    if (!games.has(game.id)) return; // o'yin allaqachon boshqa sabab bilan tugagan
+    endGame(game, turn === "w" ? "black_wins_time" : "white_wins_time");
+  }, Math.max(0, remaining));
+}
+
 function startGame(
   a: { socket: WebSocket; studentId: string; fullName: string; elo: number },
   b: { socket: WebSocket; studentId: string; fullName: string; elo: number },
-  tc?: string,
-  tcType?: string,
+  tc: string = "5+0",
+  tcType: string = "BLITS",
 ) {
   const id = `${a.studentId}-${b.studentId}-${Date.now()}`;
   const chess = new Chess();
-  const game: Game = { id, chess, white: a, black: b };
+  const { totalMs, incrementMs } = tcToMs(tc);
+  const game: Game = {
+    id, chess, white: a, black: b, tc, tcType,
+    whiteMs: totalMs, blackMs: totalMs, incrementMs,
+    turnStartedAt: Date.now(), flagTimer: null, disconnectTimers: new Map(),
+  };
   games.set(id, game);
   socketGames.set(a.socket, id);
   socketGames.set(b.socket, id);
+  studentGames.set(a.studentId, id);
+  studentGames.set(b.studentId, id);
 
-  send(a.socket, { type: "matched", color: "w", opponent: b.fullName, opponentElo: b.elo, fen: chess.fen(), tc, tcType });
-  send(b.socket, { type: "matched", color: "b", opponent: a.fullName, opponentElo: a.elo, fen: chess.fen(), tc, tcType });
+  send(a.socket, { type: "matched", color: "w", opponent: b.fullName, opponentElo: b.elo, fen: chess.fen(), tc, tcType, whiteMs: totalMs, blackMs: totalMs });
+  send(b.socket, { type: "matched", color: "b", opponent: a.fullName, opponentElo: a.elo, fen: chess.fen(), tc, tcType, whiteMs: totalMs, blackMs: totalMs });
+  scheduleFlagTimer(game);
   broadcastOnlineList();
 }
 
@@ -151,9 +197,14 @@ async function updateElo(game: Game, reason: string) {
 }
 
 function endGame(game: Game, reason: string) {
+  if (game.flagTimer) clearTimeout(game.flagTimer);
+  for (const t of game.disconnectTimers.values()) clearTimeout(t);
+  game.disconnectTimers.clear();
   games.delete(game.id);
   socketGames.delete(game.white.socket);
   socketGames.delete(game.black.socket);
+  studentGames.delete(game.white.studentId);
+  studentGames.delete(game.black.studentId);
   send(game.white.socket, { type: "ended", reason });
   send(game.black.socket, { type: "ended", reason });
   broadcastOnlineList();
@@ -195,13 +246,14 @@ async function getStudent(userId: string): Promise<{ studentId: string; fullName
 export async function pvpRoutes(app: FastifyInstance) {
   /* ── Record game result (computer games) ──────────────────────────────── */
   app.post("/pvp/game-result", { onRequest: [app.authenticate] }, async (request, reply) => {
-    const { opponentName, result, opponentElo } = request.body as {
+    const { opponentName, result, difficulty, unbeatable } = request.body as {
       opponentName: string;
       result: "win" | "draw" | "loss";
-      opponentElo: number;
+      difficulty: number;
+      unbeatable?: boolean;
     };
 
-    if (!opponentName || !["win", "draw", "loss"].includes(result)) {
+    if (!opponentName || !["win", "draw", "loss"].includes(result) || typeof difficulty !== "number") {
       return reply.code(400).send({ error: "invalid params" });
     }
 
@@ -229,7 +281,7 @@ export async function pvpRoutes(app: FastifyInstance) {
       [studentId]
     );
     const myElo = xpRows[0]?.elo ?? 1200;
-    const oppElo = opponentElo ?? 1200;
+    const oppElo = computerOpponentElo(difficulty, unbeatable);
 
     const score = result === "win" ? 1 : result === "draw" ? 0.5 : 0;
     const expected = 1 / (1 + 10 ** ((oppElo - myElo) / 400));
@@ -320,6 +372,38 @@ export async function pvpRoutes(app: FastifyInstance) {
     // Add to lobby (not queue)
     onlinePlayers.set(socket, { socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo, tenantId });
     send(socket, { type: "connected", myElo: student.elo });
+
+    // Qayta ulanish: bu o'quvchining hali tugamagan o'yini bo'lsa (sahifa
+    // yangilandi yoki tarmoq qisqa uzildi), yangi socket'ni o'sha o'yinga
+    // qayta ulaymiz — mag'lubiyat-taymer bo'lsa bekor qilinadi.
+    const activeGameId = studentGames.get(student.studentId);
+    if (activeGameId && games.has(activeGameId)) {
+      const game = games.get(activeGameId)!;
+      const isWhite = game.white.studentId === student.studentId;
+      const me = isWhite ? game.white : game.black;
+      const opponent = isWhite ? game.black : game.white;
+      me.socket = socket;
+      socketGames.set(socket, activeGameId);
+
+      const myColor: "w" | "b" = isWhite ? "w" : "b";
+      const pendingTimer = game.disconnectTimers.get(myColor);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        game.disconnectTimers.delete(myColor);
+        send(opponent.socket, { type: "opponent_reconnected" });
+      }
+
+      send(socket, {
+        type: "resume",
+        color: myColor,
+        opponent: opponent.fullName, opponentElo: opponent.elo,
+        fen: game.chess.fen(), turn: game.chess.turn(),
+        tc: game.tc, tcType: game.tcType,
+        whiteMs: game.whiteMs, blackMs: game.blackMs,
+        moves: game.chess.history({ verbose: true }).map((m) => `${m.from}${m.to}${m.promotion ?? ""}`),
+      });
+    }
+
     broadcastOnlineList();
 
     socket.on("message", (raw) => {
@@ -432,18 +516,26 @@ export async function pvpRoutes(app: FastifyInstance) {
         catch { move = null; }
         if (!move) { send(socket, { type: "error", message: "Noto'g'ri yurish" }); return; }
 
+        // Soat — real o'tgan vaqtni yurgan tomonning hisobidan ayiramiz, keyin
+        // shu tomonga inkrementni qo'shamiz (standart shaxmat soat mantiqi).
+        const now = Date.now();
+        const elapsed = now - game.turnStartedAt;
+        if (myColor === "w") game.whiteMs = Math.max(0, game.whiteMs - elapsed) + game.incrementMs;
+        else game.blackMs = Math.max(0, game.blackMs - elapsed) + game.incrementMs;
+        game.turnStartedAt = now;
+
         const status = gameStatus(game.chess);
-        const update = { type: "move", from: msg.from, to: msg.to, fen: game.chess.fen(), turn: game.chess.turn(), ...status };
+        const update = {
+          type: "move", from: msg.from, to: msg.to, fen: game.chess.fen(), turn: game.chess.turn(),
+          whiteMs: game.whiteMs, blackMs: game.blackMs, ...status,
+        };
         send(game.white.socket, update);
         send(game.black.socket, update);
 
-        // Fix: ELO update on checkmate/stalemate/draw
         if (status.gameOver) {
-          games.delete(game.id);
-          socketGames.delete(game.white.socket);
-          socketGames.delete(game.black.socket);
-          broadcastOnlineList();
-          updateElo(game, status.result!).catch((err) => console.error("ELO update failed", err));
+          endGame(game, status.result!);
+        } else {
+          scheduleFlagTimer(game);
         }
         return;
       }
@@ -454,7 +546,7 @@ export async function pvpRoutes(app: FastifyInstance) {
       }
     });
 
-    socket.on("close", () => {
+    socket.on("close", (code: number) => {
       const idx = queue.findIndex((p) => p.socket === socket);
       if (idx !== -1) queue.splice(idx, 1);
 
@@ -466,16 +558,38 @@ export async function pvpRoutes(app: FastifyInstance) {
         }
       }
 
+      // Kod 4000 — shu o'quvchi YANGI socket bilan qayta ulandi (masalan sahifa
+      // yangilandi), va yangi ulanish yuqorida allaqachon o'yinga qayta
+      // biriktirildi. Bu eski socket shunchaki keksa — o'yinni tugatmaymiz.
+      if (code === 4000) { broadcastOnlineList(); return; }
+
       const gameId = socketGames.get(socket);
+      socketGames.delete(socket);
       if (!gameId) { broadcastOnlineList(); return; }
       const game = games.get(gameId);
-      if (!game) { broadcastOnlineList(); return; }
+      // Bu socket boshqa (qayta ulangan) socket bilan allaqachon almashtirilgan
+      // bo'lishi mumkin — bu holda o'yinni tugatmaymiz.
+      if (!game || (game.white.socket !== socket && game.black.socket !== socket)) {
+        broadcastOnlineList();
+        return;
+      }
 
-      const opponent = game.white.socket === socket ? game.black.socket : game.white.socket;
-      games.delete(game.id);
-      socketGames.delete(game.white.socket);
-      socketGames.delete(game.black.socket);
-      send(opponent, { type: "ended", reason: "opponent_disconnected" });
+      const isWhite = game.white.socket === socket;
+      const myColor: "w" | "b" = isWhite ? "w" : "b";
+      const opponentSocket = isWhite ? game.black.socket : game.white.socket;
+
+      send(opponentSocket, { type: "opponent_disconnected_grace", seconds: RECONNECT_GRACE_SECONDS });
+
+      // Darhol mag'lubiyat yozmaymiz — qayta ulanish uchun muddat beramiz.
+      // Muddat ichida qaytmasa (yuqoridagi qayta-ulanish bloki timer'ni bekor
+      // qiladi), mag'lubiyat sifatida yozamiz va ELO yangilanadi.
+      const timer = setTimeout(() => {
+        game.disconnectTimers.delete(myColor);
+        if (!games.has(game.id)) return;
+        endGame(game, myColor === "w" ? "black_wins_disconnect" : "white_wins_disconnect");
+      }, RECONNECT_GRACE_SECONDS * 1000);
+      game.disconnectTimers.set(myColor, timer);
+
       broadcastOnlineList();
     });
   });

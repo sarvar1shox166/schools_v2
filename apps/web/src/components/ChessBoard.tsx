@@ -311,9 +311,9 @@ export function ChessBoard({
                   {/* Capture ring */}
                   {isCapture && (
                     <div style={{
-                      position: "absolute", inset: 0,
+                      position: "absolute", inset: "6%",
                       borderRadius: "50%",
-                      border: "8% solid rgba(0,0,0,.22)",
+                      border: "5px solid rgba(0,0,0,.22)",
                       pointerEvents: "none",
                       zIndex: 3,
                     }} />
