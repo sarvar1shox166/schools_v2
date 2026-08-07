@@ -170,7 +170,7 @@ export function Sidebar({ sections, brandSub, gender, onGenderChange }: SidebarP
       {user && (
         <div className="sidebar-foot">
           <div className="userbox">
-            <Avatar name={user.fullName} />
+            <Avatar name={user.fullName} src={user.avatarUrl} />
             <div className="userbox-text">
               <div className="userbox-name">{user.fullName}</div>
               <div className="userbox-role">

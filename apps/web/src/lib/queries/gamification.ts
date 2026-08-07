@@ -65,6 +65,7 @@ export interface AttemptResult {
 export interface LeaderboardEntry {
   userId: string;
   fullName: string;
+  avatarUrl: string | null;
   xp: number;
   level: number;
   streak: number;
@@ -240,10 +241,10 @@ export function usePuzzleStats() {
   });
 }
 
-export function useLeaderboard() {
+export function useLeaderboard(sortBy: "elo" | "xp" = "elo") {
   return useQuery({
-    queryKey: ["leaderboard"],
-    queryFn: async () => (await api.get<LeaderboardEntry[]>("/leaderboard")).data,
+    queryKey: ["leaderboard", sortBy],
+    queryFn: async () => (await api.get<LeaderboardEntry[]>("/leaderboard", { params: { sortBy } })).data,
   });
 }
 

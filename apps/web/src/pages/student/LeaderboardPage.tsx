@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAuthStore } from "../../lib/auth-store.js";
 import { usePvpSocket } from "../../lib/pvpSocket.js";
 import { useLeaderboard, useMyXp, useEloHistory, useGameStats } from "../../lib/queries.js";
@@ -25,8 +26,14 @@ const ELO_SIZES = [52, 40, 34];
 const ELO_COLORS = ["#facc15", "#e5e7eb", "#fdba74"];
 const RANK_COLORS = ["#facc15", "#e5e7eb", "#fdba74"];
 
+const TABS: { id: "elo" | "xp"; label: string }[] = [
+  { id: "elo", label: "Reyting (ELO)" },
+  { id: "xp", label: "XP bo'yicha" },
+];
+
 export default function LeaderboardPage() {
-  const { data = [], isLoading } = useLeaderboard();
+  const [sortBy, setSortBy] = useState<"elo" | "xp">("elo");
+  const { data = [], isLoading } = useLeaderboard(sortBy);
   const { data: xp } = useMyXp();
   const { data: eloHistory = [] } = useEloHistory();
   const { data: gameStats } = useGameStats();
@@ -38,6 +45,11 @@ export default function LeaderboardPage() {
   const myRank = myIdx >= 0 ? myIdx + 1 : null;
   const myEntry = myIdx >= 0 ? data[myIdx] : null;
   const myElo = xp?.elo ?? myEntry?.elo ?? 1200;
+  const myXp = xp?.xp ?? myEntry?.xp ?? 0;
+  // Faol tabga qarab asosiy ko'rsatkich (katta raqam) almashadi — ELO tabida
+  // ELO, XP tabida XP birinchi o'ringa chiqadi.
+  const myValue = sortBy === "elo" ? myElo : myXp;
+  const valueLabel = sortBy === "elo" ? "ELO" : "XP";
 
   const weekElo = eloHistory.length > 0 ? eloHistory[Math.max(0, eloHistory.length - 7)]?.elo ?? myElo : myElo;
   const weekDiff = myElo - weekElo;
@@ -46,13 +58,29 @@ export default function LeaderboardPage() {
   const top3 = data.slice(0, 3);
   const rest = data.slice(3);
 
-  const gapToNext = myRank && myRank > 1 ? Math.max(0, (data[myRank - 2]?.elo ?? 1200) - myElo) : 0;
+  const gapToNext = myRank && myRank > 1 ? Math.max(0, (data[myRank - 2]?.[sortBy] ?? myValue) - myValue) : 0;
 
   return (
     <div style={{ paddingBottom: 40 }}>
 
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "#f5f5f6" }}>Reyting jadvali 🏆</div>
+        <div style={{ display: "flex", gap: 6, background: "#141417", border: "1px solid #232328", borderRadius: 12, padding: 4 }}>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setSortBy(t.id)}
+              style={{
+                padding: "8px 16px", borderRadius: 9, border: "none", cursor: "pointer",
+                fontSize: 13, fontWeight: 700, transition: "all .15s",
+                background: sortBy === t.id ? "#22c55e" : "transparent",
+                color: sortBy === t.id ? "#052e16" : "#8b8d98",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Top-3 + siz paneli ── */}
@@ -77,8 +105,10 @@ export default function LeaderboardPage() {
                     <div style={{
                       width: AVATAR_SIZES[i], height: AVATAR_SIZES[i], borderRadius: 16, background: avatarColor(e.fullName),
                       display: "flex", alignItems: "center", justifyContent: "center", color: "#0a0a0c", fontSize: AVATAR_FONTS[i], fontWeight: 800,
-                      boxShadow: "0 6px 18px rgba(0,0,0,.3)",
-                    }}>{initials(e.fullName)}</div>
+                      boxShadow: "0 6px 18px rgba(0,0,0,.3)", overflow: "hidden",
+                    }}>
+                      {e.avatarUrl ? <img src={e.avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials(e.fullName)}
+                    </div>
                     {online && <div style={{ position: "absolute", bottom: -2, right: -2, width: 14, height: 14, borderRadius: "50%", background: "#22c55e", border: "2.5px solid #141417", boxShadow: "0 0 8px rgba(34,197,94,.6)" }} />}
                   </div>
                   <div style={{ minWidth: 0 }}>
@@ -92,8 +122,10 @@ export default function LeaderboardPage() {
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: ELO_SIZES[i], fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: ELO_COLORS[i] }}>{e.elo}</div>
-                  <div style={{ fontSize: 11, color: "#65666f", marginTop: 6, fontWeight: 600 }}>{e.xp} XP</div>
+                  <div style={{ fontSize: ELO_SIZES[i], fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: ELO_COLORS[i] }}>{e[sortBy]}</div>
+                  <div style={{ fontSize: 11, color: "#65666f", marginTop: 6, fontWeight: 600 }}>
+                    {sortBy === "elo" ? `${e.xp} XP` : `${e.elo} ELO`}
+                  </div>
                 </div>
               </div>
             );
@@ -108,10 +140,10 @@ export default function LeaderboardPage() {
                 <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: "0.2em", color: "#4ade80" }}>/SIZNING O'RNINGIZ</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 10 }}>
                   <div style={{ fontSize: 40, fontWeight: 800, color: "#f5f5f6", lineHeight: 1, letterSpacing: "-0.03em" }}>{myRank ? `${myRank}-o'rin` : "—"}</div>
-                  <div style={{ color: "#86efac", fontSize: 13, fontWeight: 700 }}>{myElo} ELO</div>
+                  <div style={{ color: "#86efac", fontSize: 13, fontWeight: 700 }}>{myValue} {valueLabel}</div>
                 </div>
                 {myRank && myRank > 1 && (
-                  <div style={{ fontSize: 12, color: "#86efac", fontWeight: 600, marginTop: 8 }}>▲ {gapToNext} ELO — {myRank - 1}-o'ringacha</div>
+                  <div style={{ fontSize: 12, color: "#86efac", fontWeight: 600, marginTop: 8 }}>▲ {gapToNext} {valueLabel} — {myRank - 1}-o'ringacha</div>
                 )}
               </div>
               <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#22c55e,#16a34a)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 18px rgba(34,197,94,.4)", flexShrink: 0 }}>
@@ -163,7 +195,9 @@ export default function LeaderboardPage() {
                 <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, fontWeight: 800, color: "#65666f" }}>{String(rank).padStart(2, "0")}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                   <div style={{ position: "relative", flexShrink: 0 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: avatarColor(e.fullName), color: "#0a0a0c", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(e.fullName)}</div>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: avatarColor(e.fullName), color: "#0a0a0c", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {e.avatarUrl ? <img src={e.avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials(e.fullName)}
+                    </div>
                     {online && <div style={{ position: "absolute", bottom: -2, right: -2, width: 11, height: 11, borderRadius: "50%", background: "#22c55e", border: "2px solid #141417" }} />}
                   </div>
                   <div style={{ minWidth: 0 }}>
@@ -174,8 +208,8 @@ export default function LeaderboardPage() {
                     <div style={{ color: "#4ade80", fontSize: 10.5, fontWeight: 600, marginTop: 2 }}>{e.wins} g'alaba</div>
                   </div>
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "'JetBrains Mono',monospace", letterSpacing: "-0.02em", color: "#f5f5f6" }}>{e.elo}</div>
-                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 800, color: "#c7d0e8" }}>{e.xp}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "'JetBrains Mono',monospace", letterSpacing: "-0.02em", color: sortBy === "elo" ? "#4ade80" : "#f5f5f6" }}>{e.elo}</div>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 800, color: sortBy === "xp" ? "#4ade80" : "#c7d0e8" }}>{e.xp}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "#fb923c" }}>🔥 {e.streak}</div>
               </div>
             );

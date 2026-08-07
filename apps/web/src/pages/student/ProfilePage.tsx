@@ -157,6 +157,7 @@ export default function ProfilePage() {
 
   const name = user?.fullName ?? "—";
   const bg = avatarColor(name);
+  const avatarUrl = user?.avatarUrl;
 
   return (
     <div style={{ paddingBottom: 40 }}>
@@ -176,8 +177,10 @@ export default function ProfilePage() {
             <div style={{
               position: "relative", width: 96, height: 96, borderRadius: 20, background: `linear-gradient(135deg,${bg},${bg}bb)`,
               color: "#fff", fontSize: 32, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: `0 10px 30px ${bg}66, inset 0 1px 0 rgba(255,255,255,.25)`,
-            }}>{initials(name)}</div>
+              boxShadow: `0 10px 30px ${bg}66, inset 0 1px 0 rgba(255,255,255,.25)`, overflow: "hidden",
+            }}>
+              {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials(name)}
+            </div>
             <div style={{ position: "absolute", bottom: -4, right: -4, width: 22, height: 22, borderRadius: "50%", background: "#22c55e", border: "3.5px solid #0f2418", boxShadow: "0 0 12px rgba(34,197,94,.6)" }} />
           </div>
 

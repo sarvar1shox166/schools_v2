@@ -17,6 +17,7 @@ const telegramSchema = z.object({
 function issueSession(app: FastifyInstance, user: {
   id: string; tenantId: string | null; branchId: string | null;
   role: "super_admin" | "admin" | "teacher" | "student"; fullName: string; phone: string; login: string;
+  avatarUrl: string | null;
   tokenVersion: number;
 }) {
   const payload = {
@@ -42,6 +43,7 @@ function issueSession(app: FastifyInstance, user: {
       role: user.role,
       tenantId: user.tenantId,
       branchId: user.branchId,
+      avatarUrl: user.avatarUrl,
     },
   };
 }

@@ -28,10 +28,6 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 const LEVELS = ["Boshlang'ich", "O'rta", "Yuqori", "Professional"];
-const HOURS = [
-  "07:00","08:00","09:00","10:00","11:00","12:00","13:00",
-  "14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00",
-];
 
 type AppStatus = Application["status"];
 
@@ -435,11 +431,7 @@ function DiagnosticFields({
             onChange={e => setDiagnosticDate(e.target.value)} style={{ width: "100%" }} />
         </FieldRow>
         <FieldRow label="Soati">
-          <select className="inp" value={diagnosticTime} onChange={e => setDiagnosticTime(e.target.value)} style={{ width: "100%" }}>
-            {HOURS.map(h => (
-              <option key={h} value={h}>{h}</option>
-            ))}
-          </select>
+          <input className="inp" type="time" value={diagnosticTime} onChange={e => setDiagnosticTime(e.target.value)} style={{ width: "100%" }} />
         </FieldRow>
       </div>
 

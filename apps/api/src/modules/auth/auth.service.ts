@@ -10,6 +10,7 @@ export interface AuthUser {
   fullName: string;
   phone: string;
   login: string;
+  avatarUrl: string | null;
 }
 
 export async function findUserByLogin(loginValue: string) {
@@ -17,7 +18,8 @@ export async function findUserByLogin(loginValue: string) {
     AuthUser & { passwordHash: string; isActive: boolean; tokenVersion: number }
   >(
     `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId", role,
-            full_name AS "fullName", phone, login, password_hash AS "passwordHash",
+            full_name AS "fullName", phone, login, avatar_url AS "avatarUrl",
+            password_hash AS "passwordHash",
             is_active AS "isActive", token_version AS "tokenVersion"
      FROM users WHERE login = $1 OR phone = $1`,
     [loginValue]
@@ -45,7 +47,7 @@ export const findUserByPhone = findUserByLogin;
 export async function findUserByTelegramId(telegramId: number) {
   const { rows } = await pool.query<AuthUser & { isActive: boolean; tokenVersion: number }>(
     `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId", role,
-            full_name AS "fullName", phone, is_active AS "isActive",
+            full_name AS "fullName", phone, avatar_url AS "avatarUrl", is_active AS "isActive",
             token_version AS "tokenVersion"
      FROM users WHERE telegram_id = $1`,
     [telegramId]

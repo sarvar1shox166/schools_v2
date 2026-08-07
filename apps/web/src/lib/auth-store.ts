@@ -12,6 +12,7 @@ export interface AuthUser {
   role: Role;
   tenantId: string | null;
   branchId: string | null;
+  avatarUrl: string | null;
 }
 
 interface AuthState {
