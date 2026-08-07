@@ -5,6 +5,7 @@ import { consumeLesson, refundLesson } from "../payments/lessons.js";
 import { createNotification } from "../notifications/notify.js";
 import { recordLessonSession } from "../payroll/lesson-sessions.js";
 import { assignedTeacherIds } from "../../lib/moderator.js";
+import { bumpAttendanceStreak, checkAchievements } from "../gamification/xp.js";
 
 const querySchema = z.object({
   scheduleSlotId: z.string().uuid(),
@@ -278,6 +279,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
                student_package_id = EXCLUDED.student_package_id`,
             [r.studentId, body.scheduleSlotId, body.date, r.status, r.reason ?? null, newCounted, userId, newPackageId]
           );
+
+          await bumpAttendanceStreak(client, r.studentId, body.date, r.status);
+          await checkAchievements(client, r.studentId);
         }
         await recordLessonSession(client, body.scheduleSlotId, body.date);
         await client.query("COMMIT");
@@ -623,6 +627,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
           }
         }
         await recordLessonSession(client, body.scheduleSlotId, date);
+        await bumpAttendanceStreak(client, studentId, date, "p");
+        await checkAchievements(client, studentId);
       }
       await client.query("COMMIT");
     } catch (err) {

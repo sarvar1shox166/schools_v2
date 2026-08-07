@@ -354,18 +354,19 @@ export async function gamificationRoutes(app: FastifyInstance) {
   // ---- Student XP / achievements ----
 
   app.get("/me/xp", { onRequest: [app.requireRole("student")] }, async (request) => {
+    const { tenantId } = request.user;
     const studentId = await getStudentIdForUser(request.user.sub);
     if (!studentId) return { xp: 0, level: 1, streak: 0, elo: 1200, achievements: [] };
 
     const xpRes = await pool.query(
-      `SELECT xp, level, streak, elo FROM student_xp WHERE student_id = $1`,
+      `SELECT xp, level, streak, elo, COALESCE(attendance_streak, 0) AS "attendanceStreak"
+       FROM student_xp WHERE student_id = $1`,
       [studentId]
     );
-    const xp = xpRes.rows[0] ?? { xp: 0, level: 1, streak: 0, elo: 1200 };
+    const xp = xpRes.rows[0] ?? { xp: 0, level: 1, streak: 0, elo: 1200, attendanceStreak: 0 };
 
     const achRes = await pool.query(
       `SELECT a.code, a.name, a.description, a.icon, a.xp_threshold AS "xpThreshold",
-              a.streak_threshold AS "streakThreshold",
               (sa.student_id IS NOT NULL) AS earned
        FROM achievements a
        LEFT JOIN student_achievements sa ON sa.achievement_id = a.id AND sa.student_id = $1
@@ -373,24 +374,35 @@ export async function gamificationRoutes(app: FastifyInstance) {
       [studentId]
     );
 
-    const correctRes = await pool.query(
-      `SELECT count(*)::int AS cnt FROM puzzle_attempts WHERE student_id = $1 AND correct = true`,
+    const gamesRes = await pool.query(
+      `SELECT count(*)::int AS cnt FROM game_results WHERE student_id = $1`,
       [studentId]
     );
-    const correctAttempts = correctRes.rows[0].cnt as number;
+    const gamesPlayed = gamesRes.rows[0].cnt as number;
+
+    const puzzlesRes = await pool.query(
+      `SELECT count(DISTINCT puzzle_id)::int AS cnt FROM puzzle_attempts WHERE student_id = $1 AND correct = true`,
+      [studentId]
+    );
+    const puzzlesSolved = puzzlesRes.rows[0].cnt as number;
+
+    const topEloRes = await pool.query(
+      `SELECT COALESCE(MAX(sx.elo), 0) AS "topElo"
+       FROM student_xp sx JOIN students s ON s.id = sx.student_id
+       WHERE s.tenant_id = $1`,
+      [tenantId]
+    );
+    const isRankOne = xp.elo >= topEloRes.rows[0].topElo && topEloRes.rows[0].topElo > 0;
 
     const achievements = achRes.rows.map((a) => {
       let current = 0;
       let threshold = 1;
-      if (a.code === "first_solve") {
-        current = correctAttempts;
-        threshold = 1;
-      } else if (a.xpThreshold !== null) {
-        current = xp.xp;
-        threshold = a.xpThreshold;
-      } else if (a.streakThreshold !== null) {
-        current = xp.streak;
-        threshold = a.streakThreshold;
+      switch (a.code) {
+        case "games_100": current = gamesPlayed; threshold = 100; break;
+        case "xp_5000": current = xp.xp; threshold = a.xpThreshold ?? 5000; break;
+        case "puzzles_1000": current = puzzlesSolved; threshold = 1000; break;
+        case "rank_1": current = isRankOne ? 1 : 0; threshold = 1; break;
+        case "attendance_streak_7": current = xp.attendanceStreak; threshold = 7; break;
       }
       return {
         code: a.code,
@@ -402,7 +414,7 @@ export async function gamificationRoutes(app: FastifyInstance) {
       };
     });
 
-    return { ...xp, achievements };
+    return { xp: xp.xp, level: xp.level, streak: xp.streak, elo: xp.elo, achievements };
   });
 
   // ---- Kunlik streak bonusi (12 kunlik tsikl) ----

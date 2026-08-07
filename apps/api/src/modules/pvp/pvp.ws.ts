@@ -4,6 +4,7 @@ import { Chess } from "@chess-school/chess-engine";
 import { pool } from "../../db/pool.js";
 import type { JwtPayload } from "../../plugins/auth.js";
 import { getComputerMove, difficultyToSkill, computerOpponentElo } from "./stockfish.service.js";
+import { checkAchievements } from "../gamification/xp.js";
 
 interface OnlinePlayer {
   socket: WebSocket;
@@ -193,6 +194,10 @@ async function updateElo(game: Game, reason: string) {
       `INSERT INTO game_results (student_id, opponent_name, result, elo_change) VALUES ($1, $2, $3, $4)`,
       [studentId, opponentName, result, eloChange]
     );
+    // O'yinlar soni va reyting o'rni shu yerda o'zgaradi — "100 marta
+    // shaxmat o'ynadi" va "1-o'ringa chiqdi" yutuqlari faqat shu holatda
+    // qo'lga kiritilishi mumkin.
+    await checkAchievements(pool, studentId);
   }
 }
 
@@ -299,6 +304,7 @@ export async function pvpRoutes(app: FastifyInstance) {
       `INSERT INTO game_results (student_id, opponent_name, result, elo_change) VALUES ($1, $2, $3, $4)`,
       [studentId, opponentName, result, eloChange]
     );
+    await checkAchievements(pool, studentId);
 
     return reply.send({ newElo, eloChange });
   });

@@ -1,3 +1,4 @@
+import { Icon } from "@chess-school/ui";
 import { useAuthStore } from "../../lib/auth-store.js";
 import { useMyXp, useEloHistory, useGameStats, type EloPoint } from "../../lib/queries.js";
 
@@ -263,8 +264,13 @@ export default function ProfilePage() {
                   background: a.earned ? "linear-gradient(135deg,rgba(234,179,8,.14),rgba(234,179,8,.03))" : "#18181c",
                   border: `1px solid ${a.earned ? "rgba(234,179,8,.28)" : "#232328"}`, opacity: a.earned ? 1 : 0.5,
                 }}>
-                  <div style={{ fontSize: 22, lineHeight: 1, filter: a.earned ? "none" : "grayscale(1)" }}>{a.icon}</div>
+                  <div style={{ display: "flex", justifyContent: "center", color: a.earned ? "#facc15" : "#54555e", filter: a.earned ? "none" : "grayscale(1)" }}>
+                    <Icon name={a.icon} size={24} />
+                  </div>
                   <div style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: a.earned ? "#facc15" : "#54555e", lineHeight: 1.2 }}>{a.name}</div>
+                  {!a.earned && (
+                    <div style={{ fontSize: 9, color: "#54555e", fontWeight: 600 }}>{a.progress.current} / {a.progress.threshold}</div>
+                  )}
                 </div>
               ))}
               {achievements.length === 0 && (
