@@ -1,3 +1,5 @@
+import { Chess } from "chess.js";
+
 const START_COUNTS: Record<string, number> = { p: 8, n: 2, b: 2, r: 2, q: 1 };
 const GLYPH: Record<string, { w: string; b: string }> = {
   p: { w: "♙", b: "♟" },
@@ -42,6 +44,22 @@ export function isPromotionMove(fen: string, from: string, to: string): boolean 
   if (!piece || piece.toLowerCase() !== "p") return false;
   const targetRank = to[1];
   return targetRank === "8" || targetRank === "1";
+}
+
+const REPLAY_START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+/** Replays UCI-style moves (e.g. "e2e4", "e7e8q") from the start position up to
+ *  and including `index`, returning the resulting FEN — used to browse move history. */
+export function fenAtMoveIndex(moves: string[], index: number): string {
+  const chess = new Chess();
+  for (let i = 0; i <= index && i < moves.length; i++) {
+    const mv = moves[i];
+    const from = mv.slice(0, 2);
+    const to = mv.slice(2, 4);
+    const promotion = mv.length > 4 ? mv[4] : undefined;
+    try { chess.move({ from, to, promotion }); } catch { break; }
+  }
+  return index < 0 ? REPLAY_START_FEN : chess.fen();
 }
 
 export function getCaptured(fen: string): CapturedMaterial {

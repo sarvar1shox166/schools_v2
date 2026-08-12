@@ -4,10 +4,11 @@ import { createPortal } from "react-dom";
 import { Chess } from "@chess-school/chess-engine";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { PromotionModal } from "../../components/PromotionModal.js";
-import { MaterialColumn } from "../../components/MaterialColumn.js";
+import { PlayerIdentityCard, VsDivider, TcBadge, ClockPill, ClockCard, MovesPanel } from "../../components/GameSidebar.js";
 import { api } from "../../lib/api.js";
-import { useRecordGameResult } from "../../lib/queries.js";
-import { getCaptured, isPromotionMove } from "../../lib/chessMaterial.js";
+import { useRecordGameResult, useMyXp } from "../../lib/queries.js";
+import { isPromotionMove, fenAtMoveIndex } from "../../lib/chessMaterial.js";
+import { useAuthStore } from "../../lib/auth-store.js";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -27,53 +28,6 @@ export interface PvpGameState {
 function tcToSeconds(tc: string): number {
   const [min, inc = "0"] = tc.split("+");
   return parseInt(min) * 60 + parseInt(inc);
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-/* ── Player card ──────────────────────────────────────────────────────────── */
-function PlayerCard({
-  name, elo, seconds, avatar, isComputer, isActive, isLow,
-}: {
-  name: string; elo: number; seconds: number;
-  avatar: string; isComputer?: boolean; isActive: boolean; isLow?: boolean;
-}) {
-  return (
-    <div style={{
-      background: isActive ? "linear-gradient(135deg,rgba(59,130,246,0.14) 0%,#141417 60%)" : "#141417",
-      border: `1px solid ${isActive ? "rgba(59,130,246,0.35)" : "#232328"}`,
-      borderRadius: 14, padding: 14, transition: "all .2s",
-      display: "flex", alignItems: "center", gap: 12,
-    }}>
-      <div style={{
-        width: 44, height: 44, borderRadius: 12, overflow: "hidden",
-        background: isComputer
-          ? "linear-gradient(135deg,#a78bfa,#7c3aed)"
-          : "linear-gradient(135deg,#22c55e,#16a34a)",
-        display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0,
-      }}>
-        {avatar}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 800, fontSize: 14, color: "#f5f5f6" }}>{name}</div>
-        <div style={{ fontSize: 12, color: "#8b8d98", marginTop: 1 }}>{elo} ELO</div>
-      </div>
-      <div style={{
-        padding: "8px 14px", borderRadius: 10,
-        background: isLow ? "#ef4444" : isActive ? "#3b82f6" : "#18181c",
-        border: isLow || isActive ? "none" : "1px solid #232328",
-        fontWeight: 800, fontSize: 20, letterSpacing: 1,
-        color: "#fff", fontVariantNumeric: "tabular-nums",
-        transition: "background .3s",
-      }}>
-        {formatTime(seconds)}
-      </div>
-    </div>
-  );
 }
 
 /* ── Board with coordinate labels ─────────────────────────────────────────── */
@@ -234,8 +188,14 @@ export default function PvpGamePage() {
   const [gameOver, setGameOver] = useState<string | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [viewIndex, setViewIndex] = useState<number | null>(null);
   const resultRecordedRef = useRef(false);
   const computerRetryRef = useRef(0);
+
+  const myAvatarUrl = useAuthStore(s => s.user?.avatarUrl ?? null);
+  const { data: myXp } = useMyXp();
+  const displayFen = viewIndex !== null ? fenAtMoveIndex(moves, viewIndex) : fen;
+  const isLive = viewIndex === null;
 
   const totalSeconds = tcToSeconds(tc);
   const [playerSeconds, setPlayerSeconds] = useState(totalSeconds);
@@ -415,10 +375,11 @@ export default function PvpGamePage() {
     setPlayerSeconds(totalSeconds);
     setComputerSeconds(totalSeconds);
     resultRecordedRef.current = false;
+    setViewIndex(null);
   }
 
   const compName = unbeatable ? "👑 Yengilmas" : `Kompyuter (${difficulty}-daraja)`;
-  const captured = getCaptured(fen);
+  const compIcon = unbeatable ? "👑" : "🤖";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -465,40 +426,61 @@ export default function PvpGamePage() {
 
       {/* Main layout */}
       <div className="pvp-game-grid">
-        {/* Left column — material advantage + captured pieces */}
-        <div className="pvp-material-col">
-          <MaterialColumn diff={captured.diff} byWhite={captured.byWhite} byBlack={captured.byBlack} />
+        {/* Left column — raqib */}
+        <div className="pvp-raqiblar-col" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: "#65666f", letterSpacing: "0.08em", padding: "0 2px" }}>RAQIB</div>
+          <PlayerIdentityCard name={compName} elo={unbeatable ? 3500 : computerElo} icon={compIcon} />
+          <VsDivider />
+          <PlayerIdentityCard name={playerName} elo={playerElo} xp={myXp?.xp} avatarUrl={myAvatarUrl} isMe online />
+          <TcBadge tc={tc} tcType={tcType} color={tcColor} />
         </div>
 
         {/* Board column — fills remaining space */}
-        <div ref={boardColRef} className="pvp-board-col" style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div ref={boardColRef} className="pvp-board-col" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8, alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: boardSize }}>
+            <ClockPill name={compName} seconds={computerSeconds} isActive={!isPlayerTurn && !gameOver} isLow={computerSeconds <= 30} />
+          </div>
           <div style={{ width: boardSize, height: boardSize, flexShrink: 0 }}>
             <BoardWithCoords
-              fen={fen}
+              fen={displayFen}
               onMove={handleMove}
               flipped={isFlipped}
-              disabled={!isPlayerTurn || !!gameOver || thinking || !!pendingPromotion}
-              getMoves={(square) =>
-                chessRef.current
+              disabled={!isLive || !isPlayerTurn || !!gameOver || thinking || !!pendingPromotion}
+              getMoves={(square) => {
+                if (!isLive) return [];
+                return chessRef.current
                   .moves({ square: square as import("chess.js").Square, verbose: true })
-                  .map((m: { to: string }) => m.to)
-              }
+                  .map((m: { to: string }) => m.to);
+              }}
             />
           </div>
+          {!isLive && (
+            <button onClick={() => setViewIndex(null)} style={{
+              padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(59,130,246,.35)",
+              background: "rgba(59,130,246,.12)", color: "#60a5fa", fontWeight: 700, fontSize: 12, cursor: "pointer",
+            }}>
+              ⏭ Jonli holatga qaytish
+            </button>
+          )}
         </div>
 
         {/* Right panel */}
         <div className="pvp-panel-col" style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
-          {/* Computer card */}
-          <PlayerCard
-            name={compName}
-            elo={unbeatable ? 3500 : computerElo}
-            seconds={computerSeconds}
-            avatar={unbeatable ? "👑" : "🤖"}
-            isComputer
-            isActive={!isPlayerTurn}
-            isLow={computerSeconds <= 30}
-          />
+          {/* Kompyuter o'ylayapti indikatori */}
+          {thinking && (
+            <div style={{
+              padding: "12px 16px", background: "#141417",
+              border: "1px solid #232328", borderRadius: 12,
+              display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 14,
+            }}>
+              <div style={{
+                width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+                border: "2px solid #3b82f6", borderTopColor: "transparent",
+                animation: "spin 0.7s linear infinite",
+              }} />
+              <span style={{ color: "#60a5fa" }}>Kompyuter o'ylayapti...</span>
+            </div>
+          )}
 
           {/* Aloqa xatosi — o'yin mag'lubiyat deb hisoblanmaydi, qo'lda qayta urinish */}
           {moveError && (
@@ -519,63 +501,10 @@ export default function PvpGamePage() {
             </div>
           )}
 
-          {/* Turn / thinking indicator */}
-          <div style={{
-            padding: "12px 16px", background: "#141417",
-            border: "1px solid #232328", borderRadius: 12,
-            display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 14,
-          }}>
-            {thinking ? (
-              <>
-                <div style={{
-                  width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
-                  border: "2px solid #3b82f6", borderTopColor: "transparent",
-                  animation: "spin 0.7s linear infinite",
-                }} />
-                <span style={{ color: "#60a5fa" }}>Kompyuter o'ylayapti...</span>
-              </>
-            ) : (
-              <>
-                <div style={{
-                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                  background: turn === "white" ? "#fff" : "#1a1a2e",
-                  border: turn === "black" ? "2px solid rgba(255,255,255,.4)" : "none",
-                }} />
-                <span style={{ color: "#f5f5f6" }}>{turn === "white" ? "Oq o'ynaydi" : "Qora o'ynaydi"}</span>
-              </>
-            )}
-          </div>
+          <MovesPanel moves={moves} viewIndex={viewIndex} onViewIndex={setViewIndex} />
 
-          {/* Move history */}
-          <div style={{
-            padding: "12px 16px", background: "#141417",
-            border: "1px solid #232328", borderRadius: 12,
-            minHeight: 90, maxHeight: 160, overflowY: "auto",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={{ color: "#f5f5f6", fontSize: 12.5, fontWeight: 800 }}>Yurishlar</div>
-              <div style={{ color: "#65666f", fontSize: 11, fontWeight: 700 }}>{moves.length} yurish</div>
-            </div>
-            {moves.length === 0 ? (
-              <div style={{ color: "#54555e", fontSize: 12.5, textAlign: "center", paddingTop: 8 }}>
-                Hali yurish yo'q
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {moves.map((m, i) => (
-                  <span key={i} style={{
-                    fontSize: 11, fontWeight: 600, padding: "2px 7px",
-                    borderRadius: 6, background: "#18181c", color: "#c7d0e8",
-                  }}>
-                    {i % 2 === 0 ? `${Math.floor(i / 2) + 1}.` : ""}{m}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Action buttons — "Durang" tugmasi olib tashlandi: bot bilan durang
-           *  faqat haqiqiy pozitsiyadan kelib chiqishi kerak (pat, takrorlanish,
+          {/* Action buttons — "Durang" tugmasi yo'q: bot bilan durang faqat
+           *  haqiqiy pozitsiyadan kelib chiqishi kerak (pat, takrorlanish,
            *  yetarli material yo'qligi) — bular checkStatus() orqali avtomatik
            *  aniqlanadi, qo'lda "durang" deb belgilash faqat ELO'ni sun'iy
            *  oshirish uchun ishlatilardi. */}
@@ -598,15 +527,9 @@ export default function PvpGamePage() {
             ))}
           </div>
 
-          {/* Player card */}
-          <PlayerCard
-            name={playerName}
-            elo={playerElo}
-            seconds={playerSeconds}
-            avatar="🤓"
-            isActive={isPlayerTurn}
-            isLow={playerSeconds <= 30}
-          />
+          {/* Player card — live timer */}
+          <ClockCard name={playerName} seconds={playerSeconds} avatarUrl={myAvatarUrl} isMe
+            isActive={isPlayerTurn && !gameOver} isLow={playerSeconds <= 30} />
         </div>
       </div>
 

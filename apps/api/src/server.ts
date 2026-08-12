@@ -1,10 +1,14 @@
 import { buildApp } from "./app.js";
 import { env } from "./env.js";
+import { startTeacherAbsenceSweep } from "./modules/attendance/teacher-absence-sweep.js";
 
 buildApp().then((app) =>
   app
     .listen({ port: env.PORT, host: "0.0.0.0" })
-    .then((address) => app.log.info(`API listening on ${address}`))
+    .then((address) => {
+      app.log.info(`API listening on ${address}`);
+      startTeacherAbsenceSweep();
+    })
     .catch((err) => {
       app.log.error(err);
       process.exit(1);

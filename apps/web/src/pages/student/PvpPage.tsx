@@ -5,16 +5,13 @@ import { Chess } from "chess.js";
 import type { PvpGameState } from "./PvpGamePage.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { PromotionModal } from "../../components/PromotionModal.js";
-import { MaterialColumn } from "../../components/MaterialColumn.js";
+import { PlayerIdentityCard, VsDivider, TcBadge, ClockPill, ClockCard, MovesPanel } from "../../components/GameSidebar.js";
 import { usePvpSocket, type OnlinePlayer, type IncomingChallenge, type PvpStatus } from "../../lib/pvpSocket.js";
-import { getCaptured, isPromotionMove } from "../../lib/chessMaterial.js";
+import { isPromotionMove, fenAtMoveIndex } from "../../lib/chessMaterial.js";
+import { useAuthStore } from "../../lib/auth-store.js";
+import { useMyXp } from "../../lib/queries.js";
 
 /* ── Shared helpers ──────────────────────────────────────────────────────── */
-function fmt(s: number) {
-  const m = Math.floor(s / 60), sec = s % 60;
-  return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
-}
-
 function useBoardSizePvp(ref: React.RefObject<HTMLDivElement>) {
   const [size, setSize] = useState(500);
   useEffect(() => {
@@ -31,38 +28,6 @@ function useBoardSizePvp(ref: React.RefObject<HTMLDivElement>) {
     return () => { obs?.disconnect(); window.removeEventListener("resize", calc); };
   }, [ref]);
   return size;
-}
-
-function PvpPlayerCard({ name, elo, seconds, isMe, isActive }: {
-  name: string; elo: number; seconds: number; isMe?: boolean; isActive: boolean;
-}) {
-  const avatarColor = isMe ? "#22c55e" : ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#22c55e"][name.charCodeAt(0)%5];
-  const initls = name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
-  const isLow = seconds <= 30 && seconds > 0;
-  return (
-    <div style={{
-      background: isActive ? "linear-gradient(135deg,rgba(59,130,246,0.14) 0%,#141417 60%)" : "#141417",
-      border: `1px solid ${isActive ? "rgba(59,130,246,0.35)" : "#232328"}`,
-      borderRadius: 14, padding: 14, transition: "all .2s",
-      display: "flex", alignItems: "center", gap: 12,
-    }}>
-      <div style={{ width:44,height:44,borderRadius:12,background:avatarColor,
-        display:"grid",placeItems:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0 }}>
-        {initls}
-      </div>
-      <div style={{ flex:1,minWidth:0 }}>
-        <div style={{ fontWeight:800,fontSize:14,color:"#f5f5f6" }}>{name}</div>
-        <div style={{ fontSize:12,color:"#8b8d98",marginTop:1 }}>{elo} ELO</div>
-      </div>
-      <div style={{ padding:"8px 14px",borderRadius:10,
-        background: isLow?"#ef4444":isActive?"#3b82f6":"#18181c",
-        border: isLow || isActive ? "none" : "1px solid #232328",
-        fontWeight:800,fontSize:20,letterSpacing:1,color:"#fff",
-        fontVariantNumeric:"tabular-nums",transition:"background .3s" }}>
-        {fmt(seconds)}
-      </div>
-    </div>
-  );
 }
 
 function PvpBoardWithCoords({ fen, onMove, flipped, disabled, getMoves }: {
@@ -109,6 +74,7 @@ const RESULT_LABELS: Record<string, string> = {
   draw_repetition:         "Durang (takrorlanish)",
   draw_material:           "Durang (yetarli material yo'q)",
   draw:                    "Durang",
+  draw_agreement:          "Durang (kelishuv orqali)",
   opponent_disconnected:   "Raqib o'yindan chiqdi",
 };
 
@@ -553,14 +519,26 @@ function LobbyScreen({ status, onlinePlayers, myElo, onJoinQueue, onChallenge, o
 export default function PvpPage() {
   const {
     status, myElo, onlinePlayers, incomingChallenge, challengeSent,
-    color, opponent, opponentElo, fen, gameTc, gameTcType, moves, turn,
+    color, opponent, opponentElo, opponentAvatarUrl, opponentXp,
+    fen, gameTc, gameTcType, moves, turn,
     mySeconds, opSeconds, result, error, opponentDisconnected,
-    joinQueue, leaveQueue, sendChallenge, respondChallenge, handleMove, resign, playAgain, reconnect,
+    drawOfferSent, drawOffered,
+    joinQueue, leaveQueue, sendChallenge, respondChallenge, handleMove, resign,
+    offerDraw, respondDraw, playAgain, reconnect,
   } = usePvpSocket();
+  const myAvatarUrl = useAuthStore(s => s.user?.avatarUrl ?? null);
+  const { data: myXp } = useMyXp(status === "playing" || status === "finished");
   const [challengeTarget, setChallengeTarget] = useState<OnlinePlayer | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
+  const [viewIndex, setViewIndex] = useState<number | null>(null);
   const boardColRef = useRef<HTMLDivElement>(null);
   const boardSize = useBoardSizePvp(boardColRef);
+
+  // Yangi o'yin boshlanganda tarixni ko'rib chiqish holatini tozalaymiz.
+  useEffect(() => { setViewIndex(null); }, [color, opponent]);
+
+  const displayFen = viewIndex !== null ? fenAtMoveIndex(moves, viewIndex) : fen;
+  const isLive = viewIndex === null;
 
   function onBoardMove(from: string, to: string) {
     if (isPromotionMove(fen, from, to)) {
@@ -670,74 +648,60 @@ export default function PvpPage() {
 
       {/* Playing / Finished */}
       {(status === "playing" || status === "finished") && (() => {
-        const captured = getCaptured(fen);
+        const oppName = opponent ?? "Raqib";
         return (
         <div className="pvp-game-grid">
-          {/* Left column — material advantage + captured pieces */}
-          <div className="pvp-material-col">
-            <MaterialColumn diff={captured.diff} byWhite={captured.byWhite} byBlack={captured.byBlack} />
+          {/* Left column — raqiblar */}
+          <div className="pvp-raqiblar-col" style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <div style={{ fontSize:11, fontWeight:800, color:"#65666f", letterSpacing:"0.08em", padding:"0 2px" }}>RAQIBLAR</div>
+            <PlayerIdentityCard name={oppName} elo={opponentElo} xp={opponentXp} avatarUrl={opponentAvatarUrl} online />
+            <VsDivider />
+            <PlayerIdentityCard name="Siz" elo={myElo} xp={myXp?.xp} avatarUrl={myAvatarUrl} isMe online />
+            {gameTc && <TcBadge tc={gameTc} tcType={gameTcType ?? ""} color="#f59e0b" />}
           </div>
 
           {/* Board column */}
-          <div ref={boardColRef} className="pvp-board-col" style={{ minWidth:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
+          <div ref={boardColRef} className="pvp-board-col" style={{ minWidth:0, display:"flex", flexDirection:"column", gap:8, alignItems:"center", justifyContent:"center" }}>
+            <div style={{ width:boardSize }}>
+              <ClockPill name={oppName} seconds={opSeconds} isActive={status==="playing" && turn!==color} isLow={opSeconds<=30} />
+            </div>
             <div style={{ width:boardSize,height:boardSize,flexShrink:0 }}>
               <PvpBoardWithCoords
-                fen={fen}
+                fen={displayFen}
                 onMove={onBoardMove}
                 flipped={color === "b"}
-                disabled={status !== "playing" || turn !== color || !!pendingPromotion}
+                disabled={!isLive || status !== "playing" || turn !== color || !!pendingPromotion}
                 getMoves={sq => {
+                  if (!isLive) return [];
                   try { return new Chess(fen).moves({ square:sq as import("chess.js").Square, verbose:true }).map((m:{to:string})=>m.to); }
                   catch { return []; }
                 }}
               />
             </div>
+            {!isLive && (
+              <button onClick={() => setViewIndex(null)} style={{
+                padding:"6px 14px", borderRadius:8, border:"1px solid rgba(59,130,246,.35)",
+                background:"rgba(59,130,246,.12)", color:"#60a5fa", fontWeight:700, fontSize:12, cursor:"pointer",
+              }}>
+                ⏭ Jonli holatga qaytish
+              </button>
+            )}
           </div>
 
           {/* Right panel */}
           <div className="pvp-panel-col" style={{ display:"flex",flexDirection:"column",gap:10,overflowY:"auto" }}>
-            {/* Opponent card */}
-            <PvpPlayerCard
-              name={opponent ?? "Raqib"}
-              elo={opponentElo}
-              seconds={opSeconds}
-              isActive={turn !== color}
-            />
+            <MovesPanel moves={moves} viewIndex={viewIndex} onViewIndex={setViewIndex} />
 
-            {/* Turn indicator */}
-            <div style={{ padding:"12px 16px",background:"#141417",
-              border:"1px solid #232328",borderRadius:12,
-              display:"flex",alignItems:"center",gap:10,fontWeight:700,fontSize:14 }}>
-              <div style={{ width:16,height:16,borderRadius:4,flexShrink:0,
-                background:turn==="w"?"#fff":"#1a1a2e",
-                border:turn==="b"?"2px solid rgba(255,255,255,.4)":"none" }}/>
-              <span style={{ color:"#f5f5f6" }}>{turn==="w" ? "Oq o'ynaydi" : "Qora o'ynaydi"}</span>
-              {gameTc && <span style={{ marginLeft:"auto",fontSize:11,fontWeight:600,color:"#65666f" }}>{gameTc} {gameTcType}</span>}
-            </div>
-
-            {/* Move history */}
-            <div style={{ padding:"12px 16px",background:"#141417",
-              border:"1px solid #232328",borderRadius:12,
-              minHeight:80,maxHeight:160,overflowY:"auto",flex:1 }}>
-              <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
-                <div style={{ color:"#f5f5f6",fontSize:12.5,fontWeight:800 }}>Yurishlar</div>
-                <div style={{ color:"#65666f",fontSize:11,fontWeight:700 }}>{moves.length} yurish</div>
+            {/* Durang taklifi keldi — qabul qilish/rad etish */}
+            {drawOffered && status === "playing" && (
+              <div style={{ padding:"10px 14px",borderRadius:12,
+                background:"rgba(59,130,246,.12)",border:"1px solid rgba(59,130,246,.3)",
+                display:"flex",alignItems:"center",gap:10 }}>
+                <span style={{ flex:1,fontSize:12.5,fontWeight:700,color:"#93c5fd" }}>🤝 Raqib durang taklif qildi</span>
+                <button onClick={() => respondDraw(true)} style={{ padding:"6px 12px",borderRadius:8,border:"none",background:"#22c55e",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer" }}>Qabul</button>
+                <button onClick={() => respondDraw(false)} style={{ padding:"6px 12px",borderRadius:8,border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",color:"#f87171",fontWeight:700,fontSize:12,cursor:"pointer" }}>Rad</button>
               </div>
-              {moves.length === 0 ? (
-                <div style={{ color:"#54555e",fontSize:12.5,textAlign:"center",paddingTop:8 }}>
-                  Hali yurish yo'q
-                </div>
-              ) : (
-                <div style={{ display:"flex",flexWrap:"wrap",gap:4 }}>
-                  {moves.map((m,i)=>(
-                    <span key={i} style={{ fontSize:11,fontWeight:600,padding:"2px 7px",
-                      borderRadius:6,background:"#18181c",color:"#c7d0e8" }}>
-                      {i%2===0?`${Math.floor(i/2)+1}.`:""}{m}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Raqib ulanishi uzilgan — qayta ulanish uchun muddat berilmoqda */}
             {opponentDisconnected && status === "playing" && (
@@ -764,15 +728,24 @@ export default function PvpPage() {
               </div>
             )}
 
-            {/* Action button */}
+            {/* Action buttons */}
             {status === "playing" ? (
-              <button onClick={resign}
-                style={{ padding:"12px",borderRadius:12,
-                  border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",
-                  color:"#f87171",fontWeight:700,cursor:"pointer",fontSize:14,
-                  display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
-                🏳 Taslim bo'lish
-              </button>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+                <button onClick={offerDraw} disabled={drawOfferSent}
+                  style={{ padding:"12px",borderRadius:12,
+                    border:"1px solid rgba(139,92,246,.3)",background:"rgba(139,92,246,.1)",
+                    color: drawOfferSent ? "#65666f" : "#c4b5fd",fontWeight:700,cursor:drawOfferSent?"default":"pointer",fontSize:13.5,
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
+                  {drawOfferSent ? "Kutilmoqda..." : "½ Durrang"}
+                </button>
+                <button onClick={resign}
+                  style={{ padding:"12px",borderRadius:12,
+                    border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",
+                    color:"#f87171",fontWeight:700,cursor:"pointer",fontSize:13.5,
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
+                  🏳 Taslim
+                </button>
+              </div>
             ) : (
               <button onClick={playAgain}
                 style={{ padding:"12px",borderRadius:12,border:"none",
@@ -782,14 +755,9 @@ export default function PvpPage() {
               </button>
             )}
 
-            {/* My card */}
-            <PvpPlayerCard
-              name="Siz"
-              elo={myElo}
-              seconds={mySeconds}
-              isMe
-              isActive={turn === color}
-            />
+            {/* My card — live timer */}
+            <ClockCard name="Siz" seconds={mySeconds} avatarUrl={myAvatarUrl} isMe
+              isActive={status==="playing" && turn === color} isLow={mySeconds<=30} />
           </div>
         </div>
         );

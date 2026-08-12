@@ -15,7 +15,12 @@ const MONTH_NAMES = [
   "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
   "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
 ];
-const HOURS = [
+// Standart ish vaqti qatorlari. Bundan tashqarida (masalan 00:02 kabi) dars
+// qo'yilsa, u avval bu ro'yxatda umuman qator topilmagani uchun jadvalda
+// KO'RINMASDI, garchi ma'lumotlar bazasida saqlangan bo'lsa ham — pastdagi
+// WeeklyView shu ro'yxatni haftadagi haqiqiy darslar soatlari bilan
+// to'ldirib, kerak bo'lsa qo'shimcha qatorlar qo'shadi.
+const DEFAULT_HOURS = [
   "08:00","09:00","10:00","11:00","12:00","13:00",
   "14:00","15:00","16:00","17:00","18:00","19:00",
   "20:00","21:00","22:00","23:00",
@@ -56,7 +61,7 @@ type ModalState =
   | null;
 
 export default function SchedulePage() {
-  const [tab, setTab] = useState<"weekly" | "calendar">("weekly");
+  const [tab, setTab] = useState<"weekly" | "calendar" | "table">("weekly");
   const { data: slots = [], isLoading } = useSchedule();
   const { data: groups = [] } = useGroups();
   const { data: allTeachers = [] } = useTeachers();
@@ -90,7 +95,7 @@ export default function SchedulePage() {
     (slots.reduce((sum, s) => sum + (s.durationMinutes ?? 90), 0) / 60).toFixed(1)
   );
   const activeGroups = new Set(slots.map((s) => s.groupId)).size;
-  const emptySlots = HOURS.length * 7 - totalLessons;
+  const emptySlots = DEFAULT_HOURS.length * 7 - totalLessons;
 
   function openAdd(date: string, hour: string) {
     setModal({ mode: "add", date, hour });
@@ -145,7 +150,7 @@ export default function SchedulePage() {
         </h2>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ display: "flex", background: "var(--surface-2)", borderRadius: 10, padding: 3 }}>
-            {(["weekly", "calendar"] as const).map((t) => (
+            {(["weekly", "calendar", "table"] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)}
                 style={{
                   padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer",
@@ -154,7 +159,7 @@ export default function SchedulePage() {
                   color: tab === t ? "var(--text)" : "var(--text-faint)",
                   boxShadow: tab === t ? "var(--shadow-xs)" : "none",
                 }}>
-                {t === "weekly" ? "Haftalik" : "Kalendar"}
+                {t === "weekly" ? "Haftalik" : t === "calendar" ? "Kalendar" : "Jadval"}
               </button>
             ))}
           </div>
@@ -187,8 +192,10 @@ export default function SchedulePage() {
 
       {tab === "weekly" ? (
         <WeeklyView teacherFilter={teacherFilter} onOpenAdd={openAdd} onOpenView={openView} />
-      ) : (
+      ) : tab === "calendar" ? (
         <CalendarView teacherFilter={teacherFilter} onOpenAdd={openAdd} onOpenView={openView} />
+      ) : (
+        <TableView teacherFilter={teacherFilter} onOpenView={openView} />
       )}
 
       {/* Stats */}
@@ -317,6 +324,20 @@ function WeeklyView({ teacherFilter, onOpenAdd, onOpenView }: {
     return map;
   }, [days, teacherFilter]);
 
+  // Standart ish vaqtlari + shu haftada haqiqatan bor bo'lgan (masalan
+  // 00:02 kabi standart vaqtdan tashqaridagi) darslarning soatlari — aks
+  // holda ular jadvalda hech qanday qatorga tushmay ko'rinmay qolar edi.
+  const hours = useMemo(() => {
+    const extra = new Set<string>();
+    for (const d of days) {
+      for (const s of d.slots) {
+        const h = String(s.startTime).slice(0, 2) + ":00";
+        if (!DEFAULT_HOURS.includes(h)) extra.add(h);
+      }
+    }
+    return [...DEFAULT_HOURS, ...extra].sort();
+  }, [days]);
+
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   return (
@@ -356,7 +377,7 @@ function WeeklyView({ teacherFilter, onOpenAdd, onOpenView }: {
             <tbody>
               {isLoading ? (
                 <tr><td colSpan={8} style={{ padding: 30, textAlign: "center", color: "var(--text-faint)" }}>Yuklanmoqda...</td></tr>
-              ) : HOURS.map((hour) => (
+              ) : hours.map((hour) => (
                 <tr key={hour}>
                   <td style={tdTime}>{hour}</td>
                   {weekDates.map((d, di) => {
@@ -385,6 +406,94 @@ function WeeklyView({ teacherFilter, onOpenAdd, onOpenView }: {
                   })}
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </>
+  );
+}
+
+/* ══════════════════════════ Jadval (table) ko'rinish ══════════════════════════ */
+// Vaqt bo'yicha qatorlarga bo'lingan setka (WeeklyView) o'rniga — bu yerda har
+// bir dars alohida qator, hech qanday soat-oralig'iga bog'liq emas. Shu
+// sababli 00:02 kabi "g'ayrioddiy" vaqtdagi dars ham har doim ko'rinadi.
+const DAY_FULL_TABLE = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
+
+function TableView({ teacherFilter, onOpenView }: {
+  teacherFilter: string | null;
+  onOpenView: (slot: ScheduleSlot, occurrenceDate: string) => void;
+}) {
+  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const weekEnd = addDays(weekStart, 6);
+  const from = toDateStr(weekStart);
+  const to = toDateStr(weekEnd);
+  const { data: days = [], isLoading } = useScheduleOccurrences(from, to);
+  const todayStr = toDateStr(new Date());
+
+  const rows = useMemo(() => {
+    const list: { slot: ScheduleOccurrenceSlot; date: string }[] = [];
+    for (const d of days) {
+      const daySlots = teacherFilter ? d.slots.filter((s) => s.teacherName === teacherFilter) : d.slots;
+      for (const s of daySlots) list.push({ slot: s, date: d.date });
+    }
+    list.sort((a, b) => (a.date === b.date ? String(a.slot.startTime).localeCompare(String(b.slot.startTime)) : a.date.localeCompare(b.date)));
+    return list;
+  }, [days, teacherFilter]);
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-dim)" }}>
+          {fmtDisplayDate(from)} — {fmtDisplayDate(to)}
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="btn" onClick={() => setWeekStart(mondayOf(new Date()))}>Bugun</button>
+          <button className="iconbtn" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+            <Icon name="chevronLeft" size={14} />
+          </button>
+          <button className="iconbtn" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+            <Icon name="chevronRight" size={14} />
+          </button>
+        </div>
+      </div>
+
+      <Card style={{ overflow: "hidden", padding: 0 }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+            <thead>
+              <tr>
+                <th style={{ ...thTime, width: 110 }}>Sana</th>
+                <th style={thDay}>Kun</th>
+                <th style={{ ...thTime, width: 72 }}>Vaqt</th>
+                <th style={{ ...thDay, textAlign: "left" }}>Guruh / nomi</th>
+                <th style={{ ...thDay, textAlign: "left" }}>O'qituvchi</th>
+                <th style={thDay}>Turi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={6} style={{ padding: 30, textAlign: "center", color: "var(--text-faint)" }}>Yuklanmoqda...</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: 30, textAlign: "center", color: "var(--text-faint)" }}>Bu haftada dars yo'q</td></tr>
+              ) : rows.map(({ slot, date }) => {
+                const isToday = date === todayStr;
+                const dow = dayOfWeekOf(new Date(date + "T00:00:00"));
+                return (
+                  <tr key={`${slot.id}-${date}`} onClick={() => onOpenView(slot, date)} style={{ cursor: "pointer" }}>
+                    <td style={{ ...tdTime, width: 110, textAlign: "left", color: isToday ? "var(--accent)" : "var(--text-faint)", fontWeight: isToday ? 800 : 700 }}>
+                      {fmtDisplayDate(date)}
+                    </td>
+                    <td style={{ ...tdCell, textAlign: "center", fontSize: 12.5, fontWeight: 600 }}>{DAY_FULL_TABLE[dow]}</td>
+                    <td style={{ ...tdTime, width: 72 }}>{String(slot.startTime).slice(0, 5)}</td>
+                    <td style={{ ...tdCell, fontSize: 13, fontWeight: 700 }}>{slot.groupName ?? slot.customName ?? "Dars"}</td>
+                    <td style={{ ...tdCell, fontSize: 12.5 }}>{slot.teacherName ?? "—"}</td>
+                    <td style={{ ...tdCell, textAlign: "center", fontSize: 12 }}>
+                      {slot.lessonType === "guruh" ? "Guruh" : slot.lessonType === "individual" ? "Individual" : "Diagnostika"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

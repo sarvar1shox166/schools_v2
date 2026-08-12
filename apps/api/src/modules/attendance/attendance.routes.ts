@@ -296,7 +296,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
     }
   );
 
-  // ── O'qituvchi davomati (faqat statistika/hisobot — payrollga ta'sir qilmaydi) ──
+  // ── O'qituvchi davomati — statistika/hisobot UCHUN ham, endi payroll uchun
+  // ham asosiy manba: recordLessonSession() shu yerdagi holatga qarab to'lov
+  // yozadi yoki bekor qiladi (pastdagi POST /attendance/teacher'ga qarang). ──
 
   app.get(
     "/attendance/teacher/stats",
@@ -556,6 +558,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
              DO UPDATE SET status = EXCLUDED.status, marked_by = EXCLUDED.marked_by`,
             [tenantId, r.teacherId, r.scheduleSlotId, body.date, r.status, userId]
           );
+          // Holat to'g'irlansa (masalan "kelmadi"dan "keldi"ga yoki aksincha),
+          // to'lov shu zahoti qayta hisoblanadi/bekor qilinadi.
+          await recordLessonSession(client, r.scheduleSlotId, body.date);
         }
         await client.query("COMMIT");
       } catch (err) {
@@ -582,12 +587,28 @@ export async function attendanceRoutes(app: FastifyInstance) {
     if (!studentId) return { ok: false };
 
     const slotCheck = await pool.query(
-      `SELECT sl.id FROM schedule_slots sl
+      `SELECT sl.id, COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId"
+       FROM schedule_slots sl
+       LEFT JOIN groups g ON g.id = sl.group_id
        LEFT JOIN group_members gm ON gm.group_id = sl.group_id AND gm.student_id = $1
        WHERE sl.id = $2 AND sl.tenant_id = $3 AND (gm.student_id IS NOT NULL OR sl.student_id = $1)`,
       [studentId, body.scheduleSlotId, tenantId]
     );
     if (!slotCheck.rows[0]) return { ok: false };
+
+    // O'qituvchi hali darsga kirmagan bo'lsa, o'quvchi ham kira olmaydi —
+    // aks holda "keldi" deb avtomatik belgilanadi, garchi o'qituvchi hali
+    // umuman ulanmagan bo'lsa ham.
+    const teacherId = slotCheck.rows[0].teacherId as string | null;
+    if (teacherId) {
+      const taCheck = await pool.query(
+        `SELECT status FROM teacher_attendance WHERE teacher_id = $1 AND schedule_slot_id = $2 AND date = $3`,
+        [teacherId, body.scheduleSlotId, date]
+      );
+      if (!["p", "l"].includes(taCheck.rows[0]?.status)) {
+        return { ok: false, reason: "teacher_not_joined" };
+      }
+    }
 
     const client = await pool.connect();
     try {

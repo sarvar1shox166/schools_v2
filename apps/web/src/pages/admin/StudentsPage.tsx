@@ -41,7 +41,7 @@ const LEVEL_COLOR: Record<string, string> = {
 const ALL_TAB = "hammasi";
 
 const PAY_STATUS_LABEL: Record<string, string> = {
-  active:     "To'langan",
+  active:     "Kutilmoqda",
   debt:       "Qarzdor",
   no_package: "Paket yo'q",
   inactive:   "Nofaol",

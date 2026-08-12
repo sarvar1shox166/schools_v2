@@ -19,6 +19,9 @@ export interface NextLesson {
   nextAt: string;
   endsAt: string;
   isLive: boolean;
+  // Dars jonli bo'lganda o'qituvchi haqiqatan "Darsga kirish"ni bosganmi —
+  // bosmagan bo'lsa o'quvchi ham kira olmaydi (backend ham buni tekshiradi).
+  teacherJoined: boolean;
   endedToday: boolean;
   teacherRating: number | null;
   teacherStudentsCount: number;

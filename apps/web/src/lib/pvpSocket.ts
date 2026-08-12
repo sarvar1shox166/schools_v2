@@ -3,7 +3,7 @@ import { useAuthStore } from "./auth-store.js";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-export interface OnlinePlayer { studentId: string; fullName: string; elo: number; inGame: boolean; }
+export interface OnlinePlayer { studentId: string; fullName: string; elo: number; avatarUrl: string | null; inGame: boolean; }
 export interface IncomingChallenge { fromStudentId: string; fromName: string; fromElo: number; tc: string; tcType: string; }
 export type PvpStatus = "disconnected" | "connecting" | "lobby" | "queued" | "playing" | "finished";
 
@@ -16,6 +16,8 @@ interface PvpState {
   color: "w" | "b" | null;
   opponent: string | null;
   opponentElo: number;
+  opponentAvatarUrl: string | null;
+  opponentXp: number;
   fen: string;
   gameTc: string | null;
   gameTcType: string | null;
@@ -28,14 +30,18 @@ interface PvpState {
   // Raqib ulanishi uzilganda "N soniya ichida qaytmasa yutasiz" bannerini
   // ko'rsatish uchun — soatning o'zi serverda davom etadi.
   opponentDisconnected: boolean;
+  // Durang taklifi — men taklif qilganim yoki raqib menga taklif qilgani.
+  drawOfferSent: boolean;
+  drawOffered: boolean;
 }
 
 function initialState(): PvpState {
   return {
     status: "disconnected", myElo: 1200, onlinePlayers: [], incomingChallenge: null, challengeSent: null,
-    color: null, opponent: null, opponentElo: 1200, fen: START_FEN, gameTc: null, gameTcType: null,
+    color: null, opponent: null, opponentElo: 1200, opponentAvatarUrl: null, opponentXp: 0,
+    fen: START_FEN, gameTc: null, gameTcType: null,
     moves: [], turn: "w", mySeconds: 300, opSeconds: 300, result: null, error: null,
-    opponentDisconnected: false,
+    opponentDisconnected: false, drawOfferSent: false, drawOffered: false,
   };
 }
 
@@ -148,10 +154,13 @@ function connect(token: string) {
         setState({
           incomingChallenge: null, challengeSent: null,
           color, opponent: (msg.opponent as string) ?? null,
-          opponentElo: (msg.opponentElo as number) ?? 1200, fen: (msg.fen as string) ?? START_FEN,
+          opponentElo: (msg.opponentElo as number) ?? 1200,
+          opponentAvatarUrl: (msg.opponentAvatarUrl as string) ?? null,
+          opponentXp: (msg.opponentXp as number) ?? 0,
+          fen: (msg.fen as string) ?? START_FEN,
           gameTc: (msg.tc as string) ?? null, gameTcType: (msg.tcType as string) ?? null,
           status: "playing", result: null, error: null, moves: [], turn: "w",
-          opponentDisconnected: false,
+          opponentDisconnected: false, drawOfferSent: false, drawOffered: false,
           mySeconds: msToSeconds(color === "w" ? whiteMs : blackMs),
           opSeconds: msToSeconds(color === "w" ? blackMs : whiteMs),
         });
@@ -167,17 +176,27 @@ function connect(token: string) {
         const blackMs = (msg.blackMs as number) ?? 300_000;
         setState({
           color, opponent: (msg.opponent as string) ?? null,
-          opponentElo: (msg.opponentElo as number) ?? 1200, fen: (msg.fen as string) ?? START_FEN,
+          opponentElo: (msg.opponentElo as number) ?? 1200,
+          opponentAvatarUrl: (msg.opponentAvatarUrl as string) ?? null,
+          opponentXp: (msg.opponentXp as number) ?? 0,
+          fen: (msg.fen as string) ?? START_FEN,
           gameTc: (msg.tc as string) ?? null, gameTcType: (msg.tcType as string) ?? null,
           status: "playing", result: null, error: null,
           moves: (msg.moves as string[]) ?? [], turn: (msg.turn as "w" | "b") ?? "w",
-          opponentDisconnected: false,
+          opponentDisconnected: false, drawOfferSent: false, drawOffered: false,
           mySeconds: msToSeconds(color === "w" ? whiteMs : blackMs),
           opSeconds: msToSeconds(color === "w" ? blackMs : whiteMs),
         });
         ensureTimer();
         break;
       }
+      case "draw_offered":
+        setState({ drawOffered: true });
+        break;
+      case "draw_declined":
+        setState({ drawOfferSent: false, error: "Raqib durangni rad etdi" });
+        setTimeout(() => setState({ error: null }), 3000);
+        break;
       case "opponent_disconnected_grace":
         setState({ opponentDisconnected: true });
         break;
@@ -197,6 +216,7 @@ function connect(token: string) {
         setState({
           fen: msg.fen as string, turn: (msg.turn as "w" | "b") ?? "w",
           moves: [...state.moves, `${msg.from as string}${msg.to as string}`],
+          drawOfferSent: false, drawOffered: false,
           ...clockPatch,
           ...(gameOver ? { result: msg.result as string, status: "finished" as PvpStatus } : {}),
         });
@@ -249,6 +269,16 @@ export function resign() {
   ws?.send(JSON.stringify({ type: "resign" }));
 }
 
+export function offerDraw() {
+  setState({ drawOfferSent: true });
+  ws?.send(JSON.stringify({ type: "draw_offer" }));
+}
+
+export function respondDraw(accept: boolean) {
+  setState({ drawOffered: false });
+  ws?.send(JSON.stringify({ type: accept ? "draw_accept" : "draw_decline" }));
+}
+
 export function playAgain() {
   setState({
     fen: START_FEN, color: null, opponent: null, result: null, error: null, moves: [], status: "lobby",
@@ -285,6 +315,6 @@ export function usePvpSocket(enabled: boolean = true) {
   return {
     ...state,
     joinQueue, leaveQueue, sendChallenge, respondChallenge, dismissIncomingChallenge,
-    handleMove, resign, playAgain, reconnect: reconnectPvp,
+    handleMove, resign, offerDraw, respondDraw, playAgain, reconnect: reconnectPvp,
   };
 }

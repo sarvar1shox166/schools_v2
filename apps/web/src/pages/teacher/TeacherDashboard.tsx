@@ -139,7 +139,7 @@ export default function TeacherDashboard() {
         <div style={{ position:"absolute", right:-50, top:-70, width:240, height:240, borderRadius:"50%", background:"rgba(255,255,255,0.08)", pointerEvents:"none" }}/>
         <div style={{ position:"absolute", right:100, bottom:-90, width:180, height:180, borderRadius:"50%", background:"rgba(255,255,255,0.05)", pointerEvents:"none" }}/>
 
-        {/* profile row + admin button */}
+        {/* profile row */}
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", flexWrap:"wrap", gap:12, marginBottom:22 }}>
           <div style={{ display:"flex", alignItems:"center", gap:16, minWidth:0 }}>
             <div style={{
@@ -157,20 +157,6 @@ export default function TeacherDashboard() {
               </div>
             </div>
           </div>
-
-          <button
-            onClick={() => navigate("/admin")}
-            style={{
-              background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.35)",
-              borderRadius:10, padding:"7px 16px", color:"#fff", fontSize:13, fontWeight:700,
-              cursor:"pointer", display:"flex", alignItems:"center", gap:7, flexShrink:0,
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
-            </svg>
-            Admin panel
-          </button>
         </div>
 
         {/* stats row */}
@@ -311,7 +297,7 @@ export default function TeacherDashboard() {
               </div>
               <div style={{ fontSize:13.5, opacity:0.85 }}>
                 {liveLesson.startTime.slice(0,5)} · {studentsMap[liveLesson.groupName ?? ""] ?? slotStudents.length} o'quvchi
-                {" · "}⏱ tugashiga {liveCountdown.m}:{liveCountdown.s}
+                {" · "}⏱ tugashiga {liveCountdown.h}:{liveCountdown.m}:{liveCountdown.s}
               </div>
             </div>
 

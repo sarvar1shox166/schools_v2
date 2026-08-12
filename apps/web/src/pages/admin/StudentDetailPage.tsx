@@ -20,7 +20,7 @@ const METHODS = [
 type PayMethod = "naqd" | "uzcard" | "click" | "payme";
 
 const PAY_STATUS_LABEL: Record<string, string> = {
-  active: "To'langan", debt: "Qarzdor",
+  active: "Kutilmoqda", debt: "Qarzdor",
   no_package: "Paket yo'q", inactive: "Nofaol",
 };
 const PAY_STATUS_COLOR: Record<string, { bg: string; color: string }> = {

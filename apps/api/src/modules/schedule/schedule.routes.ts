@@ -3,6 +3,7 @@ import { z } from "zod";
 import { pool } from "../../db/pool.js";
 import { dayOfWeekOf, todayStr, toDateStr } from "../../lib/schedule-dates.js";
 import { assignedTeacherIds } from "../../lib/moderator.js";
+import { refundLesson } from "../payments/lessons.js";
 
 const createSchema = z.object({
   groupId: z.string().uuid().optional(),
@@ -224,6 +225,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
               sl.meeting_platform AS "meetingPlatform",
               sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
+              COALESCE(t2.id, t.id) AS "teacherId",
               COALESCE(tu2.full_name, tu.full_name) AS "teacherName",
               COALESCE(tu2.phone, tu.phone) AS "teacherPhone",
               EXISTS (
@@ -351,12 +353,27 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
     if (!best) return null;
     const isLive = best.at <= now && now < best.endsAt && !best.row.endedToday;
+
+    // O'qituvchi haqiqatan darsga kirganmi — shu holatga qarab o'quvchi
+    // "Darsga kirish" tugmasini ko'radimi yoki "o'qituvchi hali kelmadi"
+    // xabarini. Faqat dars jonli bo'lganda tekshiriladi.
+    let teacherJoined = false;
+    if (isLive && best.row.teacherId) {
+      const taRes = await pool.query(
+        `SELECT status FROM teacher_attendance
+         WHERE teacher_id = $1 AND schedule_slot_id = $2 AND date = $3`,
+        [best.row.teacherId, best.row.id, toDateStr(best.at)]
+      );
+      teacherJoined = ["p", "l"].includes(taRes.rows[0]?.status);
+    }
+
     return {
       ...best.row,
       startTime: best.startTimeOverride ?? best.row.startTime,
       nextAt: best.at.toISOString(),
       endsAt: best.endsAt.toISOString(),
       isLive,
+      teacherJoined,
       isRescheduled: best.isRescheduled,
     };
   });
@@ -562,6 +579,50 @@ export async function scheduleRoutes(app: FastifyInstance) {
        RETURNING id`,
       [tenantId, id, body.date, body.kind, body.newDate ?? null, body.newStartTime ?? null, body.reason ?? null, sub]
     );
+
+    // Bir kun ichida faqat VAQTI o'zgartirilgan ko'chirish (new_date === date) —
+    // teacher_attendance/attendance_records (shu jumladan avtomatik "kelmadi"
+    // sweep'i) hali ham ESKI vaqtga tegishli yozuvni saqlab turadi, chunki bu
+    // jadvallar sana bo'yicha kalitlanadi, vaqt bo'yicha emas. Agar tozalamasak,
+    // yangi (ko'chirilgan) vaqtdagi dars "allaqachon boshlangan/kelmadi" deb
+    // noto'g'ri ko'rinadi — garchi hech kim hali kirmagan bo'lsa ham.
+    if (body.kind === "rescheduled" && body.newDate === body.date) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `DELETE FROM teacher_attendance WHERE schedule_slot_id = $1 AND date = $2`,
+          [id, body.date]
+        );
+        // O'quvchi yozuvlarini o'chirishdan oldin sarflangan dars kreditlarini
+        // qaytaramiz — aks holda kredit "yeb qo'yilgan" holicha qolib ketardi.
+        const staleRecords = await client.query(
+          `SELECT student_id AS "studentId", status, student_package_id AS "studentPackageId"
+           FROM attendance_records WHERE schedule_slot_id = $1 AND date = $2`,
+          [id, body.date]
+        );
+        for (const r of staleRecords.rows) {
+          if (r.status !== "ae") {
+            await refundLesson(client, r.studentId, r.studentPackageId);
+          }
+        }
+        await client.query(
+          `DELETE FROM attendance_records WHERE schedule_slot_id = $1 AND date = $2`,
+          [id, body.date]
+        );
+        await client.query(
+          `DELETE FROM lesson_sessions WHERE schedule_slot_id = $1 AND date = $2`,
+          [id, body.date]
+        );
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+    }
+
     return reply.code(201).send({ id: rows[0].id });
   });
 

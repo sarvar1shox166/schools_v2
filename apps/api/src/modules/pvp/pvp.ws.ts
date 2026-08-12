@@ -11,6 +11,8 @@ interface OnlinePlayer {
   studentId: string;
   fullName: string;
   elo: number;
+  xp: number;
+  avatarUrl: string | null;
   tenantId: string;
 }
 
@@ -19,6 +21,8 @@ interface QueuedPlayer {
   studentId: string;
   fullName: string;
   elo: number;
+  xp: number;
+  avatarUrl: string | null;
   tenantId: string;
 }
 
@@ -27,6 +31,8 @@ interface GamePlayer {
   studentId: string;
   fullName: string;
   elo: number;
+  avatarUrl: string | null;
+  xp: number;
 }
 
 interface Game {
@@ -47,6 +53,8 @@ interface Game {
   // muddat beriladi (RECONNECT_GRACE_SECONDS), aks holda oddiy sahifa
   // yangilash yoki qisqa internet uzilishi o'yinni notekis tugatardi.
   disconnectTimers: Map<"w" | "b", ReturnType<typeof setTimeout>>;
+  // Kim durang taklif qilgani — yurish qilinganda yoki javob berilganda tozalanadi.
+  drawOfferedBy: "w" | "b" | null;
 }
 
 interface Challenge {
@@ -98,7 +106,7 @@ function broadcastOnlineList() {
       // bir-birining ismi/reytingini ko'rmasligi va o'ynashga taklif qila olmasligi kerak.
       players: all
         .filter((p) => p.tenantId === viewer.tenantId && p.studentId !== viewer.studentId)
-        .map((p) => ({ studentId: p.studentId, fullName: p.fullName, elo: p.elo, inGame: inGame.has(p.socket) })),
+        .map((p) => ({ studentId: p.studentId, fullName: p.fullName, elo: p.elo, avatarUrl: p.avatarUrl, inGame: inGame.has(p.socket) })),
     });
   }
 }
@@ -117,8 +125,8 @@ function scheduleFlagTimer(game: Game) {
 }
 
 function startGame(
-  a: { socket: WebSocket; studentId: string; fullName: string; elo: number },
-  b: { socket: WebSocket; studentId: string; fullName: string; elo: number },
+  a: GamePlayer,
+  b: GamePlayer,
   tc: string = "5+0",
   tcType: string = "BLITS",
 ) {
@@ -129,6 +137,7 @@ function startGame(
     id, chess, white: a, black: b, tc, tcType,
     whiteMs: totalMs, blackMs: totalMs, incrementMs,
     turnStartedAt: Date.now(), flagTimer: null, disconnectTimers: new Map(),
+    drawOfferedBy: null,
   };
   games.set(id, game);
   socketGames.set(a.socket, id);
@@ -136,8 +145,8 @@ function startGame(
   studentGames.set(a.studentId, id);
   studentGames.set(b.studentId, id);
 
-  send(a.socket, { type: "matched", color: "w", opponent: b.fullName, opponentElo: b.elo, fen: chess.fen(), tc, tcType, whiteMs: totalMs, blackMs: totalMs });
-  send(b.socket, { type: "matched", color: "b", opponent: a.fullName, opponentElo: a.elo, fen: chess.fen(), tc, tcType, whiteMs: totalMs, blackMs: totalMs });
+  send(a.socket, { type: "matched", color: "w", opponent: b.fullName, opponentElo: b.elo, opponentAvatarUrl: b.avatarUrl, opponentXp: b.xp, fen: chess.fen(), tc, tcType, whiteMs: totalMs, blackMs: totalMs });
+  send(b.socket, { type: "matched", color: "b", opponent: a.fullName, opponentElo: a.elo, opponentAvatarUrl: a.avatarUrl, opponentXp: a.xp, fen: chess.fen(), tc, tcType, whiteMs: totalMs, blackMs: totalMs });
   scheduleFlagTimer(game);
   broadcastOnlineList();
 }
@@ -236,9 +245,10 @@ function tryMatch() {
   }
 }
 
-async function getStudent(userId: string): Promise<{ studentId: string; fullName: string; elo: number } | null> {
+async function getStudent(userId: string): Promise<{ studentId: string; fullName: string; elo: number; xp: number; avatarUrl: string | null } | null> {
   const { rows } = await pool.query(
-    `SELECT s.id AS "studentId", u.full_name AS "fullName", COALESCE(sx.elo, 1200) AS elo
+    `SELECT s.id AS "studentId", u.full_name AS "fullName", u.avatar_url AS "avatarUrl",
+            COALESCE(sx.elo, 1200) AS elo, COALESCE(sx.xp, 0) AS xp
      FROM students s
      JOIN users u ON u.id = s.user_id
      LEFT JOIN student_xp sx ON sx.student_id = s.id
@@ -376,7 +386,7 @@ export async function pvpRoutes(app: FastifyInstance) {
     const tenantId = payload.tenantId!;
 
     // Add to lobby (not queue)
-    onlinePlayers.set(socket, { socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo, tenantId });
+    onlinePlayers.set(socket, { socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo, xp: student.xp, avatarUrl: student.avatarUrl, tenantId });
     send(socket, { type: "connected", myElo: student.elo });
 
     // Qayta ulanish: bu o'quvchining hali tugamagan o'yini bo'lsa (sahifa
@@ -403,6 +413,7 @@ export async function pvpRoutes(app: FastifyInstance) {
         type: "resume",
         color: myColor,
         opponent: opponent.fullName, opponentElo: opponent.elo,
+        opponentAvatarUrl: opponent.avatarUrl, opponentXp: opponent.xp,
         fen: game.chess.fen(), turn: game.chess.turn(),
         tc: game.tc, tcType: game.tcType,
         whiteMs: game.whiteMs, blackMs: game.blackMs,
@@ -426,7 +437,7 @@ export async function pvpRoutes(app: FastifyInstance) {
       if (msg.type === "join_queue") {
         const alreadyInQueue = queue.some((p) => p.studentId === student.studentId);
         if (!alreadyInQueue) {
-          queue.push({ socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo, tenantId });
+          queue.push({ socket, studentId: student.studentId, fullName: student.fullName, elo: student.elo, xp: student.xp, avatarUrl: student.avatarUrl, tenantId });
           send(socket, { type: "queued" });
           tryMatch();
         }
@@ -530,6 +541,8 @@ export async function pvpRoutes(app: FastifyInstance) {
         else game.blackMs = Math.max(0, game.blackMs - elapsed) + game.incrementMs;
         game.turnStartedAt = now;
 
+        game.drawOfferedBy = null; // yurish qilinganda taklif kuchini yo'qotadi
+
         const status = gameStatus(game.chess);
         const update = {
           type: "move", from: msg.from, to: msg.to, fen: game.chess.fen(), turn: game.chess.turn(),
@@ -549,6 +562,34 @@ export async function pvpRoutes(app: FastifyInstance) {
       if (msg.type === "resign") {
         const isWhite = game.white.socket === socket;
         endGame(game, isWhite ? "black_wins_resign" : "white_wins_resign");
+        return;
+      }
+
+      if (msg.type === "draw_offer") {
+        const myColor: "w" | "b" = game.white.socket === socket ? "w" : "b";
+        const opponentSocket = myColor === "w" ? game.black.socket : game.white.socket;
+        game.drawOfferedBy = myColor;
+        send(opponentSocket, { type: "draw_offered" });
+        return;
+      }
+
+      if (msg.type === "draw_accept") {
+        const myColor: "w" | "b" = game.white.socket === socket ? "w" : "b";
+        if (game.drawOfferedBy && game.drawOfferedBy !== myColor) {
+          game.drawOfferedBy = null;
+          endGame(game, "draw_agreement");
+        }
+        return;
+      }
+
+      if (msg.type === "draw_decline") {
+        const myColor: "w" | "b" = game.white.socket === socket ? "w" : "b";
+        if (game.drawOfferedBy && game.drawOfferedBy !== myColor) {
+          const offererSocket = game.drawOfferedBy === "w" ? game.white.socket : game.black.socket;
+          game.drawOfferedBy = null;
+          send(offererSocket, { type: "draw_declined" });
+        }
+        return;
       }
     });
 

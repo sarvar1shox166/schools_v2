@@ -285,20 +285,36 @@ export default function StudentDashboard() {
               display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(239,68,68,.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444" }} />
+                <div style={{ width: 42, height: 42, borderRadius: 10, background: nextLesson.teacherJoined ? "rgba(239,68,68,.15)" : "rgba(234,179,8,.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: nextLesson.teacherJoined ? "#ef4444" : "#eab308" }} />
                 </div>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ background: "rgba(239,68,68,.15)", color: "#f87171", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 8 }}>● LIVE hozir</div>
+                    {nextLesson.teacherJoined ? (
+                      <div style={{ background: "rgba(239,68,68,.15)", color: "#f87171", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 8 }}>● LIVE hozir</div>
+                    ) : (
+                      <div style={{ background: "rgba(234,179,8,.15)", color: "#facc15", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 8 }}>⏳ O'qituvchi hali kelmadi</div>
+                    )}
                     <div style={{ color: "#8b8d98", fontSize: 12.5 }}>{nextLesson.startTime.slice(0, 5)}</div>
                   </div>
                   <div style={{ color: "#f5f5f6", fontSize: 15, fontWeight: 700, marginTop: 4 }}>{nextLesson.groupName ?? nextLesson.customName ?? "Dars"}</div>
                   {nextLesson.teacherName && <div style={{ color: "#65666f", fontSize: 12.5, marginTop: 2 }}>{nextLesson.teacherName}</div>}
                 </div>
               </div>
-              {nextLesson.meetingUrl && (
-                <button onClick={() => { joinLesson.mutate(nextLesson.id); window.open(nextLesson.meetingUrl!, "_blank", "noreferrer"); }}
+              {/* O'qituvchi hali darsga kirmagan bo'lsa, o'quvchi ham kira olmaydi —
+                  backend /me/attendance/join ham buni tekshiradi. "Hali kelmadi"
+                  xabari onlayn/offlayn darsdan qat'i nazar ko'rsatiladi (bu sof
+                  ma'lumot), lekin "Kirish" tugmasi faqat haqiqiy havola (meetingUrl)
+                  bor onlayn darslarda chiqadi — offlayn darsda bosadigan joy yo'q. */}
+              {!nextLesson.teacherJoined ? (
+                <div style={{ color: "#8b8d98", fontSize: 12.5, fontWeight: 600, fontStyle: "italic" }}>
+                  Dars boshlandi, lekin o'qituvchi hali kelmadi
+                </div>
+              ) : nextLesson.meetingUrl && (
+                <button onClick={async () => {
+                    const res = await joinLesson.mutateAsync(nextLesson.id);
+                    if (res?.ok !== false) window.open(nextLesson.meetingUrl!, "_blank", "noreferrer");
+                  }}
                   disabled={joinLesson.isPending}
                   style={{ display: "flex", alignItems: "center", gap: 6, background: "#22c55e", color: "#fff", fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 9, border: "none", cursor: joinLesson.isPending ? "default" : "pointer", opacity: joinLesson.isPending ? 0.7 : 1 }}>
                   ● Darsga kirish →

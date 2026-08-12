@@ -1,4 +1,8 @@
-import type { PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
+
+// Ba'zi chaqiruvchilar tranzaksiya ichida (PoolClient), ba'zilari esa
+// to'g'ridan-to'g'ri pool orqali (masalan sweep job) ishlaydi.
+type Queryable = Pool | PoolClient;
 
 // schedule_slots.lesson_type uses Uzbek values ('guruh'/'individual'/'diagnostika');
 // lesson_sessions.lesson_type uses the English enum ('group'/'individual'/'diagnostic').
@@ -8,7 +12,7 @@ const UZ_TO_EN_LESSON_TYPE: Record<string, "group" | "individual" | "diagnostic"
   diagnostika: "diagnostic",
 };
 
-export async function recordLessonSession(client: PoolClient, scheduleSlotId: string, date: string) {
+export async function recordLessonSession(client: Queryable, scheduleSlotId: string, date: string) {
   const slotRes = await client.query(
     `SELECT sl.group_id, COALESCE(sl.teacher_id, g.teacher_id) AS teacher_id, sl.lesson_type
      FROM schedule_slots sl
@@ -19,6 +23,21 @@ export async function recordLessonSession(client: PoolClient, scheduleSlotId: st
   if (slotRes.rows.length === 0) return;
   const { group_id: groupId, teacher_id: teacherId, lesson_type: rawLessonType } = slotRes.rows[0];
   if (!teacherId) return; // no teacher assigned — nothing to pay
+
+  // O'qituvchi darsga o'zi kirmagan (yoki "kelmadi" deb belgilangan) bo'lsa —
+  // to'lov yozilmaydi. Agar oldin (xato bilan) to'lov yozilgan bo'lsa, endi
+  // o'qituvchi "kelmadi" deb tuzatilganda ham shu yerdan o'chirib tashlanadi.
+  const taRes = await client.query(
+    `SELECT status FROM teacher_attendance WHERE teacher_id = $1 AND schedule_slot_id = $2 AND date = $3`,
+    [teacherId, scheduleSlotId, date]
+  );
+  if (!["p", "l"].includes(taRes.rows[0]?.status)) {
+    await client.query(
+      `DELETE FROM lesson_sessions WHERE schedule_slot_id = $1 AND date = $2`,
+      [scheduleSlotId, date]
+    );
+    return;
+  }
 
   const lessonType = UZ_TO_EN_LESSON_TYPE[rawLessonType] ?? "group";
 

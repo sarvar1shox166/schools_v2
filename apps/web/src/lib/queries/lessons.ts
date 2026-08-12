@@ -20,7 +20,8 @@ export function useMarkAttendance() {
 export function useJoinLesson() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (scheduleSlotId: string) => (await api.post("/me/attendance/join", { scheduleSlotId })).data,
+    mutationFn: async (scheduleSlotId: string) =>
+      (await api.post<{ ok: boolean; reason?: string }>("/me/attendance/join", { scheduleSlotId })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["myPackages"] });
       qc.invalidateQueries({ queryKey: ["attendanceStats"] });
