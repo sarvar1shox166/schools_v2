@@ -2,6 +2,7 @@ import fp from "fastify-plugin";
 import jwt from "@fastify/jwt";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../env.js";
+import { getUserAuthState } from "../modules/auth/auth.service.js";
 
 export type Role =
   | "super_admin" | "admin" | "teacher" | "student"
@@ -52,6 +53,15 @@ export default fp(async (app) => {
     try {
       await request.jwtVerify();
     } catch {
+      reply.code(401).send({ error: "Unauthorized" });
+      return;
+    }
+    // Access-token imzosi to'g'ri bo'lsa ham, hisob o'chirilgan yoki
+    // faolsizlantirilgan bo'lishi mumkin (masalan admin o'quvchini o'chirdi) —
+    // bunday holda eski (hali muddati tugamagan) tokendan foydalanish darhol
+    // to'xtatiladi, 15 daqiqa kutilmaydi.
+    const state = await getUserAuthState(request.user.sub);
+    if (!state || !state.isActive) {
       reply.code(401).send({ error: "Unauthorized" });
     }
   });

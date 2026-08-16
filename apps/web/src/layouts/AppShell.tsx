@@ -106,7 +106,11 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   const [pvpModalOpen, setPvpModalOpen] = useState(false);
   const { data: xpData } = useMyXp(isStudent);
 
-  const studentMeta = isStudent ? (STUDENT_PAGE_META[location.pathname] ?? { title, sub: "" }) : null;
+  const studentMeta = isStudent
+    ? (STUDENT_PAGE_META[location.pathname]
+        ?? (location.pathname.startsWith("/student/puzzles/") ? STUDENT_PAGE_META["/student/puzzles"] : undefined)
+        ?? { title, sub: "" })
+    : null;
 
   const pageMeta = isStudent
     ? studentMeta
@@ -126,8 +130,18 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
   const [mobOpen, setMobOpen] = useState(false);
   const [streakModalOpen, setStreakModalOpen] = useState(false);
   const [notifModalOpen, setNotifModalOpen] = useState(false);
+  // 1024px dan tor ekranlarda sidebar doim yashirin overlay sifatida ishlaydi
+  // (hamburger orqali ochiladi) — kengroq ekranda esa oddiy doimiy ustun.
+  const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < 1025);
+  useEffect(() => {
+    const h = () => setIsNarrow(window.innerWidth < 1025);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
   // Close mobile sidebar on route change
   useEffect(() => { setMobOpen(false); }, [location.pathname]);
+  // Ekran 1025px dan kichraysa, ochiq turgan sidebar avtomatik yopiladi.
+  useEffect(() => { if (isNarrow) setMobOpen(false); }, [isNarrow]);
 
   useEffect(() => {
     const t = isStudent ? "dark" : theme;
@@ -172,14 +186,24 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
     }));
   }, [roleFilteredNav, unread?.count]);
 
+  // Tor ekranda sidebar ko'rinishini "mob-open" boshqaradi (barcha rollar
+  // uchun bir xil overlay xatti-harakati); keng ekranda esa desktop'ning
+  // doimiy "collapsed" (ingichka/kengaytirilgan) holati ishlatiladi.
+  const navExpanded = isNarrow ? mobOpen : !collapsed;
+
+  // Diqqatni jamlash rejimi — o'quvchi boshqotirma yechayotganda sidebar
+  // butunlay olib tashlanadi (orqaga tugmasi va sahifa ichidagi dropdown
+  // orqali navigatsiya qilinadi), chalg'ituvchi elementlar bo'lmasligi uchun.
+  const hideSidebar = isStudent && location.pathname.startsWith("/student/puzzles/");
+
   return (
-    <div className={"app" + (isStudent ? " kid-theme" : "") + (!isStudent && collapsed ? " collapsed" : "") + (isStudent && mobOpen ? " mob-open" : "")}>
+    <div className={"app" + (isStudent ? " kid-theme" : "") + (!isStudent && !isNarrow && collapsed ? " collapsed" : "") + (mobOpen ? " mob-open" : "") + (hideSidebar ? " no-sidebar" : "")}>
       <XpToastHost />
       <VideoUploadToast />
       {isStudent && <AutoLessonReviewPrompt />}
       {/* Mobile backdrop — clicks close the sidebar */}
-      <div className="mob-backdrop" onClick={() => isStudent ? setMobOpen(false) : setCollapsed(true)} />
-      {filteredNav && (
+      {!hideSidebar && <div className="mob-backdrop" onClick={() => setMobOpen(false)} />}
+      {filteredNav && !hideSidebar && (
         <Sidebar
           sections={filteredNav}
           brandSub={title}
@@ -191,12 +215,14 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
         <header className="topbar">
           {isStudent ? (
             <>
-              <button className="mob-hamburger" onClick={() => setMobOpen(true)} title="Menyu">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/>
-                </svg>
-              </button>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              {!hideSidebar && (
+                <button className="mob-hamburger" onClick={() => setMobOpen(true)} title="Menyu">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/>
+                  </svg>
+                </button>
+              )}
+              <div className="topbar-title-block" style={{ flex: 1, minWidth: 0 }}>
                 <div className="kid-tb-title">{studentMeta?.title ?? title}</div>
                 {studentMeta?.sub && <div className="kid-tb-sub">{studentMeta.sub}</div>}
               </div>
@@ -244,22 +270,22 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
             </>
           ) : (
             <>
-              {/* Sidebar collapse toggle */}
+              {/* Sidebar toggle — tor ekranda overlay'ni och/yop, keng ekranda ingichka/keng almashtiradi */}
               <button
                 className="iconbtn"
-                onClick={toggleCollapse}
-                title={collapsed ? "Kengaytirish" : "Yig'ish"}
+                onClick={() => (isNarrow ? setMobOpen((o) => !o) : toggleCollapse())}
+                title={navExpanded ? "Yig'ish" : "Kengaytirish"}
                 style={{ flexShrink: 0 }}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  {collapsed ? (
-                    <><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></>
-                  ) : (
+                  {navExpanded ? (
                     <><line x1="2" y1="4" x2="10" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="10" y2="12"/></>
+                  ) : (
+                    <><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></>
                   )}
                 </svg>
               </button>
-              <div style={{ minWidth: 0 }}>
+              <div className="topbar-title-block" style={{ minWidth: 0 }}>
                 <h1 style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1 }}>{pageMeta?.title ?? title}</h1>
                 {pageMeta?.sub && (
                   <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>{pageMeta.sub}</div>

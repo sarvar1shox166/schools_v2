@@ -37,6 +37,7 @@ import TLessonHistoryPage from "./pages/teacher/TLessonHistoryPage.js";
 import TLiveLessonPage from "./pages/teacher/TLiveLessonPage.js";
 import StudentDashboard from "./pages/student/StudentDashboard.js";
 import PuzzlesPage from "./pages/student/PuzzlesPage.js";
+import PuzzleSolvePage from "./pages/student/PuzzleSolvePage.js";
 import LeaderboardPage from "./pages/student/LeaderboardPage.js";
 import PvpPage from "./pages/student/PvpPage.js";
 import PvpGamePage from "./pages/student/PvpGamePage.js";
@@ -215,6 +216,7 @@ export default function App() {
           <Route path="/student/learn/:topicId/:levelNumber"  element={<LearnLevelPage />} />
           <Route path="/student/lessons"               element={<LessonsPage />} />
           <Route path="/student/puzzles"               element={<PuzzlesPage />} />
+          <Route path="/student/puzzles/:section"      element={<PuzzleSolvePage />} />
           <Route path="/student/videos"                element={<VideosPage />} />
           <Route path="/student/videos/watch/:videoId" element={<VideoWatchPage />} />
           <Route path="/student/pvp"                   element={<PvpPage />} />

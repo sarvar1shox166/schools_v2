@@ -140,6 +140,9 @@ svg.ic { display: block; flex: none; }
   overflow: hidden;
 }
 .app.collapsed { --sb-w: 76px; }
+/* Diqqatni jamlash rejimi — sidebar butunlay olib tashlanadi (masalan
+ * boshqotirma yechish sahifasida), bola chalg'imasligi uchun. */
+.app.no-sidebar { grid-template-columns: 1fr; }
 
 /* Desktop: backdrop always hidden (shown only on mobile via media query) */
 .mob-backdrop { display: none; }
@@ -1093,12 +1096,14 @@ body { transition: background .3s, color .3s; }
   .content { padding: 20px 20px 60px; }
 }
 
-/* Mobile: to'liq qayta tuzilish */
-@media (max-width: 768px) {
+/* Mobile/tablet: to'liq qayta tuzilish — 1024px dan kichik ekranlarda
+ * sidebar doim overlay sifatida yashirin turadi (hamburger orqali ochiladi),
+ * aks holda planshetlarda sidebar doimiy ustun sifatida joy siqib qo'yardi. */
+@media (max-width: 1024px) {
   /* App grid — sidebar uchun joy yo'q */
   .app { grid-template-columns: 1fr; }
 
-  /* Sidebar: fixed overlay sifatida */
+  /* Sidebar: fixed overlay sifatida, standart holatda yashirin */
   .sidebar {
     position: fixed;
     top: 0; left: 0; bottom: 0;
@@ -1109,12 +1114,8 @@ body { transition: background .3s, color .3s; }
     box-shadow: 4px 0 28px rgba(0,0,0,.45);
   }
 
-  /* Sidebar ochiq holatda (not collapsed = ochiq) */
-  .app:not(.collapsed) .sidebar { transform: translateX(0); }
-
-  /* Kid theme sidebar (student) — ham overlay */
-  .app.kid-theme.mob-open .sidebar { transform: translateX(0); }
-  .app.kid-theme .sidebar { transform: translateX(-100%); }
+  /* "mob-open" klassi (barcha rollar uchun bir xil) — sidebar ochiq */
+  .app.mob-open .sidebar { transform: translateX(0); }
 
   /* Backdrop — sidebar ochiqda orqa */
   .mob-backdrop {
@@ -1125,8 +1126,12 @@ body { transition: background .3s, color .3s; }
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
   }
-  .app:not(.collapsed) .mob-backdrop,
-  .app.kid-theme.mob-open .mob-backdrop { display: block; }
+  .app.mob-open .mob-backdrop { display: block; }
+
+  /* Topbar sarlavhasi (title/sub) — planshet va telefonda joy tejash uchun
+   * yashiriladi, faqat muhim boshqaruv elementlari (hamburger, qidiruv,
+   * ikonalar) qoladi. */
+  .topbar-title-block { display: none; }
 
   /* Topbar */
   .topbar { padding: 0 14px; height: 60px; gap: 12px; }
@@ -1154,9 +1159,6 @@ body { transition: background .3s, color .3s; }
   .kids-hero { min-height: 200px; }
   .kids-hero-content { padding: 20px 20px; }
   .kids-hero h1 { font-size: 20px; }
-
-  /* Hide collapse button label */
-  .app.collapsed { --sb-w: 0px; }
 }
 
 /* Very small screens */
@@ -1240,6 +1242,6 @@ body { transition: background .3s, color .3s; }
   place-items: center; cursor: pointer; flex: none;
   transition: all .15s;
 }
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .mob-hamburger { display: grid; }
 }
