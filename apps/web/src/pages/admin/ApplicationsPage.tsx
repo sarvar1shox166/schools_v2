@@ -9,6 +9,8 @@ import {
   useConvertApplication,
   useDeleteApplication,
   useTeachers,
+  useResetStudentPassword,
+  useCreateApplicationAccount,
   Application,
 } from "../../lib/queries.js";
 
@@ -69,12 +71,15 @@ export default function ApplicationsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editApp, setEditApp]   = useState<Application | null>(null);
   const [convertResult, setConvertResult] = useState<{ studentId: string; tempPassword: string } | null>(null);
+  const [pwResultMode, setPwResultMode] = useState<"created" | "reset">("created");
 
   const { data: apps = [], isLoading } = useApplications();
   const { data: appStats } = useApplicationStats();
   const deleteApp   = useDeleteApplication();
   const updateApp   = useUpdateApplication();
   const convertApp  = useConvertApplication();
+  const resetPassword = useResetStudentPassword();
+  const createAccount = useCreateApplicationAccount();
 
   const total          = apps.length;
   const diagnostika    = appStats?.diagnostika ?? 0;
@@ -112,7 +117,31 @@ export default function ApplicationsPage() {
   async function handleConvert(id: string) {
     try {
       const result = await convertApp.mutateAsync(id);
+      setPwResultMode("created");
       setConvertResult(result);
+    } catch { /* toast global handlerda ko'rsatiladi */ }
+  }
+
+  // Diagnostika uchun yaratilgan o'quvchi hisobining paroli faqat yaratilgan
+  // zumda bir marta ko'rsatiladi (bazada hash saqlanadi, ochiq matn emas) —
+  // shu tugma orqali istalgan payt yangi vaqtinchalik parol olib, oilaga
+  // qayta yuborish mumkin.
+  async function handleShowPassword(studentId: string) {
+    try {
+      const res = await resetPassword.mutateAsync(studentId);
+      setPwResultMode("reset");
+      setConvertResult({ studentId, tempPassword: res.tempPassword });
+    } catch { /* toast global handlerda ko'rsatiladi */ }
+  }
+
+  // Diagnostika arizasiga hali hisob biriktirilmagan bo'lsa (masalan avval
+  // o'qituvchi tanlanmagani uchun dars rejalashtirilmagan bo'lishi mumkin edi) —
+  // statusni o'zgartirmasdan darhol hisob va parol yaratib beradi.
+  async function handleCreateAccount(id: string) {
+    try {
+      const res = await createAccount.mutateAsync(id);
+      setPwResultMode("created");
+      setConvertResult(res);
     } catch { /* toast global handlerda ko'rsatiladi */ }
   }
 
@@ -319,6 +348,27 @@ export default function ApplicationsPage() {
                               <Icon name="userPlus" size={13} />
                             </button>
                           )}
+                          {a.convertedStudentId ? (
+                            <button
+                              className="iconbtn"
+                              style={{ width: 30, height: 30 }}
+                              title="Parolni ko'rish (yangi vaqtinchalik parol yaratiladi)"
+                              disabled={resetPassword.isPending}
+                              onClick={() => handleShowPassword(a.convertedStudentId!)}
+                            >
+                              <Icon name="eye" size={13} />
+                            </button>
+                          ) : a.status === "diagnostika" && (
+                            <button
+                              className="iconbtn"
+                              style={{ width: 30, height: 30, color: "var(--info)" }}
+                              title="O'quvchi hisobi hali yo'q — yaratish (login/parol beriladi)"
+                              disabled={createAccount.isPending}
+                              onClick={() => handleCreateAccount(a.id)}
+                            >
+                              <Icon name="userPlus" size={13} />
+                            </button>
+                          )}
                           <button
                             className="iconbtn"
                             style={{ width: 30, height: 30 }}
@@ -358,6 +408,7 @@ export default function ApplicationsPage() {
       {convertResult && (
         <ConvertResultModal
           result={convertResult}
+          mode={pwResultMode}
           onClose={() => setConvertResult(null)}
         />
       )}
@@ -469,6 +520,13 @@ function CreateAppModal({ onClose, onStudentCreated }: { onClose: () => void; on
   async function handleSubmit() {
     if (!fullName.trim()) { setErr("Ism kiritilishi shart"); return; }
     if (!phone.trim())    { setErr("Telefon kiritilishi shart"); return; }
+    // Sana/soat kiritilgan bo'lsa, lekin o'qituvchi tanlanmagan bo'lsa —
+    // avval bu ikkalasi jimgina tashlab yuborilib, dars umuman
+    // rejalashtirilmas va o'quvchi hisobi ham yaratilmas edi (admin esa
+    // "belgiladim" deb o'ylardi). Endi aniq xato ko'rsatiladi.
+    if ((diagnosticDate || diagnosticTeacherId) && !diagnosticTeacherId) {
+      setErr("Diagnostika o'qituvchisi tanlanishi shart"); return;
+    }
     if (diagnosticTeacherId && !diagnosticDate) { setErr("Diagnostika sanasi tanlanishi shart"); return; }
     setErr("");
     try {
@@ -587,6 +645,13 @@ function EditAppModal({ app, onClose, onStudentCreated }: { app: Application; on
   async function handleSubmit() {
     if (!fullName.trim()) { setErr("Ism kiritilishi shart"); return; }
     if (!phone.trim())    { setErr("Telefon kiritilishi shart"); return; }
+    // Sana/soat kiritilgan bo'lsa, lekin o'qituvchi tanlanmagan bo'lsa —
+    // avval bu ikkalasi jimgina tashlab yuborilib, dars umuman
+    // rejalashtirilmas va o'quvchi hisobi ham yaratilmas edi.
+    if ((diagnosticDate || diagnosticTeacherId) && !diagnosticTeacherId) {
+      setErr("Diagnostika o'qituvchisi tanlanishi shart"); return;
+    }
+    if (diagnosticTeacherId && !diagnosticDate) { setErr("Diagnostika sanasi tanlanishi shart"); return; }
     setErr("");
     try {
       const res = await updateApp.mutateAsync({
@@ -713,11 +778,17 @@ function EditAppModal({ app, onClose, onStudentCreated }: { app: Application; on
 /* ─── Convert result modal ─── */
 function ConvertResultModal({
   result,
+  mode = "created",
   onClose,
 }: {
   result: { studentId: string; tempPassword: string };
+  mode?: "created" | "reset";
   onClose: () => void;
 }) {
+  const title = mode === "reset" ? "Yangi parol yaratildi" : "O'quvchi yaratildi!";
+  const subtitle = mode === "reset"
+    ? "Eski parol endi ishlamaydi. Yangi vaqtinchalik parolni oilaga yuboring."
+    : "O'quvchi tizimga qo'shildi. Vaqtinchalik parolni o'quvchiga yuboring.";
   return createPortal(
     <div
       style={{
@@ -739,9 +810,9 @@ function ConvertResultModal({
         }}>
           <Icon name="check" size={28} style={{ color: "#16a34a" }} />
         </div>
-        <div style={{ fontWeight: 800, fontSize: 18 }}>O'quvchi yaratildi!</div>
+        <div style={{ fontWeight: 800, fontSize: 18 }}>{title}</div>
         <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
-          O'quvchi tizimga qo'shildi. Vaqtinchalik parolni o'quvchiga yuboring.
+          {subtitle}
         </div>
         <div style={{
           background: "var(--surface-2)", borderRadius: 12, padding: "14px 20px",

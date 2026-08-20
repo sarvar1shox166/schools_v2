@@ -306,6 +306,51 @@ export async function applicationsRoutes(app: FastifyInstance) {
     }
   });
 
+  // Diagnostika bosqichidagi arizaga hali o'quvchi hisobi biriktirilmagan
+  // bo'lsa (masalan o'qituvchi tanlanmasdan saqlangani uchun), statusni
+  // o'zgartirmasdan hisob yaratib beradi — "royxatdan o'tdi"ga o'tkazish
+  // shart emas, faqat login/parol kerak bo'lganda ishlatiladi.
+  app.post("/applications/:id/create-account", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const appRes = await client.query(
+        `SELECT full_name, phone, age, level, converted_student_id AS "convertedStudentId"
+         FROM applications WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+        [id, tenantId]
+      );
+      if (appRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "Not found" });
+      }
+      const app_ = appRes.rows[0];
+      if (app_.convertedStudentId) {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({ error: "already_has_account" });
+      }
+
+      const { studentId, tempPassword } = await createStudentAccount(client, tenantId!, {
+        fullName: app_.full_name, phone: app_.phone, age: app_.age, level: app_.level,
+      });
+      await client.query(
+        `UPDATE applications SET converted_student_id = $1, updated_at = now() WHERE id = $2`,
+        [studentId, id]
+      );
+      await client.query("COMMIT");
+      return reply.code(201).send({ studentId, tempPassword });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      if (err instanceof PhoneTakenError) return reply.code(409).send({ error: "phone_taken", message: err.message });
+      throw err;
+    } finally {
+      client.release();
+    }
+  });
+
   // Convert application to student
   app.post("/applications/:id/convert", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin", "operator")] }, async (request, reply) => {
     const { id } = request.params as { id: string };

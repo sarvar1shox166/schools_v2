@@ -8,6 +8,9 @@ import {
   useMyProfile,
   useMyStudents,
   useTodaySchedule,
+  useTeacherSchedule,
+  useUpdateLessonMeetingUrl,
+  useUpdateDefaultMeetingUrl,
 } from "../../lib/queries.js";
 
 /* ─── helpers ─── */
@@ -51,6 +54,80 @@ function useCountdown(timeStr: string | undefined) {
   };
 }
 
+/* ── Bugungi darslar havolalari — o'qituvchi FAQAT bugungi darslarining
+ *  havolasini bu yerdan tahrirlay oladi (vaqt/guruh kabi boshqa maydonlar
+ *  faqat admin orqali o'zgaradi). Qo'shimcha ish qilmaslik uchun pastda
+ *  hamma darsga ishlaydigan bitta "standart havola" ham qo'yiladi. ── */
+function MeetingLinksCard({ todaySchedule, defaultMeetingUrl }: {
+  todaySchedule: { id: string; groupName: string | null; customName: string | null; startTime: string; meetingUrl: string | null; isOnline: boolean }[];
+  defaultMeetingUrl: string | null;
+}) {
+  const updateLink = useUpdateLessonMeetingUrl();
+  const updateDefault = useUpdateDefaultMeetingUrl();
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [defaultDraft, setDefaultDraft] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+
+  const onlineLessons = todaySchedule.filter(s => s.isOnline);
+  if (onlineLessons.length === 0 && !defaultMeetingUrl) return null;
+
+  async function saveLink(id: string) {
+    const value = (drafts[id] ?? "").trim();
+    await updateLink.mutateAsync({ scheduleSlotId: id, meetingUrl: value || null });
+    setSavedId(id);
+    setTimeout(() => setSavedId(cur => (cur === id ? null : cur)), 2000);
+  }
+
+  async function saveDefault() {
+    const value = (defaultDraft ?? "").trim();
+    await updateDefault.mutateAsync(value || null);
+    setSavedId("default");
+    setTimeout(() => setSavedId(cur => (cur === "default" ? null : cur)), 2000);
+  }
+
+  return (
+    <Card style={{ padding: 20 }}>
+      <div style={{ fontWeight: 700, fontSize: 14.5, marginBottom: 4 }}>🔗 Bugungi darslar havolalari</div>
+      <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginBottom: 14 }}>
+        Havola kiritish ixtiyoriy — kiritilmasa pastdagi standart havola ishlatiladi.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {onlineLessons.map(s => (
+          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ minWidth: 140, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+              {s.startTime.slice(0, 5)} · {s.groupName ?? s.customName ?? "Dars"}
+            </div>
+            <input className="inp" style={{ flex: 1, minWidth: 200 }}
+              placeholder="https://zoom.us/j/... yoki https://meet.google.com/..."
+              value={drafts[s.id] ?? s.meetingUrl ?? ""}
+              onChange={e => setDrafts(d => ({ ...d, [s.id]: e.target.value }))} />
+            <button className="btn" style={{ fontSize: 12.5, padding: "7px 12px" }}
+              disabled={updateLink.isPending}
+              onClick={() => saveLink(s.id)}>
+              {savedId === s.id ? "✓ Saqlandi" : "Saqlash"}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: onlineLessons.length ? 18 : 0, paddingTop: onlineLessons.length ? 14 : 0, borderTop: onlineLessons.length ? "1px solid var(--border)" : "none" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Standart havola (barcha darslar uchun)</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <input className="inp" style={{ flex: 1, minWidth: 200 }}
+            placeholder="Alohida havola kiritilmagan darslarda shu ishlatiladi"
+            value={defaultDraft ?? defaultMeetingUrl ?? ""}
+            onChange={e => setDefaultDraft(e.target.value)} />
+          <button className="btn" style={{ fontSize: 12.5, padding: "7px 12px" }}
+            disabled={updateDefault.isPending}
+            onClick={saveDefault}>
+            {savedId === "default" ? "✓ Saqlandi" : "Saqlash"}
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 /* ─── page ─── */
 export default function TeacherDashboard() {
   const navigate  = useNavigate();
@@ -61,6 +138,7 @@ export default function TeacherDashboard() {
   const { data: myStudents }    = useMyStudents();
   const { data: lessons }       = useMyLessons();
   const { data: income }        = useMyIncome(currentPeriod());
+  const { data: teacherSchedule } = useTeacherSchedule();
 
   const todayLessons = useMemo(
     () => lessons?.filter(l => l.date.slice(0, 10) === date) ?? [],
@@ -76,12 +154,16 @@ export default function TeacherDashboard() {
 
   /* live / current / upcoming lesson from today's schedule */
   const nm = nowMins();
+  // Dars rejalashtirilgan vaqti tugagandan keyin ham, o'qituvchi "Darsni
+  // tugatish"ni bosmaguncha (yoki backend'dagi avtomatik yopilish — 1 soat —
+  // ishlamaguncha) dars jurnaliga kirish tugmasi ko'rinishda qolishi kerak.
+  const AUTO_END_GRACE_MIN = 60;
   const liveLesson = useMemo(() => {
     if (!todaySchedule) return undefined;
     return todaySchedule.find(s => {
       const [h, mi] = s.startTime.split(":").map(Number);
       const start = h * 60 + mi;
-      return nm >= start && nm < start + (s.durationMinutes ?? 90) && !s.isEnded;
+      return nm >= start && nm < start + (s.durationMinutes ?? 90) + AUTO_END_GRACE_MIN && !s.isEnded;
     });
   }, [todaySchedule, nm]);
   const upcomingLesson = useMemo(() => {
@@ -321,6 +403,13 @@ export default function TeacherDashboard() {
           </div>
         );
       })()}
+
+      {todaySchedule && (
+        <MeetingLinksCard
+          todaySchedule={todaySchedule}
+          defaultMeetingUrl={teacherSchedule?.defaultMeetingUrl ?? null}
+        />
+      )}
 
       {/* ── 4 KPI cards ── */}
       <div className="grid cols-4">

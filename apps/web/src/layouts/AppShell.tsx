@@ -23,6 +23,7 @@ function AutoLessonReviewPrompt() {
 const STUDENT_PAGE_META: Record<string, { title: string; sub: string }> = {
   "/student": { title: "Bosh sahifa", sub: "Xush kelibsiz!" },
   "/student/lessons": { title: "Darslarim", sub: "Haftalik jadval" },
+  "/student/homework": { title: "Uy vazifalarim", sub: "Oldingi va joriy vazifalar" },
   "/student/videos": { title: "Video darslar", sub: "O'rganish va rivojlanish" },
   "/student/learn": { title: "O'rganish", sub: "Darslar va topshiriqlar" },
   "/student/puzzles": { title: "Boshqotirmalar", sub: "Masala yeching, XP yig'ing" },

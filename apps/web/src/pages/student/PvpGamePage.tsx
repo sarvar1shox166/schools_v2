@@ -134,14 +134,21 @@ function GameOverModal({
 }
 
 /* ── Board size from container ────────────────────────────────────────────── */
+// Taxta joylashgan ustunning haqiqiy ekrandagi holatidan (getBoundingClientRect)
+// hisoblanadi — qattiq kodlangan "220px" taxminidan farqli, bu boshqa
+// ekran o'lchami/brauzer zoom darajasida ham taxtani ekrandan chiqib
+// ketishining oldini oladi (avval ba'zi kompyuterlarda taxta yarmi
+// ko'rinmay qolar, scroll ham ishlamas edi).
 function useBoardSize(ref: React.RefObject<HTMLDivElement>) {
   const [size, setSize] = useState(500);
   useEffect(() => {
     function calc() {
       const el = ref.current;
-      const availH = window.innerHeight - 220; // topbar + padding + game topbar
-      const availW = el ? el.getBoundingClientRect().width : window.innerWidth - 600;
-      setSize(Math.floor(Math.min(availW, availH, 680)));
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const availH = window.innerHeight - rect.top - 16;
+      const availW = rect.width;
+      setSize(Math.floor(Math.max(220, Math.min(availW, availH, 680))));
     }
     calc();
     const obs = ref.current ? new ResizeObserver(calc) : null;

@@ -11,6 +11,8 @@ export interface NextLesson {
   durationMinutes: number;
   isOnline: boolean;
   meetingUrl: string | null;
+  /** Dars o'ziga xos havolaga ega bo'lmasa, o'qituvchining standart havolasi. */
+  teacherDefaultMeetingUrl?: string | null;
   meetingPlatform: "zoom" | "meet";
   lessonType?: "guruh" | "individual" | "diagnostika";
   customName?: string | null;
@@ -91,6 +93,11 @@ export interface Homework {
   groupColor?: string | null;
   completionCount?: number;
   totalStudents?: number;
+  /** Vazifa qaysi dars uchun berilgani — bir guruhda bir necha marta dars
+   *  bo'lganda ularni ajratish uchun. */
+  scheduleSlotId?: string | null;
+  lessonDate?: string | null;
+  lessonTime?: string | null;
 }
 
 export function useHomework(groupId?: string) {
@@ -111,7 +118,10 @@ export function useCompleteHomework() {
 export function useCreateHomework() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { groupId: string; title: string; description?: string; dueDate?: string; xpReward?: number }) =>
+    mutationFn: async (payload: {
+      groupId: string; title: string; description?: string; dueDate?: string; xpReward?: number;
+      scheduleSlotId?: string; lessonDate?: string;
+    }) =>
       (await api.post("/homework", payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["homework"] }),
   });

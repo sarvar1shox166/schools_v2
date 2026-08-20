@@ -1,6 +1,7 @@
 import { buildApp } from "./app.js";
 import { env } from "./env.js";
 import { startTeacherAbsenceSweep } from "./modules/attendance/teacher-absence-sweep.js";
+import { startLessonAutoEndSweep } from "./modules/attendance/lesson-auto-end-sweep.js";
 
 buildApp().then((app) =>
   app
@@ -8,6 +9,7 @@ buildApp().then((app) =>
     .then((address) => {
       app.log.info(`API listening on ${address}`);
       startTeacherAbsenceSweep();
+      startLessonAutoEndSweep();
     })
     .catch((err) => {
       app.log.error(err);

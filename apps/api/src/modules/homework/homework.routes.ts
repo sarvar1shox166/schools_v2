@@ -9,6 +9,10 @@ const createSchema = z.object({
   description: z.string().optional(),
   dueDate: z.string().optional(),
   xpReward: z.number().int().nonnegative().default(30),
+  // Vazifa aynan qaysi dars uchun berilganini bildiradi — bir guruhda bir
+  // necha marta dars bo'lganda ularni ajratish uchun.
+  scheduleSlotId: z.string().uuid().optional(),
+  lessonDate: z.string().optional(),
 });
 
 const updateSchema = z.object({
@@ -46,14 +50,17 @@ export async function homeworkRoutes(app: FastifyInstance) {
         `SELECT h.id, h.title, h.description, h.due_date AS "dueDate", h.xp_reward AS "xpReward",
                 h.created_at AS "createdAt", g.name AS "groupName", g.color AS "groupColor",
                 h.group_id AS "groupId",
+                h.schedule_slot_id AS "scheduleSlotId", h.lesson_date AS "lessonDate",
+                sl.start_time AS "lessonTime",
                 COUNT(DISTINCT hc.student_id)::int AS "completionCount",
                 (SELECT COUNT(*)::int FROM group_members gm WHERE gm.group_id = h.group_id) AS "totalStudents"
          FROM homework h
          JOIN groups g ON g.id = h.group_id
          LEFT JOIN homework_completions hc ON hc.homework_id = h.id
+         LEFT JOIN schedule_slots sl ON sl.id = h.schedule_slot_id
          WHERE g.teacher_id = $1 ${groupFilter}
-         GROUP BY h.id, g.name, g.color
-         ORDER BY h.created_at DESC`,
+         GROUP BY h.id, g.name, g.color, sl.start_time
+         ORDER BY h.lesson_date DESC NULLS LAST, sl.start_time DESC NULLS LAST, h.created_at DESC`,
         params
       );
       return rows;
@@ -74,10 +81,13 @@ export async function homeworkRoutes(app: FastifyInstance) {
         `SELECT h.id, h.title, h.description, h.due_date AS "dueDate", h.xp_reward AS "xpReward",
                 h.created_at AS "createdAt", g.name AS "groupName", g.color AS "groupColor",
                 h.group_id AS "groupId",
+                h.schedule_slot_id AS "scheduleSlotId", h.lesson_date AS "lessonDate",
+                sl.start_time AS "lessonTime",
                 EXISTS(SELECT 1 FROM homework_completions hc WHERE hc.homework_id = h.id AND hc.student_id = $1) AS done
          FROM homework h
          JOIN groups g ON g.id = h.group_id
          JOIN group_members gm ON gm.group_id = h.group_id AND gm.student_id = $1
+         LEFT JOIN schedule_slots sl ON sl.id = h.schedule_slot_id
          WHERE h.tenant_id = (SELECT tenant_id FROM students WHERE id = $1) ${groupFilter}
          ORDER BY h.due_date ASC NULLS LAST, h.created_at DESC`,
         params
@@ -94,13 +104,16 @@ export async function homeworkRoutes(app: FastifyInstance) {
       `SELECT h.id, h.title, h.description, h.due_date AS "dueDate", h.xp_reward AS "xpReward",
               h.created_at AS "createdAt", g.name AS "groupName", g.color AS "groupColor",
               h.group_id AS "groupId",
+              h.schedule_slot_id AS "scheduleSlotId", h.lesson_date AS "lessonDate",
+              sl.start_time AS "lessonTime",
               COUNT(hc.student_id)::int AS "completionCount"
        FROM homework h
        JOIN groups g ON g.id = h.group_id
        LEFT JOIN homework_completions hc ON hc.homework_id = h.id
+       LEFT JOIN schedule_slots sl ON sl.id = h.schedule_slot_id
        WHERE h.tenant_id = $1 ${groupFilter}
-       GROUP BY h.id, g.name, g.color
-       ORDER BY h.created_at DESC`,
+       GROUP BY h.id, g.name, g.color, sl.start_time
+       ORDER BY h.lesson_date DESC NULLS LAST, sl.start_time DESC NULLS LAST, h.created_at DESC`,
       params
     );
     return rows;
@@ -124,9 +137,12 @@ export async function homeworkRoutes(app: FastifyInstance) {
     if (groupCheck.rows.length === 0) return reply.code(400).send({ error: "Guruh topilmadi" });
 
     const { rows } = await pool.query(
-      `INSERT INTO homework (tenant_id, group_id, title, description, due_date, xp_reward)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [tenantId, body.groupId, body.title, body.description ?? null, body.dueDate ?? null, body.xpReward]
+      `INSERT INTO homework (tenant_id, group_id, title, description, due_date, xp_reward, schedule_slot_id, lesson_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [
+        tenantId, body.groupId, body.title, body.description ?? null, body.dueDate ?? null, body.xpReward,
+        body.scheduleSlotId ?? null, body.lessonDate ?? null,
+      ]
     );
     return reply.code(201).send({ id: rows[0].id });
   });

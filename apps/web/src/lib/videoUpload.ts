@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
-import { queryClient } from "../main.js";
+import { queryClient } from "./queryClient.js";
 
 // Backend cheklovi bilan bir xil bo'lishi kerak (apps/api/src/lib/storage.ts UPLOAD_LIMITS.video).
 export const MAX_VIDEO_UPLOAD_BYTES = 3 * 1024 * 1024 * 1024; // 3 GB

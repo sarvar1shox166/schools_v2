@@ -73,5 +73,9 @@ export interface ScheduleSlot {
   isRescheduled?: boolean;
   /** Bugun uchun o'qituvchi tomonidan allaqachon yakunlangan darsmi (lessons jadvali orqali). */
   endedToday?: boolean;
+  /** /schedule/today va /me/schedule/next ga xos: dars o'ziga xos havolaga ega
+   *  bo'lmasa, o'qituvchining standart havolasi shu yerda keladi — darsga
+   *  kirish tugmasi meetingUrl bo'sh bo'lsa shuni ishlatishi kerak. */
+  teacherDefaultMeetingUrl?: string | null;
 }
 

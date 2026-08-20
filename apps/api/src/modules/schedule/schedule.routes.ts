@@ -163,6 +163,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
               sl.room_id AS "roomId", r.name AS "roomName",
               COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId",
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
+              COALESCE(t2.default_meeting_url, t.default_meeting_url) AS "teacherDefaultMeetingUrl",
               sl.meeting_platform AS "meetingPlatform",
               sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
               COALESCE(tu2.full_name, tu.full_name) AS "teacherName",
@@ -223,6 +224,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
               sl.day_of_week AS "dayOfWeek", sl.start_time AS "startTime",
               sl.duration_minutes AS "durationMinutes", sl.specific_date AS "specificDate",
               sl.is_online AS "isOnline", sl.meeting_url AS "meetingUrl",
+              COALESCE(t2.default_meeting_url, t.default_meeting_url) AS "teacherDefaultMeetingUrl",
               sl.meeting_platform AS "meetingPlatform",
               sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
               COALESCE(t2.id, t.id) AS "teacherId",
@@ -428,10 +430,56 @@ export async function scheduleRoutes(app: FastifyInstance) {
       }
     }
 
+    const defaultUrlRes = await pool.query(
+      `SELECT default_meeting_url AS "defaultMeetingUrl" FROM teachers WHERE id = $1`,
+      [teacherId]
+    );
+
     return {
       slots: rows,
       groups: Array.from(groupMap.values()),
+      defaultMeetingUrl: defaultUrlRes.rows[0]?.defaultMeetingUrl ?? null,
     };
+  });
+
+  // O'qituvchi o'zining BUGUNGI darsi uchun havolani kiritadi/o'zgartiradi —
+  // boshqa maydonlarni (vaqt, guruh va h.k.) faqat admin tahrirlay oladi,
+  // shuning uchun bu alohida, tor doiradagi endpoint.
+  app.patch("/me/schedule/:id/meeting-url", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {
+    const { sub, tenantId } = request.user;
+    const { id } = request.params as { id: string };
+    const body = z.object({ meetingUrl: z.string().url().nullable() }).parse(request.body);
+
+    const teacherRes = await pool.query(`SELECT id FROM teachers WHERE user_id = $1`, [sub]);
+    const teacherId = teacherRes.rows[0]?.id;
+    if (!teacherId) return reply.code(404).send({ error: "Teacher not found" });
+
+    const result = await pool.query(
+      `UPDATE schedule_slots sl SET meeting_url = $1
+       WHERE sl.id = $2 AND sl.tenant_id = $3
+         AND (
+           sl.teacher_id = $4
+           OR sl.group_id IN (SELECT id FROM groups WHERE teacher_id = $4)
+         )
+       RETURNING sl.id`,
+      [body.meetingUrl, id, tenantId, teacherId]
+    );
+    if (result.rows.length === 0) return reply.code(404).send({ error: "Dars topilmadi" });
+    return { ok: true };
+  });
+
+  // O'qituvchining barcha darslari uchun standart (zaxira) havolasi — alohida
+  // havola kiritilmagan darslarda shu ishlatiladi.
+  app.patch("/me/teacher/default-meeting-url", { onRequest: [app.requireRole("teacher")] }, async (request, reply) => {
+    const { sub } = request.user;
+    const body = z.object({ defaultMeetingUrl: z.string().url().nullable() }).parse(request.body);
+
+    const result = await pool.query(
+      `UPDATE teachers SET default_meeting_url = $1 WHERE user_id = $2 RETURNING id`,
+      [body.defaultMeetingUrl, sub]
+    );
+    if (result.rows.length === 0) return reply.code(404).send({ error: "Teacher not found" });
+    return { ok: true };
   });
 
   app.post("/schedule", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {

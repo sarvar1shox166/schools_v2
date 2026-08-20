@@ -6,6 +6,7 @@ export async function consumeLesson(client: PoolClient, studentId: string): Prom
   const { rows } = await client.query(
     `SELECT id, used_lessons, total_lessons FROM student_packages
      WHERE student_id = $1 AND status = 'active' AND used_lessons < total_lessons
+       AND (expires_at IS NULL OR expires_at >= CURRENT_DATE)
      ORDER BY purchased_at ASC LIMIT 1 FOR UPDATE`,
     [studentId]
   );

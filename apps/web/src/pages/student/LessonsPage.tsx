@@ -43,6 +43,14 @@ function fmtDayLabel(iso: string): string {
   return `${DAY_SHORT[(d.getDay() + 6) % 7]}, ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 }
 
+/** "20.08, 09:00" — vazifa qaysi dars uchun berilganini ko'rsatadi. */
+function fmtLessonDateTime(date: string | null | undefined, time: string | null | undefined): string | null {
+  if (!date) return null;
+  const d = new Date(date);
+  const label = `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return time ? `${label}, ${time.slice(0, 5)}` : label;
+}
+
 // `[matn](https://...)` va oddiy "https://..." havolalarni bosiladigan
 // <a> elementlarga aylantiradi — qolgan matn o'zgarishsiz qoladi.
 const LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
@@ -69,9 +77,10 @@ function renderTextWithLinks(text: string): React.ReactNode[] {
 
 /* ── Uy vazifasi qatori — bosilsa "matn" (tavsifdan tashqari yozilgan
    qo'shimcha matn/havola) ochilib ko'rinadi ─────────────────────────────── */
-function HomeworkRow({ hw, onComplete }: { hw: Homework; onComplete: (id: string, xp: number) => void }) {
+export function HomeworkRow({ hw, onComplete }: { hw: Homework; onComplete: (id: string, xp: number) => void }) {
   const [expanded, setExpanded] = useState(false);
   const hasDescription = !!hw.description?.trim();
+  const lessonLabel = fmtLessonDateTime(hw.lessonDate, hw.lessonTime);
 
   return (
     <div style={{
@@ -102,14 +111,23 @@ function HomeworkRow({ hw, onComplete }: { hw: Homework; onComplete: (id: string
                 <Icon name="chevronDown" size={12} style={{ color: "#65666f", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
               )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, lineHeight: 1.3 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap", lineHeight: 1.3 }}>
+              {lessonLabel && (
+                <div style={{ background: "#18181c", border: "1px solid #232328", color: "#8b8d98", fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 8 }}>
+                  📅 {lessonLabel}
+                </div>
+              )}
+              {hw.groupName && (
+                <div style={{ background: hw.groupColor ?? "#3b82f6", color: "#fff", fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 8 }}>
+                  {hw.groupName}
+                </div>
+              )}
               {hw.dueDate && (
                 <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#8b8d98", fontSize: 11.5 }}>
                   <Icon name="clock" size={11} />
                   {fmtDueDate(hw.dueDate)}
                 </div>
               )}
-              {hw.dueDate && <div style={{ color: "#4a4b52", fontSize: 11.5 }}>·</div>}
               <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#fbbf24", fontSize: 11.5, fontWeight: 700 }}>
                 +{hw.xpReward} XP
               </div>

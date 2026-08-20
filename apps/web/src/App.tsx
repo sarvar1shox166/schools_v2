@@ -44,6 +44,7 @@ import PvpGamePage from "./pages/student/PvpGamePage.js";
 import VideosPage from "./pages/student/VideosPage.js";
 import VideoWatchPage from "./pages/student/VideoWatchPage.js";
 import LessonsPage from "./pages/student/LessonsPage.js";
+import HomeworkPage from "./pages/student/HomeworkPage.js";
 import LearnPage from "./pages/student/LearnPage.js";
 import LearnLevelPage from "./pages/student/LearnLevelPage.js";
 import ProfilePage from "./pages/student/ProfilePage.js";
@@ -137,6 +138,7 @@ const STUDENT_NAV: NavSection[] = [
     items: [
       { to: "/student",            label: "Bosh sahifa",    icon: "dashboard",   emoji: "🏠", navId: "home" },
       { to: "/student/lessons",    label: "Darslarim",      icon: "calendarCheck",emoji: "📅", navId: "schedule" },
+      { to: "/student/homework",   label: "Uy vazifalarim", icon: "bookOpen",    emoji: "📝", navId: "homework" },
       { to: "/student/videos",     label: "Video darslar",  icon: "video",       emoji: "🎬", navId: "video" },
       { to: "/student/learn",      label: "O'rganish",      icon: "bookOpen",    emoji: "📚", navId: "learn", locked: true },
       { to: "/student/puzzles",    label: "Boshqotirmalar", icon: "pieces",      emoji: "🧩", navId: "puzzle" },
@@ -215,6 +217,7 @@ export default function App() {
           <Route path="/student/learn"                       element={<LearnPage />} />
           <Route path="/student/learn/:topicId/:levelNumber"  element={<LearnLevelPage />} />
           <Route path="/student/lessons"               element={<LessonsPage />} />
+          <Route path="/student/homework"              element={<HomeworkPage />} />
           <Route path="/student/puzzles"               element={<PuzzlesPage />} />
           <Route path="/student/puzzles/:section"      element={<PuzzleSolvePage />} />
           <Route path="/student/videos"                element={<VideosPage />} />

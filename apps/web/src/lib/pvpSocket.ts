@@ -1,5 +1,18 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "./auth-store.js";
+import { queryClient } from "./queryClient.js";
+
+// O'yin (real raqib bilan) tugaganda ELO serverda yangilanadi, lekin bu
+// modul React Query'dan mustaqil (WebSocket orqali ishlaydi) — shu sabab
+// natija kelganda tegishli so'rovlarni qo'lda eskirgan deb belgilaymiz,
+// aks holda "Reyting" sahifasi va profil sahifadan chiqib-kirmaguncha
+// eski (masalan 1200) qiymatni ko'rsatib turaverardi.
+function invalidatePvpResultQueries() {
+  queryClient.invalidateQueries({ queryKey: ["myXp"] });
+  queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+  queryClient.invalidateQueries({ queryKey: ["eloHistory"] });
+  queryClient.invalidateQueries({ queryKey: ["gameStats"] });
+}
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -220,12 +233,13 @@ function connect(token: string) {
           ...clockPatch,
           ...(gameOver ? { result: msg.result as string, status: "finished" as PvpStatus } : {}),
         });
-        if (gameOver) stopTimer();
+        if (gameOver) { stopTimer(); invalidatePvpResultQueries(); }
         break;
       }
       case "ended":
         stopTimer();
         setState({ result: msg.reason as string, status: "finished", opponentDisconnected: false });
+        invalidatePvpResultQueries();
         break;
       case "error":
         setState({ error: msg.message as string });

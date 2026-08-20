@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { queryClient } from "../main.js";
+import { queryClient } from "./queryClient.js";
 import { useAuthStore } from "./auth-store.js";
 
 let ws: WebSocket | null = null;

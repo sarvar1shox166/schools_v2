@@ -94,6 +94,18 @@ export function useConvertApplication() {
   });
 }
 
+export function useCreateApplicationAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post<{ studentId: string; tempPassword: string }>(`/applications/${id}/create-account`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["applications"] });
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
+  });
+}
+
 export function useDeleteApplication() {
   const qc = useQueryClient();
   return useMutation({

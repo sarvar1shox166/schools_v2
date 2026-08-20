@@ -33,6 +33,14 @@ function formatDueDate(d: string | null) {
   return `${dt.getDate()}-${MONTH_FULL[dt.getMonth()]}`;
 }
 
+/** "20-avgust, 09:00" — vazifa qaysi dars uchun berilganini ko'rsatadi. */
+function formatLessonDateTime(date: string | null | undefined, time: string | null | undefined) {
+  if (!date) return null;
+  const dt = new Date(date);
+  const dateLabel = `${dt.getDate()}-${MONTH_FULL[dt.getMonth()]}`;
+  return time ? `${dateLabel}, ${time.slice(0, 5)}` : dateLabel;
+}
+
 function pillStyle(active: boolean, color: string): React.CSSProperties {
   return active
     ? { background: color, color: "#fff", fontSize: 11.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer" }
@@ -92,7 +100,15 @@ function RichToolbar({ onInsertLink }: { onInsertLink?: () => void }) {
 
 /* ── Bugungi guruh kartasi (davomat → vazifa → XP) ─────────────────────── */
 function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsCount: number }) {
-  const ended = !!slot.isEnded;
+  // "lessons" yozuvi ("Darsni tugatish" bosilganda yoki 1 soatlik avtomatik
+  // yopilishda yaratiladi) hali kelmagan bo'lishi mumkin, lekin agar
+  // rejalashtirilgan tugash vaqti allaqachon o'tgan bo'lsa — bu dars aslida
+  // tugagan, shuning uchun "kutilmoqda" emas "tugadi" deb ko'rsatiladi.
+  const [h, m] = slot.startTime.split(":").map(Number);
+  const scheduledStart = new Date();
+  scheduledStart.setHours(h, m, 0, 0);
+  const scheduledEnd = scheduledStart.getTime() + (slot.durationMinutes ?? 90) * 60000;
+  const ended = !!slot.isEnded || Date.now() >= scheduledEnd;
   const [expanded, setExpanded] = useState(false);
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const { data: students = [] } = useGroupStudents(slot.groupId);
@@ -155,7 +171,10 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
       const validItems = hwItems.filter((it) => it.title.trim());
       if (slot.groupId) {
         await Promise.all(validItems.map((it) =>
-          createHomework.mutateAsync({ groupId: slot.groupId!, title: it.title.trim(), description: it.text.trim() || undefined })
+          createHomework.mutateAsync({
+            groupId: slot.groupId!, title: it.title.trim(), description: it.text.trim() || undefined,
+            scheduleSlotId: slot.id, lessonDate: todayStr(),
+          })
         ));
       }
       const defaults: Record<string, number> = {};
@@ -369,6 +388,7 @@ function HomeworkListItem({ hw }: { hw: Homework }) {
   }
 
   const dueLabel = formatDueDate(hw.dueDate ?? null);
+  const lessonLabel = formatLessonDateTime(hw.lessonDate, hw.lessonTime);
 
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
@@ -378,14 +398,17 @@ function HomeworkListItem({ hw }: { hw: Homework }) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v15H6.5A2.5 2.5 0 004 15.5v-10z" /><path d="M4 15.5A2.5 2.5 0 016.5 18H20" /></svg>
           </div>
           <div>
-            <div style={{ color: "var(--text)", fontSize: 13.5, fontWeight: 600 }}>{hw.title}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+              {lessonLabel && (
+                <div style={{ background: "var(--surface-3)", color: "var(--text-dim)", fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 9 }}>📅 {lessonLabel}</div>
+              )}
               {hw.groupName && (
                 <div style={{ background: hw.groupColor ?? "#3b82f6", color: "#fff", fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 9 }}>{hw.groupName}</div>
               )}
-              <div style={{ color: "var(--text-faint)", fontSize: 11.5 }}>
-                {dueLabel ? `muddat ${dueLabel} · ` : ""}+{hw.xpReward} XP
-              </div>
+            </div>
+            <div style={{ color: "var(--text)", fontSize: 13.5, fontWeight: 600 }}>{hw.title}</div>
+            <div style={{ color: "var(--text-faint)", fontSize: 11.5, marginTop: 3 }}>
+              {dueLabel ? `muddat ${dueLabel} · ` : ""}+{hw.xpReward} XP
             </div>
           </div>
         </div>

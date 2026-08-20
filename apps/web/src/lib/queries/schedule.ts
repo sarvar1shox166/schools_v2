@@ -157,12 +157,37 @@ export function useDeleteHoliday() {
 export interface TeacherScheduleData {
   slots: (ScheduleSlot & { studentsCount: number })[];
   groups: { id: string; name: string; color: string | null; studentsCount: number; weeklyHours: number; slotsCount: number }[];
+  defaultMeetingUrl: string | null;
 }
 
 export function useTeacherSchedule() {
   return useQuery({
     queryKey: ["teacherSchedule"],
     queryFn: async () => (await api.get<TeacherScheduleData>("/me/teacher-schedule")).data,
+  });
+}
+
+export function useUpdateLessonMeetingUrl() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ scheduleSlotId, meetingUrl }: { scheduleSlotId: string; meetingUrl: string | null }) =>
+      (await api.patch(`/me/schedule/${scheduleSlotId}/meeting-url`, { meetingUrl })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+      qc.invalidateQueries({ queryKey: ["teacherSchedule"] });
+    },
+  });
+}
+
+export function useUpdateDefaultMeetingUrl() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (defaultMeetingUrl: string | null) =>
+      (await api.patch("/me/teacher/default-meeting-url", { defaultMeetingUrl })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["teacherSchedule"] });
+      qc.invalidateQueries({ queryKey: ["scheduleToday"] });
+    },
   });
 }
 

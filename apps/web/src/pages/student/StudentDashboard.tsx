@@ -4,6 +4,7 @@ import { Icon } from "@chess-school/ui";
 import { LessonReviewModal } from "../../components/LessonReviewModal.js";
 import { StreakModal } from "../../components/StreakModal.js";
 import { useAuthStore } from "../../lib/auth-store.js";
+import { showError } from "../../lib/errorToast.js";
 import {
   type ScheduleSlot, useAttendanceHistory, useJoinLesson, useMyPackages, useMyXp, useNextLesson,
   usePendingLessonReviews, useSchedule,
@@ -310,10 +311,16 @@ export default function StudentDashboard() {
                 <div style={{ color: "#8b8d98", fontSize: 12.5, fontWeight: 600, fontStyle: "italic" }}>
                   Dars boshlandi, lekin o'qituvchi hali kelmadi
                 </div>
-              ) : nextLesson.meetingUrl && (
+              ) : (nextLesson.meetingUrl || nextLesson.teacherDefaultMeetingUrl) && (
                 <button onClick={async () => {
                     const res = await joinLesson.mutateAsync(nextLesson.id);
-                    if (res?.ok !== false) window.open(nextLesson.meetingUrl!, "_blank", "noreferrer");
+                    if (res?.ok !== false) {
+                      window.open((nextLesson.meetingUrl || nextLesson.teacherDefaultMeetingUrl)!, "_blank", "noreferrer");
+                    } else if (res.reason === "package_expired") {
+                      showError("Sizning paketingiz muddati tugagan. Darsga kirish uchun yangi paket sotib oling.");
+                    } else if (res.reason === "teacher_not_joined") {
+                      showError("O'qituvchi hali darsga kelmagan.");
+                    }
                   }}
                   disabled={joinLesson.isPending}
                   style={{ display: "flex", alignItems: "center", gap: 6, background: "#22c55e", color: "#fff", fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 9, border: "none", cursor: joinLesson.isPending ? "default" : "pointer", opacity: joinLesson.isPending ? 0.7 : 1 }}>

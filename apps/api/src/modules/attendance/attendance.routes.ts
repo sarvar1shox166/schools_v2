@@ -610,55 +610,36 @@ export async function attendanceRoutes(app: FastifyInstance) {
       }
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      const inserted = await client.query(
-        `INSERT INTO attendance_records (student_id, schedule_slot_id, date, status, lesson_counted, marked_by, student_package_id)
-         VALUES ($1, $2, $3, 'p', true, NULL, $4)
-         ON CONFLICT (student_id, schedule_slot_id, date) DO NOTHING
-         RETURNING id`,
-        [studentId, body.scheduleSlotId, date, null]
+    // Paket muddati o'tgan bo'lsa — dars soni qolgan-qolmaganidan qat'i
+    // nazar kirish taqiqlanadi. Paketi umuman yo'q (yoki dars soni tugagan,
+    // lekin muddati hali o'tmagan) bo'lsa avvalgidek kirishga ruxsat
+    // beriladi va faqat adminlarga ogohlantirish yuboriladi.
+    const hasUsablePackage = await pool.query(
+      `SELECT 1 FROM student_packages
+       WHERE student_id = $1 AND status = 'active' AND used_lessons < total_lessons
+         AND (expires_at IS NULL OR expires_at >= CURRENT_DATE)
+       LIMIT 1`,
+      [studentId]
+    );
+    if (hasUsablePackage.rows.length === 0) {
+      const hasExpiredPackage = await pool.query(
+        `SELECT 1 FROM student_packages
+         WHERE student_id = $1 AND status = 'active' AND used_lessons < total_lessons
+           AND expires_at < CURRENT_DATE
+         LIMIT 1`,
+        [studentId]
       );
-      if (inserted.rows.length > 0) {
-        const consumed = await consumeLesson(client, studentId);
-        await client.query(
-          `UPDATE attendance_records SET student_package_id = $1 WHERE id = $2`,
-          [consumed, inserted.rows[0].id]
-        );
-        if (!consumed && tenantId) {
-          const studentNameRes = await client.query(
-            `SELECT u.full_name FROM students s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
-            [studentId]
-          );
-          const studentName = studentNameRes.rows[0]?.full_name ?? "O'quvchi";
-          const adminRes = await client.query(
-            `SELECT id FROM users WHERE tenant_id = $1 AND role IN ('admin','super_admin')`,
-            [tenantId]
-          );
-          for (const admin of adminRes.rows) {
-            await createNotification(client, {
-              tenantId,
-              userId: admin.id,
-              type: "no_package",
-              icon: "alert",
-              title: "To'lov talab qilinadi",
-              body: `${studentName} darsga kirdi, lekin faol paketi yo'q. To'lovni rasmiylashtiring.`,
-            });
-          }
-        }
-        await recordLessonSession(client, body.scheduleSlotId, date);
-        await bumpAttendanceStreak(client, studentId, date, "p");
-        await checkAchievements(client, studentId);
+      if (hasExpiredPackage.rows.length > 0) {
+        return { ok: false, reason: "package_expired" };
       }
-      await client.query("COMMIT");
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
     }
 
+    // Diqqat: bu yerda endi davomat yozuvi yaratilmaydi va paketdan dars
+    // yechilmaydi — o'quvchining havolani bosishi faqat darsga KIRISH huquqi
+    // (yuqoridagi tekshiruvlar). Haqiqiy davomat (keldi/kelmadi/sababli) va
+    // shunga bog'liq paket -1/bekor qilish FAQAT o'qituvchi POST /attendance
+    // orqali belgilaganda sodir bo'ladi (pastda, "O'qituvchi davomati" bo'limi) —
+    // bitta manba, ikki marta hisoblanish xavfi yo'q.
     return { ok: true };
   });
 
