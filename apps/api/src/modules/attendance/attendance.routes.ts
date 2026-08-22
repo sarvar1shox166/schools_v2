@@ -6,6 +6,7 @@ import { createNotification } from "../notifications/notify.js";
 import { recordLessonSession } from "../payroll/lesson-sessions.js";
 import { assignedTeacherIds } from "../../lib/moderator.js";
 import { bumpAttendanceStreak, checkAchievements } from "../gamification/xp.js";
+import { checkStudentCanJoin } from "./join-check.js";
 
 const querySchema = z.object({
   scheduleSlotId: z.string().uuid(),
@@ -586,52 +587,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const studentId = studentRes.rows[0]?.id;
     if (!studentId) return { ok: false };
 
-    const slotCheck = await pool.query(
-      `SELECT sl.id, COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId"
-       FROM schedule_slots sl
-       LEFT JOIN groups g ON g.id = sl.group_id
-       LEFT JOIN group_members gm ON gm.group_id = sl.group_id AND gm.student_id = $1
-       WHERE sl.id = $2 AND sl.tenant_id = $3 AND (gm.student_id IS NOT NULL OR sl.student_id = $1)`,
-      [studentId, body.scheduleSlotId, tenantId]
-    );
-    if (!slotCheck.rows[0]) return { ok: false };
-
-    // O'qituvchi hali darsga kirmagan bo'lsa, o'quvchi ham kira olmaydi —
-    // aks holda "keldi" deb avtomatik belgilanadi, garchi o'qituvchi hali
-    // umuman ulanmagan bo'lsa ham.
-    const teacherId = slotCheck.rows[0].teacherId as string | null;
-    if (teacherId) {
-      const taCheck = await pool.query(
-        `SELECT status FROM teacher_attendance WHERE teacher_id = $1 AND schedule_slot_id = $2 AND date = $3`,
-        [teacherId, body.scheduleSlotId, date]
-      );
-      if (!["p", "l"].includes(taCheck.rows[0]?.status)) {
-        return { ok: false, reason: "teacher_not_joined" };
-      }
-    }
-
-    // Paket muddati o'tgan bo'lsa — dars soni qolgan-qolmaganidan qat'i
-    // nazar kirish taqiqlanadi. Paketi umuman yo'q (yoki dars soni tugagan,
-    // lekin muddati hali o'tmagan) bo'lsa avvalgidek kirishga ruxsat
-    // beriladi va faqat adminlarga ogohlantirish yuboriladi.
-    const hasUsablePackage = await pool.query(
-      `SELECT 1 FROM student_packages
-       WHERE student_id = $1 AND status = 'active' AND used_lessons < total_lessons
-         AND (expires_at IS NULL OR expires_at >= CURRENT_DATE)
-       LIMIT 1`,
-      [studentId]
-    );
-    if (hasUsablePackage.rows.length === 0) {
-      const hasExpiredPackage = await pool.query(
-        `SELECT 1 FROM student_packages
-         WHERE student_id = $1 AND status = 'active' AND used_lessons < total_lessons
-           AND expires_at < CURRENT_DATE
-         LIMIT 1`,
-        [studentId]
-      );
-      if (hasExpiredPackage.rows.length > 0) {
-        return { ok: false, reason: "package_expired" };
-      }
+    const checkResult = await checkStudentCanJoin(studentId, body.scheduleSlotId, tenantId!, date);
+    if (!checkResult.ok) {
+      return { ok: false, reason: checkResult.reason === "not_enrolled" ? undefined : checkResult.reason };
     }
 
     // Diqqat: bu yerda endi davomat yozuvi yaratilmaydi va paketdan dars

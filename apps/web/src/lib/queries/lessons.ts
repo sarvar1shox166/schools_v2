@@ -50,9 +50,20 @@ export function useEndLesson() {
   });
 }
 
+export function useTelegramStatus() {
+  return useQuery({
+    queryKey: ["telegramStatus"],
+    queryFn: async () => (await api.get<{ linked: boolean; botConfigured: boolean }>("/me/telegram-status")).data,
+  });
+}
+
 export function useLinkTelegram() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (initData: string) => (await api.post("/me/telegram-link", { initData })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["telegramStatus"] });
+    },
   });
 }
 

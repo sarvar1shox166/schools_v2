@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../../env.js";
+import { pool } from "../../db/pool.js";
 import { findUserByLogin, findUserByTelegramId, getUserAuthState, linkTelegramId, revokeAllSessions, verifyPassword } from "./auth.service.js";
 import { verifyTelegramInitData } from "./telegram.js";
 import { getRefreshJwt } from "../../plugins/auth.js";
@@ -115,6 +116,11 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true });
+  });
+
+  app.get("/me/telegram-status", { onRequest: [app.authenticate] }, async (request) => {
+    const { rows } = await pool.query(`SELECT telegram_id AS "telegramId" FROM users WHERE id = $1`, [request.user.sub]);
+    return { linked: !!rows[0]?.telegramId, botConfigured: !!env.TELEGRAM_BOT_TOKEN };
   });
 
   app.post("/auth/refresh", async (request, reply) => {

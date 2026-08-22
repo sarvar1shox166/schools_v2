@@ -15,6 +15,9 @@ const envSchema = z.object({
   CLICK_SECRET_KEY: z.string().default("dev-click-secret"),
   PAYME_SECRET_KEY: z.string().default("dev-payme-secret"),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
+  // Ilovaning ochiq domeni (masalan https://chess.up) — Telegram bot "Ilovani
+  // ochish" tugmasi va dars havolasiga yo'naltirish endpointi shundan foydalanadi.
+  APP_URL: z.string().url().optional(),
   REDIS_URL: z.string().url().optional(),
   // Bo'sh qoldirilsa Sentry hech narsa yubormaydi (xavfsiz no-op) — DSN production'ga
   // deploy qilinganda qo'shiladi.

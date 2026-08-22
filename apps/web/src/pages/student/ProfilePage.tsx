@@ -1,6 +1,7 @@
 import { Icon } from "@chess-school/ui";
 import { useAuthStore } from "../../lib/auth-store.js";
-import { useMyXp, useEloHistory, useGameStats, type EloPoint } from "../../lib/queries.js";
+import { useMyXp, useEloHistory, useGameStats, useLinkTelegram, useTelegramStatus, type EloPoint } from "../../lib/queries.js";
+import { getTelegramInitData } from "../../lib/telegram.js";
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 function initials(name: string) {
@@ -128,6 +129,50 @@ function KpiCard({ icon, tint, value, label, delta }: { icon: React.ReactNode; t
       </div>
       <div style={{ position: "relative", color: "#f5f5f6", fontSize: 26, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</div>
       <div style={{ position: "relative", color: "#8b8d98", fontSize: 12, marginTop: 6, fontWeight: 600 }}>{label}</div>
+    </div>
+  );
+}
+
+/* ── Telegram link card ──────────────────────────────────────────────────── */
+function TelegramLinkCard() {
+  const { data: status } = useTelegramStatus();
+  const linkTelegram = useLinkTelegram();
+  const initData = getTelegramInitData();
+
+  if (!status?.botConfigured) return null;
+
+  return (
+    <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 16, padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(59,130,246,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name="message2" size={16} style={{ color: "#60a5fa" }} />
+        </div>
+        <div style={{ color: "#f5f5f6", fontSize: 14.5, fontWeight: 700 }}>Telegram bot</div>
+      </div>
+      {status.linked ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#8b8d98" }}>
+          <Icon name="check" size={15} style={{ color: "#4ade80" }} /> Hisobingiz ulangan — dars eslatmalari Telegramga yuboriladi.
+        </div>
+      ) : initData ? (
+        <>
+          <div style={{ fontSize: 12.5, color: "#8b8d98", marginBottom: 14, lineHeight: 1.5 }}>
+            Dars boshlanishidan oldin eslatma va darsga kirish tugmasini Telegramda olish uchun hisobingizni ulang.
+          </div>
+          <button
+            className="btn primary"
+            disabled={linkTelegram.isPending}
+            onClick={() => linkTelegram.mutate(initData)}
+            style={{ width: "100%", justifyContent: "center" }}
+          >
+            {linkTelegram.isPending ? "Ulanmoqda..." : "Telegram bilan bog'lash"}
+          </button>
+          {linkTelegram.isError && <div style={{ color: "#f87171", fontSize: 11.5, marginTop: 8 }}>Xatolik yuz berdi, qayta urinib ko'ring.</div>}
+        </>
+      ) : (
+        <div style={{ fontSize: 12.5, color: "#8b8d98", lineHeight: 1.5 }}>
+          Ulash uchun botni Telegramda oching va shu sahifani ilova ichidan qayta oching.
+        </div>
+      )}
     </div>
   );
 }
@@ -346,6 +391,10 @@ export default function ProfilePage() {
             );
           })}
         </div>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <TelegramLinkCard />
       </div>
 
       {/* ── Boshqa panellar ── */}
