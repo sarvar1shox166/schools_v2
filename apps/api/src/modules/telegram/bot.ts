@@ -2,9 +2,9 @@ import { Bot, webhookCallback } from "grammy";
 import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
 import { env } from "../../env.js";
-import { pool } from "../../db/pool.js";
 import { findUserByTelegramId, linkTelegramId } from "../auth/auth.service.js";
 import { consumeLinkToken } from "./link-token.js";
+import { registerStudentMenuHandlers, studentMenuKeyboard } from "./student-menu.js";
 
 let bot: Bot | null = null;
 let botUsername: string | null = null;
@@ -47,8 +47,11 @@ function buildBot(token: string): Bot {
         }
         throw err;
       }
-      const { rows } = await pool.query(`SELECT full_name AS "fullName" FROM users WHERE id = $1`, [userId]);
-      await ctx.reply(`✅ Hisobingiz muvaffaqiyatli bog'landi, ${rows[0]?.fullName ?? ""}!`, openAppButton);
+      const linkedUser = await findUserByTelegramId(telegramId);
+      await ctx.reply(`✅ Hisobingiz muvaffaqiyatli bog'landi, ${linkedUser?.fullName ?? ""}!`, openAppButton);
+      if (linkedUser?.role === "student") {
+        await ctx.reply("Tezkor ma'lumot uchun quyidagi tugmalardan foydalanishingiz mumkin:", { reply_markup: studentMenuKeyboard });
+      }
       return;
     }
 
@@ -62,7 +65,12 @@ function buildBot(token: string): Bot {
     }
 
     await ctx.reply(`Assalomu alaykum, ${user.fullName}! Hisobingiz ulangan. ✅`, openAppButton);
+    if (user.role === "student") {
+      await ctx.reply("Tezkor ma'lumot uchun quyidagi tugmalardan foydalanishingiz mumkin:", { reply_markup: studentMenuKeyboard });
+    }
   });
+
+  registerStudentMenuHandlers(b);
 
   return b;
 }

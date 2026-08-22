@@ -36,6 +36,18 @@ async function getTelegramEnabledTenantIds(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.tenantId as string));
 }
 
+// "Qarzdorlik 5 kunda eslatma" (debtReminder) sozlamasi mavjud bo'lmasa ham
+// yoqilgan hisoblanadi (settings.routes.ts dagi default bilan bir xil) —
+// faqat telegramBot o'chirilganida (bu default false) hech narsa yuborilmaydi.
+async function getPaymentReminderEnabledTenantIds(): Promise<Set<string>> {
+  const { rows } = await pool.query(
+    `SELECT tenant_id AS "tenantId" FROM tenant_settings
+     WHERE key = 'system' AND (value->>'telegramBot')::boolean = true
+       AND COALESCE((value->>'debtReminder')::boolean, true) = true`
+  );
+  return new Set(rows.map((r) => r.tenantId as string));
+}
+
 interface SlotRow {
   id: string;
   tenantId: string;
@@ -212,12 +224,91 @@ async function sweepTeacherDailyDigest(enabledTenants: Set<string>): Promise<voi
   }
 }
 
+const DEBT_REMINDER_GAP_MS = 5 * 24 * 60 * 60_000; // 5 kunda bir marta takrorlanadi
+const EXPIRING_SOON_DAYS = 3;
+
+/** To'lov eslatmalari — kuniga bir marta (09:00-09:05 oralig'ida) yuboriladi:
+ *  (1) "debt" — faol paketdagi darslar tugagan, yangi paket olinmagan (har 5 kunda
+ *      qayta eslatiladi, holat davom etsa); (2) "expiring" — hali darsi bor, lekin
+ *      paket muddati 3 kun ichida tugaydi (har paket uchun bir martalik). */
+async function sweepPaymentReminders(): Promise<void> {
+  const now = new Date();
+  if (now.getHours() !== 9 || now.getMinutes() >= 5) return;
+
+  const enabledTenants = await getPaymentReminderEnabledTenantIds();
+  if (enabledTenants.size === 0) return;
+
+  const { rows: debtors } = await pool.query(
+    `SELECT s.id AS "studentId", s.tenant_id AS "tenantId", u.telegram_id AS "telegramId"
+     FROM students s
+     JOIN users u ON u.id = s.user_id
+     WHERE u.telegram_id IS NOT NULL
+       AND EXISTS (
+         SELECT 1 FROM student_packages sp
+         WHERE sp.student_id = s.id AND sp.status = 'active' AND sp.used_lessons >= sp.total_lessons
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM student_packages sp
+         WHERE sp.student_id = s.id AND sp.status = 'active' AND sp.used_lessons < sp.total_lessons
+           AND (sp.expires_at IS NULL OR sp.expires_at >= CURRENT_DATE)
+       )`
+  );
+
+  for (const d of debtors) {
+    if (!enabledTenants.has(d.tenantId)) continue;
+
+    const { rows: lastRows } = await pool.query(
+      `SELECT MAX(sent_at) AS "lastSentAt" FROM telegram_payment_reminders_sent WHERE student_id = $1 AND kind = 'debt'`,
+      [d.studentId]
+    );
+    const lastSentAt = lastRows[0]?.lastSentAt ? new Date(lastRows[0].lastSentAt).getTime() : null;
+    if (lastSentAt && now.getTime() - lastSentAt < DEBT_REMINDER_GAP_MS) continue;
+
+    await sendTelegramMessage(Number(d.telegramId), "📦 Paketingizdagi darslar tugagan. Darslarni davom ettirish uchun yangi paket sotib oling.");
+    await pool.query(`INSERT INTO telegram_payment_reminders_sent (student_id, kind) VALUES ($1, 'debt')`, [d.studentId]);
+  }
+
+  const { rows: expiring } = await pool.query(
+    `SELECT s.id AS "studentId", s.tenant_id AS "tenantId", u.telegram_id AS "telegramId",
+            sp.id AS "packageId", (sp.expires_at - CURRENT_DATE) AS "daysLeft"
+     FROM students s
+     JOIN users u ON u.id = s.user_id
+     JOIN student_packages sp ON sp.student_id = s.id
+     WHERE u.telegram_id IS NOT NULL AND sp.status = 'active' AND sp.used_lessons < sp.total_lessons
+       AND sp.expires_at IS NOT NULL
+       AND sp.expires_at BETWEEN CURRENT_DATE AND CURRENT_DATE + $1::int`,
+    [EXPIRING_SOON_DAYS]
+  );
+
+  for (const e of expiring) {
+    if (!enabledTenants.has(e.tenantId)) continue;
+
+    const inserted = await pool.query(
+      `INSERT INTO telegram_payment_reminders_sent (student_id, kind, student_package_id)
+       VALUES ($1, 'expiring', $2)
+       ON CONFLICT DO NOTHING RETURNING id`,
+      [e.studentId, e.packageId]
+    );
+    if (inserted.rows.length === 0) continue;
+
+    const daysLeft = Number(e.daysLeft);
+    const dayLabel = daysLeft <= 0 ? "bugun" : `${daysLeft} kundan so'ng`;
+    await sendTelegramMessage(
+      Number(e.telegramId),
+      `⏳ Paketingiz muddati ${dayLabel} tugaydi. Darslaringiz qolgan bo'lsa ham, ulgurish uchun yangi paket rasmiylashtirishni unutmang.`
+    );
+  }
+}
+
 async function sweepOnce(): Promise<void> {
   if (!env.TELEGRAM_BOT_TOKEN) return;
+
   const enabledTenants = await getTelegramEnabledTenantIds();
-  if (enabledTenants.size === 0) return;
-  await sweepLessonReminders(enabledTenants);
-  await sweepTeacherDailyDigest(enabledTenants);
+  if (enabledTenants.size > 0) {
+    await sweepLessonReminders(enabledTenants);
+    await sweepTeacherDailyDigest(enabledTenants);
+  }
+  await sweepPaymentReminders();
 }
 
 export function startTelegramReminderSweep(): void {
