@@ -1,13 +1,17 @@
 import { Avatar, Card, Icon, PageHead } from "@chess-school/ui";
-import { useLinkTelegram, useMyProfile, useMyRatingBreakdown, useTelegramStatus } from "../../lib/queries.js";
-import { getTelegramInitData } from "../../lib/telegram.js";
+import { useMyProfile, useMyRatingBreakdown, useTelegramLinkUrl, useTelegramStatus } from "../../lib/queries.js";
 
 function TelegramLinkCard() {
   const { data: status } = useTelegramStatus();
-  const linkTelegram = useLinkTelegram();
-  const initData = getTelegramInitData();
+  const linkUrl = useTelegramLinkUrl();
 
   if (!status?.botConfigured) return null;
+
+  const handleLink = () => {
+    linkUrl.mutate(undefined, {
+      onSuccess: (data) => window.open(data.url, "_blank"),
+    });
+  };
 
   return (
     <Card className="card-pad fade-up">
@@ -18,22 +22,18 @@ function TelegramLinkCard() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-dim)" }}>
           <Icon name="check" size={16} style={{ color: "#22c55e" }} /> Hisobingiz ulangan — dars eslatmalari Telegramga yuboriladi.
         </div>
-      ) : initData ? (
+      ) : (
         <>
           <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 12 }}>
             Dars boshlanishi va bugungi darslar haqidagi eslatmalarni Telegram orqali olish uchun hisobingizni ulang.
           </div>
-          <button className="btn primary" disabled={linkTelegram.isPending} onClick={() => linkTelegram.mutate(initData)}>
-            {linkTelegram.isPending ? "Ulanmoqda..." : "Telegram bilan bog'lash"}
+          <button className="btn primary" disabled={linkUrl.isPending} onClick={handleLink}>
+            {linkUrl.isPending ? "Havola tayyorlanmoqda..." : "Telegram bilan bog'lash"}
           </button>
-          {linkTelegram.isError && (
+          {linkUrl.isError && (
             <div style={{ color: "var(--danger, #ef4444)", fontSize: 12, marginTop: 8 }}>Xatolik yuz berdi, qayta urinib ko'ring.</div>
           )}
         </>
-      ) : (
-        <div style={{ fontSize: 13, color: "var(--text-faint)" }}>
-          Ulash uchun botni Telegramda oching va shu sahifani ilova ichidan qayta oching.
-        </div>
       )}
     </Card>
   );

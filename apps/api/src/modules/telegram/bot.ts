@@ -2,9 +2,12 @@ import { Bot, webhookCallback } from "grammy";
 import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
 import { env } from "../../env.js";
-import { findUserByTelegramId } from "../auth/auth.service.js";
+import { pool } from "../../db/pool.js";
+import { findUserByTelegramId, linkTelegramId } from "../auth/auth.service.js";
+import { consumeLinkToken } from "./link-token.js";
 
 let bot: Bot | null = null;
+let botUsername: string | null = null;
 
 // Webhook so'rovi haqiqatan Telegramdan kelayotganini tasdiqlaydi (X-Telegram-Bot-Api-Secret-Token) —
 // bot tokenidan hosil qilinadi, shuning uchun alohida env o'zgaruvchisi shart emas.
@@ -18,18 +21,41 @@ function buildBot(token: string): Bot {
   b.command("start", async (ctx) => {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
-    const user = await findUserByTelegramId(telegramId);
 
     const openAppButton = env.APP_URL
       ? { reply_markup: { inline_keyboard: [[{ text: "📱 Ilovani ochish", web_app: { url: env.APP_URL } }]] } }
       : undefined;
 
+    // "Telegram bilan bog'lash" tugmasi ilova ichida bosilganda /start ga
+    // bir martalik token ulanib keladi (t.me/bot?start=<token>) — shu orqali
+    // hisob avtomatik bog'lanadi, foydalanuvchidan qo'shimcha amal talab qilinmaydi.
+    const payload = ctx.match ? String(ctx.match).trim() : "";
+    if (payload) {
+      const userId = await consumeLinkToken(payload);
+      if (!userId) {
+        await ctx.reply(
+          "Havola muddati tugagan yoki allaqachon ishlatilgan. Ilovadan qaytadan \"Telegram bilan bog'lash\" tugmasini bosing."
+        );
+        return;
+      }
+      try {
+        await linkTelegramId(userId, telegramId);
+      } catch (err) {
+        if (err instanceof Error && err.message === "telegram_already_linked") {
+          await ctx.reply("Bu Telegram hisobi allaqachon boshqa foydalanuvchiga bog'langan.");
+          return;
+        }
+        throw err;
+      }
+      const { rows } = await pool.query(`SELECT full_name AS "fullName" FROM users WHERE id = $1`, [userId]);
+      await ctx.reply(`✅ Hisobingiz muvaffaqiyatli bog'landi, ${rows[0]?.fullName ?? ""}!`, openAppButton);
+      return;
+    }
+
+    const user = await findUserByTelegramId(telegramId);
     if (!user) {
-      // Bog'lash faqat Mini App ichidan mumkin (u yerda Telegram initData mavjud
-      // bo'ladi) — shuning uchun bu yerda ham "Ilovani ochish" tugmasi beriladi,
-      // aks holda foydalanuvchi web va bot o'rtasida aylanib qoladi.
       await ctx.reply(
-        "Assalomu alaykum! Hisobingiz hali Telegram bilan bog'lanmagan.\n\nBog'lash uchun quyidagi tugma orqali ilovani oching → tizimga kiring → \"Profil\" bo'limi → \"Telegram bilan bog'lash\".",
+        "Assalomu alaykum! Hisobingiz hali Telegram bilan bog'lanmagan.\n\nBog'lash uchun: ilovaga kiring → \"Profil\" bo'limi → \"Telegram bilan bog'lash\" tugmasini bosing.",
         openAppButton
       );
       return;
@@ -49,11 +75,18 @@ export function getBot(): Bot | null {
   return bot;
 }
 
+/** Bog'lash havolasini (t.me/<username>?start=...) qurish uchun kerak —
+ *  bot hali init qilinmagan bo'lsa (masalan token sozlanmagan) null. */
+export function getBotUsername(): string | null {
+  return botUsername;
+}
+
 export async function telegramBotRoutes(app: FastifyInstance) {
   const b = getBot();
   if (!b) return;
 
   await b.init();
+  botUsername = b.botInfo.username;
   app.post("/telegram/webhook", webhookCallback(b, "fastify", { secretToken: webhookSecret() }));
 
   if (env.APP_URL) {

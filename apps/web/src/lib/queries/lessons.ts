@@ -57,13 +57,12 @@ export function useTelegramStatus() {
   });
 }
 
-export function useLinkTelegram() {
-  const qc = useQueryClient();
+/** Bog'lash uchun bir martalik Telegram deep-link (t.me/<bot>?start=<token>)
+ *  so'raydi — foydalanuvchi shu havolani bosib botga o'tadi va /start
+ *  bosilganda hisob avtomatik bog'lanadi (server tomonda). */
+export function useTelegramLinkUrl() {
   return useMutation({
-    mutationFn: async (initData: string) => (await api.post("/me/telegram-link", { initData })).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["telegramStatus"] });
-    },
+    mutationFn: async () => (await api.post<{ url: string }>("/me/telegram-link-token")).data,
   });
 }
 

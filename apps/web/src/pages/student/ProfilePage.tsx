@@ -1,7 +1,6 @@
 import { Icon } from "@chess-school/ui";
 import { useAuthStore } from "../../lib/auth-store.js";
-import { useMyXp, useEloHistory, useGameStats, useLinkTelegram, useTelegramStatus, type EloPoint } from "../../lib/queries.js";
-import { getTelegramInitData } from "../../lib/telegram.js";
+import { useMyXp, useEloHistory, useGameStats, useTelegramLinkUrl, useTelegramStatus, type EloPoint } from "../../lib/queries.js";
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 function initials(name: string) {
@@ -136,10 +135,15 @@ function KpiCard({ icon, tint, value, label, delta }: { icon: React.ReactNode; t
 /* ── Telegram link card ──────────────────────────────────────────────────── */
 function TelegramLinkCard() {
   const { data: status } = useTelegramStatus();
-  const linkTelegram = useLinkTelegram();
-  const initData = getTelegramInitData();
+  const linkUrl = useTelegramLinkUrl();
 
   if (!status?.botConfigured) return null;
+
+  const handleLink = () => {
+    linkUrl.mutate(undefined, {
+      onSuccess: (data) => window.open(data.url, "_blank"),
+    });
+  };
 
   return (
     <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 16, padding: 20 }}>
@@ -153,25 +157,21 @@ function TelegramLinkCard() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#8b8d98" }}>
           <Icon name="check" size={15} style={{ color: "#4ade80" }} /> Hisobingiz ulangan — dars eslatmalari Telegramga yuboriladi.
         </div>
-      ) : initData ? (
+      ) : (
         <>
           <div style={{ fontSize: 12.5, color: "#8b8d98", marginBottom: 14, lineHeight: 1.5 }}>
             Dars boshlanishidan oldin eslatma va darsga kirish tugmasini Telegramda olish uchun hisobingizni ulang.
           </div>
           <button
             className="btn primary"
-            disabled={linkTelegram.isPending}
-            onClick={() => linkTelegram.mutate(initData)}
+            disabled={linkUrl.isPending}
+            onClick={handleLink}
             style={{ width: "100%", justifyContent: "center" }}
           >
-            {linkTelegram.isPending ? "Ulanmoqda..." : "Telegram bilan bog'lash"}
+            {linkUrl.isPending ? "Havola tayyorlanmoqda..." : "Telegram bilan bog'lash"}
           </button>
-          {linkTelegram.isError && <div style={{ color: "#f87171", fontSize: 11.5, marginTop: 8 }}>Xatolik yuz berdi, qayta urinib ko'ring.</div>}
+          {linkUrl.isError && <div style={{ color: "#f87171", fontSize: 11.5, marginTop: 8 }}>Xatolik yuz berdi, qayta urinib ko'ring.</div>}
         </>
-      ) : (
-        <div style={{ fontSize: 12.5, color: "#8b8d98", lineHeight: 1.5 }}>
-          Ulash uchun botni Telegramda oching va shu sahifani ilova ichidan qayta oching.
-        </div>
       )}
     </div>
   );

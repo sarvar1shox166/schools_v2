@@ -2,9 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../../env.js";
 import { pool } from "../../db/pool.js";
-import { findUserByLogin, findUserByTelegramId, getUserAuthState, linkTelegramId, revokeAllSessions, verifyPassword } from "./auth.service.js";
+import { findUserByLogin, findUserByTelegramId, getUserAuthState, revokeAllSessions, verifyPassword } from "./auth.service.js";
 import { verifyTelegramInitData } from "./telegram.js";
 import { getRefreshJwt } from "../../plugins/auth.js";
+import { createLinkToken } from "../telegram/link-token.js";
+import { getBotUsername } from "../telegram/bot.js";
 
 const loginSchema = z.object({
   login: z.string().min(1),
@@ -94,28 +96,17 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send(issueSession(app, user));
   });
 
-  app.post("/me/telegram-link", { onRequest: [app.authenticate] }, async (request, reply) => {
-    const { initData } = telegramSchema.parse(request.body);
-
-    if (!env.TELEGRAM_BOT_TOKEN) {
-      return reply.code(500).send({ error: "Telegram login is not configured" });
+  // Bog'lash uchun bir martalik deep-link yaratadi (t.me/<bot>?start=<token>) —
+  // foydalanuvchi ilova ichida (tizimga kirgan holda) so'raydi, tugmani bosib
+  // Telegram botga o'tadi, u yerda /start bosilganda avtomatik bog'lanadi.
+  app.post("/me/telegram-link-token", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const username = getBotUsername();
+    if (!env.TELEGRAM_BOT_TOKEN || !username) {
+      return reply.code(500).send({ error: "Telegram bot is not configured" });
     }
 
-    const verified = verifyTelegramInitData(initData, env.TELEGRAM_BOT_TOKEN);
-    if (!verified) {
-      return reply.code(401).send({ error: "Invalid Telegram data" });
-    }
-
-    try {
-      await linkTelegramId(request.user.sub, verified.user.id);
-    } catch (err) {
-      if (err instanceof Error && err.message === "telegram_already_linked") {
-        return reply.code(409).send({ error: "telegram_already_linked" });
-      }
-      throw err;
-    }
-
-    return reply.send({ ok: true });
+    const token = await createLinkToken(request.user.sub);
+    return reply.send({ url: `https://t.me/${username}?start=${token}` });
   });
 
   app.get("/me/telegram-status", { onRequest: [app.authenticate] }, async (request) => {
