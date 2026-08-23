@@ -416,8 +416,8 @@ export default function ApplicationsPage() {
   );
 }
 
-/* ─── Shared form fields for Create/Edit ─── */
-function DiagnosticFields({
+/* ─── Shared form fields for Create/Edit (Lidlar bo'limi ham ishlatadi) ─── */
+export function DiagnosticFields({
   level, setLevel,
   diagnosticTeacherId, setDiagnosticTeacherId,
   diagnosticDate, setDiagnosticDate,
@@ -775,8 +775,8 @@ function EditAppModal({ app, onClose, onStudentCreated }: { app: Application; on
   );
 }
 
-/* ─── Convert result modal ─── */
-function ConvertResultModal({
+/* ─── Convert result modal (Lidlar bo'limi ham ishlatadi) ─── */
+export function ConvertResultModal({
   result,
   mode = "created",
   onClose,

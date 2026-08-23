@@ -28,8 +28,8 @@ async function getDefaultTenantId(): Promise<string | null> {
 
 /** Landing sahifadagi "Bepul dars olish" formasi shu yerga yozadi — so'rov
  *  beruvchi hali tizimda hisobga ega emas, shuning uchun autentifikatsiya
- *  talab qilinmaydi. Natija admin panelning "Arizalar" bo'limida
- *  ("diagnostika" statusida, "website" manbasi bilan) ko'rinadi. */
+ *  talab qilinmaydi. Natija admin panelning "Lidlar" bo'limida ko'rinadi —
+ *  Arizalar (CRM)dan ataylab ajratilgan, chalkashlik bo'lmasligi uchun. */
 export async function publicLeadsRoutes(app: FastifyInstance) {
   app.post("/public/leads", publicLeadRateLimit, async (request, reply) => {
     const body = leadSchema.parse(request.body);
@@ -37,8 +37,8 @@ export async function publicLeadsRoutes(app: FastifyInstance) {
     if (!tenantId) return reply.code(500).send({ error: "Tenant not configured" });
 
     await pool.query(
-      `INSERT INTO applications (tenant_id, full_name, phone, age, level, source)
-       VALUES ($1, $2, $3, $4, $5, 'website')`,
+      `INSERT INTO leads (tenant_id, full_name, phone, age, level)
+       VALUES ($1, $2, $3, $4, $5)`,
       [tenantId, body.fullName, body.phone, body.age ?? null, body.level ?? null]
     );
 

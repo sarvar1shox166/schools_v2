@@ -16,6 +16,7 @@ import NotificationsPage from "./pages/admin/NotificationsPage.js";
 import BroadcastPage from "./pages/admin/BroadcastPage.js";
 import ReportsPage from "./pages/admin/ReportsPage.js";
 import ApplicationsPage from "./pages/admin/ApplicationsPage.js";
+import LeadsPage from "./pages/admin/LeadsPage.js";
 import TeacherRatingPage from "./pages/admin/TeacherRatingPage.js";
 import VideoCoursesPage from "./pages/admin/VideoCoursesPage.js";
 import VideoCourseDetailPage from "./pages/admin/VideoCourseDetailPage.js";
@@ -71,6 +72,7 @@ const ADMIN_NAV: NavSection[] = [
   {
     group: "Boshqaruv",
     items: [
+      { to: "/admin/leads",          label: "Lidlar",           icon: "target" },
       { to: "/admin/applications",   label: "Arizalar",         icon: "user",       badge: 2 },
       { to: "/admin/teachers",       label: "O'qituvchilar",    icon: "teacher" },
       { to: "/admin/students",       label: "O'quvchilar",      icon: "students",   badge: 12 },
@@ -163,6 +165,7 @@ export default function App() {
 
           {/* Arizalar, O'quvchilar — + operator (front-ofis/CRM) */}
           <Route element={<RequireAuth roles={["super_admin", "admin", "assistant_admin", "operator"]} />}>
+            <Route path="/admin/leads"          element={<LeadsPage />} />
             <Route path="/admin/applications"   element={<ApplicationsPage />} />
             <Route path="/admin/students"       element={<StudentsPage />} />
             <Route path="/admin/students/new"   element={<NewStudentPage />} />
