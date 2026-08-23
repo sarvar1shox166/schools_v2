@@ -22,6 +22,16 @@ const systemSchema = z.object({
   yearStart: z.string().optional(),
 });
 
+// Chess Coin manbalari — hozircha faqat qiymatlar saqlanadi, coin berish
+// mantig'i keyingi bosqichda shu sozlamalarni o'qib ishlaydi.
+const rewardsSchema = z.object({
+  lessonCoin: z.number().int().nonnegative().optional(),
+  lessonMonthlyLimit: z.number().int().nonnegative().optional(),
+  homeworkCoin: z.number().int().nonnegative().optional(),
+  homeworkMonthlyLimit: z.number().int().nonnegative().optional(),
+  streakCoins: z.array(z.number().int().nonnegative()).length(12).optional(),
+});
+
 const salaryTypeSchema = z.object({
   teacherId: z.string().uuid(),
   salaryType: z.enum(["per_lesson", "monthly_fixed", "percent_income"]),
@@ -96,6 +106,26 @@ export async function settingsRoutes(app: FastifyInstance) {
     const body = systemSchema.parse(request.body);
     const current = (await getSetting(tenantId!, "system")) ?? {};
     await setSetting(tenantId!, "system", { ...current, ...body });
+    return reply.send({ ok: true });
+  });
+
+  // ── Mukofotlar (Chess Coin manbalari) ─────────────────────────────────
+  app.get("/settings/rewards", async (request) => {
+    const { tenantId } = request.user;
+    const stored = await getSetting(tenantId!, "rewards");
+    const defaults = {
+      lessonCoin: 1, lessonMonthlyLimit: 8,
+      homeworkCoin: 3, homeworkMonthlyLimit: 8,
+      streakCoins: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60],
+    };
+    return { ...defaults, ...(stored ?? {}) };
+  });
+
+  app.put("/settings/rewards", async (request, reply) => {
+    const { tenantId } = request.user;
+    const body = rewardsSchema.parse(request.body);
+    const current = (await getSetting(tenantId!, "rewards")) ?? {};
+    await setSetting(tenantId!, "rewards", { ...current, ...body });
     return reply.send({ ok: true });
   });
 

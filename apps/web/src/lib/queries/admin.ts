@@ -14,6 +14,12 @@ export interface SystemSettings {
   language: string; currency: string; timezone: string; yearStart: string;
 }
 
+export interface RewardsSettings {
+  lessonCoin: number; lessonMonthlyLimit: number;
+  homeworkCoin: number; homeworkMonthlyLimit: number;
+  streakCoins: number[];
+}
+
 export interface SalarySetting {
   teacherId: string;
   teacherName: string;
@@ -52,6 +58,21 @@ export function useUpdateSystemSettings() {
   return useMutation({
     mutationFn: async (body: Partial<SystemSettings>) => (await api.put("/settings/system", body)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "system"] }),
+  });
+}
+
+export function useRewardsSettings() {
+  return useQuery({
+    queryKey: ["settings", "rewards"],
+    queryFn: async () => (await api.get<RewardsSettings>("/settings/rewards")).data,
+  });
+}
+
+export function useUpdateRewardsSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Partial<RewardsSettings>) => (await api.put("/settings/rewards", body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "rewards"] }),
   });
 }
 

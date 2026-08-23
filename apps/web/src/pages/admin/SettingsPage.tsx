@@ -3,12 +3,13 @@ import { Card, Icon, fmtSom } from "@chess-school/ui";
 import {
   useBrandSettings, useUpdateBrandSettings,
   useSystemSettings, useUpdateSystemSettings,
+  useRewardsSettings, useUpdateRewardsSettings,
   useSalarySettings, useUpdateSalarySetting,
   type SalarySetting, type SystemSettings,
 } from "../../lib/queries.js";
 
 /* ─── types ──────────────────────────────────────────────── */
-type Tab = "brend" | "rollar" | "umumiy" | "ish-haqi";
+type Tab = "brend" | "rollar" | "umumiy" | "mukofotlar" | "ish-haqi";
 
 interface RoleRow {
   id: string;
@@ -444,6 +445,171 @@ function UmumiyTab() {
   );
 }
 
+/* ─── MukofotlarTab ───────────────────────────────────────── */
+function RewardCard({
+  icon, iconBg, title, sub, coinLabel, coin, onCoin, limitLabel, limit, onLimit,
+}: {
+  icon: string; iconBg: string; title: string; sub: string;
+  coinLabel: string; coin: string; onCoin: (v: string) => void;
+  limitLabel: string; limit: string; onLimit: (v: string) => void;
+}) {
+  const coinNum = Number(coin) || 0;
+  const limitNum = Number(limit) || 0;
+  return (
+    <Card style={{ padding: "22px 24px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 11, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon name={icon} size={18} />
+        </div>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>{title}</div>
+          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{sub}</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 6 }}>{coinLabel}</label>
+          <input className="input" type="number" min={0} value={coin} onChange={e => onCoin(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 6 }}>{limitLabel}</label>
+          <input className="input" type="number" min={0} value={limit} onChange={e => onLimit(e.target.value)} style={{ width: "100%", boxSizing: "border-box" }} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 14, padding: "9px 12px", borderRadius: 9, background: "var(--surface-2)", fontSize: 12.5, color: "var(--text-dim)" }}>
+        Eng ko'p: <strong style={{ color: "var(--accent-text)" }}>{coinNum * limitNum} coin/oy</strong>
+      </div>
+    </Card>
+  );
+}
+
+function MukofotlarTab() {
+  const { data, isLoading, isError } = useRewardsSettings();
+  const updateMut = useUpdateRewardsSettings();
+
+  const [lessonCoin, setLessonCoin] = useState("1");
+  const [lessonLimit, setLessonLimit] = useState("8");
+  const [homeworkCoin, setHomeworkCoin] = useState("3");
+  const [homeworkLimit, setHomeworkLimit] = useState("8");
+  const [streak, setStreak] = useState<string[]>(["5","10","15","20","25","30","35","40","45","50","55","60"]);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setLessonCoin(String(data.lessonCoin));
+      setLessonLimit(String(data.lessonMonthlyLimit));
+      setHomeworkCoin(String(data.homeworkCoin));
+      setHomeworkLimit(String(data.homeworkMonthlyLimit));
+      setStreak(data.streakCoins.map(String));
+    }
+  }, [data]);
+
+  function setStreakDay(i: number, v: string) {
+    setStreak(prev => prev.map((d, idx) => idx === i ? v : d));
+  }
+
+  function save() {
+    updateMut.mutate(
+      {
+        lessonCoin: Number(lessonCoin) || 0,
+        lessonMonthlyLimit: Number(lessonLimit) || 0,
+        homeworkCoin: Number(homeworkCoin) || 0,
+        homeworkMonthlyLimit: Number(homeworkLimit) || 0,
+        streakCoins: streak.map(v => Number(v) || 0),
+      },
+      {
+        onSuccess: () => {
+          setSaved(true);
+          setTimeout(() => setSaved(false), 2000);
+        },
+      }
+    );
+  }
+
+  const streakTotal = streak.reduce((sum, v) => sum + (Number(v) || 0), 0);
+
+  if (isLoading) {
+    return <div style={{ color: "var(--text-dim)", fontSize: 14, padding: 8 }}>Yuklanmoqda...</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+      <div style={{
+        display: "flex", gap: 12, alignItems: "flex-start", padding: "14px 18px",
+        background: "var(--accent-soft)", border: "1px solid var(--accent-border)", borderRadius: 12,
+      }}>
+        <Icon name="lightbulb" size={17} style={{ color: "var(--accent-text)", flexShrink: 0, marginTop: 1 }} />
+        <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
+          Bu yerdagi qiymatlar <strong style={{ color: "var(--text)" }}>Chess Coin</strong> tizimi uchun sozlanadi.
+          Hozircha faqat saqlanadi — o'quvchiga dars/uy vazifasi uchun coin avtomatik berilishi keyingi bosqichda ulanadi.
+        </div>
+      </div>
+
+      {isError && <div style={{ color: "#dc2626", fontSize: 13 }}>Yuklab bo'lmadi.</div>}
+
+      <div className="grid cols-2">
+        <RewardCard
+          icon="calendarCheck" iconBg="var(--accent-soft-2)"
+          title="Darsga qatnashish" sub="Har bir o'tilgan dars uchun"
+          coinLabel="Coin / dars" coin={lessonCoin} onCoin={setLessonCoin}
+          limitLabel="Oylik limit (dars)" limit={lessonLimit} onLimit={setLessonLimit}
+        />
+        <RewardCard
+          icon="bookOpen" iconBg="var(--accent-soft-2)"
+          title="Uy vazifasi bajarilishi" sub="Har bir bajarilgan vazifa uchun"
+          coinLabel="Coin / vazifa" coin={homeworkCoin} onCoin={setHomeworkCoin}
+          limitLabel="Oylik limit (vazifa)" limit={homeworkLimit} onLimit={setHomeworkLimit}
+        />
+      </div>
+
+      <Card style={{ padding: "22px 24px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 11, background: "var(--accent-soft-2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Icon name="flame" size={18} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>Kunlik streak bonusi</div>
+              <div style={{ fontSize: 12, color: "var(--text-dim)" }}>12 kunlik sikl — bir kun o'tkazib qoldirilsa, 1-kundan qayta boshlanadi</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
+            Jami: <strong style={{ color: "var(--accent-text)" }}>{streakTotal} coin</strong> / sikl
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
+          {streak.map((v, i) => (
+            <div key={i} style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 10.5, color: "var(--text-dim)", marginBottom: 6, fontWeight: 600 }}>{i + 1}-kun</div>
+              <input
+                className="input" type="number" min={0} value={v}
+                onChange={e => setStreakDay(i, e.target.value)}
+                style={{ width: "100%", boxSizing: "border-box", textAlign: "center", padding: "5px 4px", fontSize: 13 }}
+              />
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {updateMut.isError && <div style={{ color: "#dc2626", fontSize: 13 }}>Saqlashda xatolik yuz berdi.</div>}
+
+      <div>
+        <button className="btn primary" onClick={save} disabled={updateMut.isPending} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {saved
+            ? <><Icon name="check" size={14} /> Saqlandi!</>
+            : updateMut.isPending
+              ? <><Icon name="clock" size={14} /> Saqlanmoqda...</>
+              : <><Icon name="check" size={14} /> Saqlash</>
+          }
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── IshHaqiTab ──────────────────────────────────────────── */
 const SALARY_TYPE_LABELS: Record<string, string> = {
   per_lesson:     "Dars boshiga",
@@ -679,10 +845,11 @@ function IshHaqiTab() {
 
 /* ─── main ────────────────────────────────────────────────── */
 const TABS: { id: Tab; label: string }[] = [
-  { id: "brend",    label: "Brend" },
-  { id: "rollar",   label: "Rollar" },
-  { id: "umumiy",   label: "Umumiy" },
-  { id: "ish-haqi", label: "Ish haqi" },
+  { id: "brend",      label: "Brend" },
+  { id: "rollar",     label: "Rollar" },
+  { id: "umumiy",     label: "Umumiy" },
+  { id: "mukofotlar", label: "Mukofotlar" },
+  { id: "ish-haqi",   label: "Ish haqi" },
 ];
 
 export default function SettingsPage() {
@@ -719,10 +886,11 @@ export default function SettingsPage() {
       </div>
 
       {/* Content */}
-      {tab === "brend"    && <BrendTab />}
-      {tab === "rollar"   && <RollarTab />}
-      {tab === "umumiy"   && <UmumiyTab />}
-      {tab === "ish-haqi" && <IshHaqiTab />}
+      {tab === "brend"      && <BrendTab />}
+      {tab === "rollar"     && <RollarTab />}
+      {tab === "umumiy"     && <UmumiyTab />}
+      {tab === "mukofotlar" && <MukofotlarTab />}
+      {tab === "ish-haqi"   && <IshHaqiTab />}
     </div>
   );
 }
