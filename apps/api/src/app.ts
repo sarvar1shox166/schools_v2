@@ -30,6 +30,7 @@ import { messagesRoutes } from "./modules/messages/messages.routes.js";
 import { videosRoutes } from "./modules/videos/videos.routes.js";
 import { lessonsHubRoutes } from "./modules/lessons-hub/lessons-hub.routes.js";
 import { applicationsRoutes } from "./modules/applications/applications.routes.js";
+import { publicLeadsRoutes } from "./modules/applications/public-leads.routes.js";
 import { settingsRoutes } from "./modules/settings/settings.routes.js";
 import { staffRoutes } from "./modules/staff/staff.routes.js";
 import { lessonsRoutes } from "./modules/lessons/lessons.routes.js";
@@ -117,6 +118,7 @@ export async function buildApp() {
   app.register(videosRoutes, { prefix: "/api/v1" });
   app.register(lessonsHubRoutes, { prefix: "/api/v1" });
   app.register(applicationsRoutes, { prefix: "/api/v1" });
+  app.register(publicLeadsRoutes, { prefix: "/api/v1" });
   app.register(settingsRoutes, { prefix: "/api/v1" });
   app.register(staffRoutes, { prefix: "/api/v1" });
   app.register(lessonsRoutes, { prefix: "/api/v1" });
