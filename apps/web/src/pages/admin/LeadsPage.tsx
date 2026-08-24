@@ -112,6 +112,7 @@ export default function LeadsPage() {
                   <th>ISM</th>
                   <th>TELEFON</th>
                   <th>DARAJA</th>
+                  <th>QULAY KUNLAR</th>
                   <th>HOLAT</th>
                   <th>VAQT</th>
                   <th />
@@ -127,12 +128,13 @@ export default function LeadsPage() {
                           <Avatar name={l.fullName} size="sm" />
                           <div>
                             <div className="cell-main">{l.fullName}</div>
-                            {l.age && <div className="cell-sub">{l.age} yosh</div>}
+                            {(l.age || l.ageRange) && <div className="cell-sub">{l.age ? `${l.age} yosh` : `${l.ageRange} yosh`}</div>}
                           </div>
                         </div>
                       </td>
                       <td className="mono" style={{ fontSize: 13 }}>{l.phone}</td>
                       <td style={{ fontSize: 13.5, color: "var(--text-dim)", fontWeight: 600 }}>{l.level ?? "–"}</td>
+                      <td style={{ fontSize: 13.5, color: "var(--text-dim)", fontWeight: 600 }}>{l.preferredDays ?? "–"}</td>
                       <td>
                         <span style={{
                           display: "inline-flex", alignItems: "center", height: 26,
@@ -171,7 +173,7 @@ export default function LeadsPage() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <div className="empty"><Icon name="target" size={26} /><div>Lidlar topilmadi</div></div>
                     </td>
                   </tr>

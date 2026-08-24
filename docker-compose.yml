@@ -42,6 +42,13 @@ services:
     volumes:
       - uploads:/app/uploads
 
+  # ── Landing sahifa (Next.js, chesson.uz) ─────────────────────────────────────
+  landing:
+    build:
+      context: .
+      dockerfile: apps/landing/Dockerfile
+    restart: unless-stopped
+
   # ── Nginx + React SPA ─────────────────────────────────────────────────────
   nginx:
     build:
@@ -50,6 +57,7 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+      - landing
     ports:
       - "80:80"
       - "443:443"

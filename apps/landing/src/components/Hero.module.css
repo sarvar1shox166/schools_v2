@@ -1,0 +1,106 @@
+.section {
+  display: grid;
+  grid-template-columns: 1.02fr 0.98fr;
+  gap: 52px;
+  align-items: center;
+  padding: 66px 0 78px;
+}
+
+@media (max-width: 900px) {
+  .section {
+    grid-template-columns: 1fr;
+    padding: 40px 0 52px;
+  }
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -1.8px;
+  line-height: 1.05;
+  font-size: clamp(34px, 5vw, 60px);
+  margin: 20px 0 0;
+  color: #0f172a;
+}
+
+.titleAccent { color: var(--primary); }
+
+.lede {
+  font-size: 18.5px;
+  line-height: 1.6;
+  color: #5b6472;
+  max-width: 520px;
+  margin: 22px 0 0;
+}
+
+.lede strong { color: var(--text-primary); font-weight: 600; }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 13px;
+  margin-top: 30px;
+}
+
+.ctaPrimary {
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+  padding: 15px 26px;
+  border-radius: 12px;
+  background: var(--primary);
+  box-shadow: var(--shadow-primary);
+  transition: background 0.18s;
+}
+.ctaPrimary:hover { background: var(--primary-hover); }
+
+.ctaSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-primary);
+  padding: 15px 24px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  transition: border-color 0.18s;
+}
+.ctaSecondary:hover { border-color: var(--border-strong); }
+
+.stats {
+  display: flex;
+  gap: 28px;
+  margin-top: 38px;
+}
+
+.statDivider { width: 1px; background: var(--border); }
+
+.statValue {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 25px;
+  color: #0f172a;
+}
+.statValue .starAccent { color: var(--accent-text); }
+
+.statLabel { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }

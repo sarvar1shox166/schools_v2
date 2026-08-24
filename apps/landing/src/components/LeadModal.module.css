@@ -1,0 +1,62 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  animation: fadeUp 0.22s both;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 460px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 40px 100px rgba(15, 23, 42, 0.35);
+  padding: 32px;
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #f3f4f6;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: #fef3e2;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 24px;
+  margin: 0 0 6px;
+  letter-spacing: -0.5px;
+  color: #0f172a;
+}
+
+.sub { color: var(--text-secondary); font-size: 14.5px; line-height: 1.55; margin: 0 0 20px; }

@@ -6,6 +6,9 @@ const leadSchema = z.object({
   fullName: z.string().min(2).max(200),
   phone: z.string().min(5).max(30),
   age: z.number().int().positive().max(120).optional(),
+  // Landing formasi yoshni aniq son emas, diapazon ("7-9") sifatida so'raydi.
+  ageRange: z.string().max(20).optional(),
+  preferredDays: z.string().max(100).optional(),
   level: z.string().max(100).optional(),
 });
 
@@ -37,9 +40,9 @@ export async function publicLeadsRoutes(app: FastifyInstance) {
     if (!tenantId) return reply.code(500).send({ error: "Tenant not configured" });
 
     await pool.query(
-      `INSERT INTO leads (tenant_id, full_name, phone, age, level)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [tenantId, body.fullName, body.phone, body.age ?? null, body.level ?? null]
+      `INSERT INTO leads (tenant_id, full_name, phone, age, age_range, preferred_days, level)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [tenantId, body.fullName, body.phone, body.age ?? null, body.ageRange ?? null, body.preferredDays ?? null, body.level ?? null]
     );
 
     return reply.code(201).send({ ok: true });

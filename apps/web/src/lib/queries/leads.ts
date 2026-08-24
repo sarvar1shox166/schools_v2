@@ -8,6 +8,8 @@ export interface Lead {
   fullName: string;
   phone: string;
   age: number | null;
+  ageRange: string | null;
+  preferredDays: string | null;
   level: string | null;
   status: "yangi" | "otkazildi" | "rad";
   convertedApplicationId: string | null;

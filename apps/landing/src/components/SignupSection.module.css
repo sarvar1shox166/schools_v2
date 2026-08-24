@@ -1,0 +1,54 @@
+.section { padding: 56px 0; }
+
+.banner {
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--primary);
+  box-shadow: 0 30px 70px rgba(37, 99, 235, 0.28);
+}
+
+.grid { display: grid; grid-template-columns: 0.95fr 1.05fr; gap: 0; }
+
+@media (max-width: 780px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+.copy { padding: 44px 40px; color: #fff; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -1px;
+  font-size: clamp(26px, 3.2vw, 36px);
+  margin: 18px 0 12px;
+}
+
+.sub { color: rgba(255, 255, 255, 0.85); font-size: 16px; line-height: 1.6; margin: 0 0 26px; }
+
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
+
+.listItem { display: flex; gap: 11px; align-items: center; font-size: 15px; }
+
+.checkBadge {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.formWrap { padding: 34px; background: #fff; }

@@ -1,0 +1,98 @@
+.section { padding: 56px 0; }
+
+.head { text-align: center; max-width: 660px; margin: 0 auto; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 2px;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.heading {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -1px;
+  font-size: clamp(28px, 3.6vw, 40px);
+  margin: 14px 0 0;
+  color: #0f172a;
+}
+
+.marqueeRow {
+  margin-top: 44px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+}
+
+.marqueeTrack {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  width: max-content;
+  animation: marquee 55s linear infinite;
+}
+
+.marqueeRow:hover .marqueeTrack {
+  animation-play-state: paused;
+}
+
+/* O'ngdan chapga siljiydi — kartalar o'ng tomondan kirib, chapga chiqadi.
+   Keyframes shu faylning o'zida e'lon qilingan: CSS Modules animation-name'ni
+   lokal qamrovga o'girib yuboradi, shuning uchun globals.css'dagi umumiy
+   @keyframes marquee bilan mos kelmay, animatsiya umuman ishlamas edi. */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marqueeTrack { animation: none; overflow-x: auto; }
+}
+
+.card {
+  flex: none;
+  width: 236px;
+  min-height: 392px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--border);
+}
+
+.photoWrap { flex: none; position: relative; width: 100%; height: 200px; }
+
+.body { flex: 1; display: flex; flex-direction: column; padding: 16px 16px 18px; }
+
+.name { font-family: var(--font-display); font-weight: 700; font-size: 16.5px; margin: 0 0 3px; color: #0f172a; }
+
+.titleBadge {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--primary-tint);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.exp { color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin: 10px 0 0; }
+
+.spacer { flex: 1; }
+
+.langs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.langText { font-size: 11.5px; color: #94a3b8; font-weight: 600; }

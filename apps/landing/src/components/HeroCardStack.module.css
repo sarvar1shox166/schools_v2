@@ -1,0 +1,72 @@
+.stack {
+  position: relative;
+  aspect-ratio: 1.28 / 1;
+}
+
+.card {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #fff;
+  transition:
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.7s ease,
+    opacity 0.7s ease;
+}
+
+.chrome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  background: #f9fafb;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.dot { width: 11px; height: 11px; border-radius: 50%; }
+.dotRed { background: #f87171; }
+.dotYellow { background: #fbbf24; }
+.dotGreen { background: #34d399; }
+
+.url {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #9ca3af;
+}
+
+.imgWrap { position: relative; width: 100%; aspect-ratio: 1.9 / 1; }
+
+.float {
+  position: absolute;
+  padding: 11px 14px;
+  border-radius: 13px;
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+  z-index: 10;
+}
+
+.floatTop { top: -22px; right: -12px; }
+.floatBottom { bottom: -18px; left: -14px; animation-delay: 0.6s; }
+
+.floatInner { display: flex; align-items: center; gap: 9px; }
+
+.floatIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--primary-tint);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.floatLabel { font-size: 11.5px; color: var(--text-secondary); }
+.floatValue { font-size: 15px; font-weight: 700; color: #0f172a; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: opacity 0.3s ease; }
+}

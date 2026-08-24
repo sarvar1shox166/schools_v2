@@ -32,7 +32,8 @@ export async function leadsRoutes(app: FastifyInstance) {
       where += ` AND status = $${params.length}`;
     }
     const { rows } = await pool.query(
-      `SELECT id, full_name AS "fullName", phone, age, level, status,
+      `SELECT id, full_name AS "fullName", phone, age, age_range AS "ageRange",
+              preferred_days AS "preferredDays", level, status,
               converted_application_id AS "convertedApplicationId", created_at AS "createdAt"
        FROM leads WHERE ${where} ORDER BY created_at DESC`,
       params

@@ -1,0 +1,114 @@
+.section { padding: 56px 0; }
+
+.head { text-align: center; max-width: 660px; margin: 0 auto; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 2px;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.heading {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -1px;
+  font-size: clamp(28px, 3.6vw, 40px);
+  margin: 14px 0 12px;
+  color: #0f172a;
+}
+
+.sub { color: #5b6472; font-size: 17px; line-height: 1.6; margin: 0; }
+
+.wrap { position: relative; margin-top: 44px; }
+
+.dashLine {
+  position: absolute;
+  top: 36px;
+  left: 8%;
+  right: 8%;
+  height: 0;
+  border-top: 2px dashed #c7d7fb;
+  z-index: 0;
+}
+
+.grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 820px) {
+  .grid { grid-template-columns: 1fr; }
+  .dashLine { display: none; }
+}
+
+.card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 28px;
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.04));
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+.card:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(37, 99, 235, 0.12); }
+
+.cardFeature { background: var(--primary-tint); border-color: #dbe6ff; }
+.cardFeature:hover { box-shadow: 0 14px 30px rgba(37, 99, 235, 0.16); }
+
+.checker {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  opacity: 0.5;
+}
+.checkerCell { background: var(--primary-tint); }
+.checkerFeature .checkerCell { background: #fff; }
+
+.numBadge {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 5px var(--primary-tint);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+  color: #fff;
+}
+
+/* Yorqin --accent fonida oq matn ~2.1:1 (WCAG'ni o'tmaydi) — shuning uchun
+   qorong'iroq --accent-text fon sifatida ishlatiladi (oq matn bilan 5:1+). */
+.numBadgeAccent { background: var(--accent-text); box-shadow: 0 0 0 5px var(--accent-tint); }
+
+.timeLabel {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-text);
+  font-weight: 700;
+  margin-top: 18px;
+}
+
+.cardTitle {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 19px;
+  margin: 6px 0 8px;
+  color: #0f172a;
+}
+
+.cardText { color: var(--text-secondary); font-size: 14.5px; line-height: 1.6; margin: 0; }
+.cardFeature .cardText { color: #475569; }
