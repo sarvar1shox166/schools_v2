@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { checkPuzzleMove, validateAndApplyMateStep, findAnyMateMove } from "@chess-school/chess-engine";
 import { pool } from "../../db/pool.js";
@@ -57,26 +58,19 @@ export async function gamificationRoutes(app: FastifyInstance) {
 
   // ---- Puzzles ----
 
-  app.get("/puzzles", async (request) => {
-    const { section } = request.query as { section?: string };
-    const { rows } = await pool.query(
-      section
-        ? `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, rating,
-                  (created_by IS NOT NULL) AS "createdByTeacher",
-                  (SELECT count(*) FROM puzzle_attempts WHERE puzzle_id = puzzles.id)::int AS "attemptCount"
-           FROM puzzles WHERE section = $1 ORDER BY random()`
-        : `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, rating,
-                  (created_by IS NOT NULL) AS "createdByTeacher",
-                  (SELECT count(*) FROM puzzle_attempts WHERE puzzle_id = puzzles.id)::int AS "attemptCount"
-           FROM puzzles ORDER BY random()`,
-      section ? [section] : []
-    );
-    return rows;
-  });
+  const PUZZLE_SELECT_COLS = `id, fen, difficulty, xp_reward AS "xpReward", title, section, rating,
+      (created_by IS NOT NULL) AS "createdByTeacher",
+      (SELECT count(*) FROM puzzle_attempts WHERE puzzle_id = puzzles.id)::int AS "attemptCount"`;
 
-  // Bo'limlar endi yuz minglab-millionlab qatorga ega bo'lishi mumkin
-  // (to'liq Lichess mateIn1..5 importi) — shuning uchun butun ro'yxatni
-  // yuklash o'rniga har safar FAQAT BITTA tasodifiy masala so'raladi.
+  // Bo'limlar endi yuz minglab-millionlab qatorga ega (to'liq Lichess
+  // mateIn1..5 importi) — shuning uchun butun ro'yxatni yuklash o'rniga
+  // har safar FAQAT BITTA tasodifiy masala so'raladi. `ORDER BY random()`
+  // bunday hajmda har doim butun mos qatorlar to'plamini skanerlab
+  // saralaydi (production'da ~400ms/so'rov edi) — buning o'rniga `id`
+  // (gen_random_uuid() — tabiiy tekis taqsimlangan) bo'yicha indeks orqali
+  // tasodifiy nuqtadan eng yaqin qatorni olamiz: `>=` bo'yicha topilmasa,
+  // aylanma sifatida `<` bo'yicha teskari izlanadi (0067 migratsiyasidagi
+  // (section, id) / (section, difficulty, id) indekslari shu yerda ishlatiladi).
   // `excludeId` — ketma-ket ikki marta AYNAN bir xil masala qaytmasligi
   // uchun (juda katta bo'limda amalda deyarli imkonsiz, lekin kichik
   // bo'limlar — masalan mot5 — uchun ham himoya bo'lsin).
@@ -96,14 +90,25 @@ export async function gamificationRoutes(app: FastifyInstance) {
       params.push(excludeId);
       conditions.push(`id != $${params.length}`);
     }
+    const where = conditions.join(" AND ");
+    const randomPoint = randomUUID();
 
-    const { rows } = await pool.query(
-      `SELECT id, fen, difficulty, xp_reward AS "xpReward", title, section, rating,
-              (created_by IS NOT NULL) AS "createdByTeacher",
-              (SELECT count(*) FROM puzzle_attempts WHERE puzzle_id = puzzles.id)::int AS "attemptCount"
-       FROM puzzles WHERE ${conditions.join(" AND ")} ORDER BY random() LIMIT 1`,
-      params
-    );
+    let rows = (
+      await pool.query(
+        `SELECT ${PUZZLE_SELECT_COLS} FROM puzzles WHERE ${where} AND id >= $${params.length + 1}
+         ORDER BY id LIMIT 1`,
+        [...params, randomPoint]
+      )
+    ).rows;
+    if (rows.length === 0) {
+      rows = (
+        await pool.query(
+          `SELECT ${PUZZLE_SELECT_COLS} FROM puzzles WHERE ${where} AND id < $${params.length + 1}
+           ORDER BY id DESC LIMIT 1`,
+          [...params, randomPoint]
+        )
+      ).rows;
+    }
     if (rows.length === 0) return reply.code(404).send({ error: "No puzzles" });
     return rows[0];
   });
@@ -150,11 +155,31 @@ export async function gamificationRoutes(app: FastifyInstance) {
     return { fen: rows[0].fen, moves: rows[0].solution as string[] };
   });
 
+  // Kunning sanasidan deterministik "tasodifiy nuqta" hosil qilinadi (bir xil
+  // sana — bir xil masala) va `id` bo'yicha indeks orqali eng yaqin qator
+  // olinadi — avvalgi `ORDER BY md5(...)` butun (1.8M+ qatorli) jadvalni
+  // skanerlab har bir qatorga md5 hisoblardi, bu esa /puzzles/random dagi
+  // bilan bir xil sabab bilan sekin edi.
   app.get("/puzzles/daily", async () => {
-    const { rows } = await pool.query(
-      `SELECT id, fen, difficulty, xp_reward AS "xpReward", title
-       FROM puzzles ORDER BY md5(id::text || current_date::text) LIMIT 1`
-    );
+    const { rows: seedRows } = await pool.query(`SELECT md5(current_date::text)::uuid AS seed`);
+    const seed = seedRows[0].seed as string;
+
+    let rows = (
+      await pool.query(
+        `SELECT id, fen, difficulty, xp_reward AS "xpReward", title
+         FROM puzzles WHERE id >= $1 ORDER BY id LIMIT 1`,
+        [seed]
+      )
+    ).rows;
+    if (rows.length === 0) {
+      rows = (
+        await pool.query(
+          `SELECT id, fen, difficulty, xp_reward AS "xpReward", title
+           FROM puzzles WHERE id < $1 ORDER BY id DESC LIMIT 1`,
+          [seed]
+        )
+      ).rows;
+    }
     return rows[0] ?? null;
   });
 
@@ -485,14 +510,15 @@ export async function gamificationRoutes(app: FastifyInstance) {
 
   app.get("/me/puzzle-stats", { onRequest: [app.requireRole("student")] }, async (request) => {
     const studentId = await getStudentIdForUser(request.user.sub);
-    if (!studentId) return { correct: 0, incorrect: 0, accuracyPct: 0, byDifficulty: [] };
+    if (!studentId) return { correct: 0, incorrect: 0, accuracyPct: 0, todayCount: 0, byDifficulty: [] };
 
     const totalsRes = await pool.query(
-      `SELECT COUNT(*) FILTER (WHERE correct)::int AS correct, COUNT(*) FILTER (WHERE NOT correct)::int AS incorrect
+      `SELECT COUNT(*) FILTER (WHERE correct)::int AS correct, COUNT(*) FILTER (WHERE NOT correct)::int AS incorrect,
+              COUNT(*) FILTER (WHERE attempted_at::date = CURRENT_DATE)::int AS "todayCount"
        FROM puzzle_attempts WHERE student_id = $1`,
       [studentId]
     );
-    const { correct, incorrect } = totalsRes.rows[0] as { correct: number; incorrect: number };
+    const { correct, incorrect, todayCount } = totalsRes.rows[0] as { correct: number; incorrect: number; todayCount: number };
     const total = correct + incorrect;
     const accuracyPct = total > 0 ? Math.round((correct / total) * 100) : 0;
 
@@ -505,7 +531,7 @@ export async function gamificationRoutes(app: FastifyInstance) {
       [studentId]
     );
 
-    return { correct, incorrect, accuracyPct, byDifficulty: byDiffRes.rows };
+    return { correct, incorrect, accuracyPct, todayCount, byDifficulty: byDiffRes.rows };
   });
 
   // ---- ELO history ----

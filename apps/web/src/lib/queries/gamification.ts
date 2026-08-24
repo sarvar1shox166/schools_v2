@@ -80,14 +80,6 @@ export function useDailyPuzzle() {
   });
 }
 
-export function usePuzzles(section?: PuzzleSection) {
-  return useQuery({
-    queryKey: ["puzzles", section],
-    queryFn: async () => (await api.get<Puzzle[]>("/puzzles", { params: section ? { section } : undefined })).data,
-    enabled: !!section,
-  });
-}
-
 // Bo'limlar endi yuz minglab-millionlab masalaga ega bo'lishi mumkin (to'liq
 // Lichess mateIn1..5 importi) — shuning uchun butun ro'yxatni yuklash o'rniga
 // har safar (bo'lim/qiyinlik o'zgarganda yoki "Keyingisi" bosilganda) serverdan
@@ -231,6 +223,7 @@ export interface PuzzleStats {
   correct: number;
   incorrect: number;
   accuracyPct: number;
+  todayCount: number;
   byDifficulty: { difficulty: string; correct: number; total: number }[];
 }
 
