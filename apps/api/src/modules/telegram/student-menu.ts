@@ -117,7 +117,7 @@ export function registerStudentMenuHandlers(bot: Bot): void {
     }
 
     const { rows } = await pool.query(
-      `SELECT h.title, h.due_date AS "dueDate",
+      `SELECT h.title, h.description, h.due_date AS "dueDate",
               EXISTS(SELECT 1 FROM homework_completions hc WHERE hc.homework_id = h.id AND hc.student_id = $1) AS done
        FROM homework h
        JOIN group_members gm ON gm.group_id = h.group_id AND gm.student_id = $1
@@ -133,12 +133,16 @@ export function registerStudentMenuHandlers(bot: Bot): void {
 
     const pending = rows.filter((r) => !r.done);
     const shown = pending.length > 0 ? pending : rows;
-    const lines = shown.map((r) => {
+    // O'qituvchi description'ga havola/qo'shimcha ko'rsatma qo'yishi mumkin —
+    // shuning uchun sarlavha bilan bir qatorda emas, alohida qatorda ko'rsatiladi
+    // (Telegram oddiy matndagi havolalarni ham avtomatik bosiladigan qiladi).
+    const blocks = shown.map((r) => {
       const status = r.done ? "✅" : "⏳";
-      const due = r.dueDate ? ` (muddat: ${new Date(r.dueDate).toLocaleDateString("uz-UZ")})` : "";
-      return `${status} ${r.title}${due}`;
+      const due = r.dueDate ? `\n🗓 Muddat: ${new Date(r.dueDate).toLocaleDateString("uz-UZ")}` : "";
+      const desc = r.description ? `\n${r.description}` : "";
+      return `${status} ${r.title}${desc}${due}`;
     });
     const header = pending.length > 0 ? `📝 Bajarilmagan uy vazifalari (${pending.length}):` : "📝 Oxirgi uy vazifalari:";
-    await ctx.reply(`${header}\n\n${lines.join("\n")}`);
+    await ctx.reply(`${header}\n\n${blocks.join("\n\n")}`);
   });
 }
