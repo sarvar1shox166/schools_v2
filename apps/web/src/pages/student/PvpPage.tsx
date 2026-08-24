@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Chess } from "chess.js";
 import type { PvpGameState } from "./PvpGamePage.js";
 import { ChessBoard } from "../../components/ChessBoard.js";
+import { SoundToggle } from "../../components/SoundToggle.js";
 import { PromotionModal } from "../../components/PromotionModal.js";
 import { PlayerIdentityCard, VsDivider, TcBadge, ClockPill, ClockCard, MovesPanel } from "../../components/GameSidebar.js";
 import { usePvpSocket, type OnlinePlayer, type IncomingChallenge, type PvpStatus } from "../../lib/pvpSocket.js";
@@ -667,8 +668,11 @@ export default function PvpPage() {
 
           {/* Board column */}
           <div ref={boardColRef} className="pvp-board-col" style={{ minWidth:0, display:"flex", flexDirection:"column", gap:8, alignItems:"center", justifyContent:"center" }}>
-            <div style={{ width:boardSize }}>
-              <ClockPill name={oppName} seconds={opSeconds} isActive={status==="playing" && turn!==color} isLow={opSeconds<=30} />
+            <div style={{ width:boardSize, display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <ClockPill name={oppName} seconds={opSeconds} isActive={status==="playing" && turn!==color} isLow={opSeconds<=30} />
+              </div>
+              <SoundToggle />
             </div>
             <div style={{ width:boardSize,height:boardSize,flexShrink:0 }}>
               <PvpBoardWithCoords

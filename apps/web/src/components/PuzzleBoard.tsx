@@ -9,6 +9,8 @@ import { chessgroundDests } from "chessops/compat";
 import "@lichess-org/chessground/assets/chessground.base.css";
 import "@lichess-org/chessground/assets/chessground.brown.css";
 import "./puzzleBoard.css";
+import { diffFenMove } from "../lib/chessMaterial.js";
+import { playMoveSound } from "../lib/sound.js";
 
 /** Boshqotirmalar uchun taxta — Lichess'ning `chessground` (taxta) va
  *  `chessops` (qonuniy yurishlarni hisoblash) kutubxonalariga asoslangan.
@@ -90,8 +92,18 @@ export function PuzzleBoard({ fen, onMove, disabled, hintSquare, revertKey, orie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const prevFenRef = useRef(fen);
   useEffect(() => {
     groundRef.current?.set(buildConfig());
+    // `revertKey` o'zgarganda `fen` qiymati o'zgarmasligi mumkin (noto'g'ri
+    // yurishdan keyin taxta orqaga qaytadi) — bu holda tovush chalinmaydi,
+    // faqat haqiqatan yangi FEN kelganda (o'z yoki raqib yurishi).
+    const prevFen = prevFenRef.current;
+    prevFenRef.current = fen;
+    if (prevFen !== fen) {
+      const diff = diffFenMove(prevFen, fen);
+      if (diff) playMoveSound(diff.captured ? "capture" : "move");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fen, disabled, hintSquare, revertKey, orientation]);
 

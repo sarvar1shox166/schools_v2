@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Chess } from "@chess-school/chess-engine";
 import { ChessBoard } from "../../components/ChessBoard.js";
 import { PromotionModal } from "../../components/PromotionModal.js";
+import { SoundToggle } from "../../components/SoundToggle.js";
 import { PlayerIdentityCard, VsDivider, TcBadge, ClockPill, ClockCard, MovesPanel } from "../../components/GameSidebar.js";
 import { api } from "../../lib/api.js";
 import { useRecordGameResult, useMyXp } from "../../lib/queries.js";
@@ -429,6 +430,7 @@ export default function PvpGamePage() {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
           Yurish: <span style={{ color: "#f5f5f6", fontWeight: 800 }}>{moves.length}</span>
         </div>
+        <SoundToggle />
       </div>
 
       {/* Main layout */}

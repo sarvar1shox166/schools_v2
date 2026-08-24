@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Chess, parseFenPlacement } from "@chess-school/chess-engine";
+import { diffFenMove } from "../lib/chessMaterial.js";
+import { playMoveSound } from "../lib/sound.js";
 
 const PIECE_FILE: Record<string, string> = {
   K: "oq-shox.svg",   Q: "oq-farzin.svg", R: "oq-rux.svg",
@@ -126,6 +128,7 @@ export function ChessBoard({
   } | null>(null);
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  const prevFenRef = useRef(fen);
 
   const board = parseFenPlacement(fen);
   const rows = flipped ? [...board].reverse() : board;
@@ -138,12 +141,12 @@ export function ChessBoard({
     const el = document.createElement("style");
     el.id = id;
     el.textContent = `
-      @keyframes cb-arrive {
-        0%   { transform: scale(1.18); }
-        60%  { transform: scale(0.97); }
-        100% { transform: scale(1); }
+      @keyframes cb-slide {
+        0%   { transform: translate(var(--cb-dx, 0), var(--cb-dy, 0)) scale(1.05); }
+        60%  { transform: translate(0, 0) scale(0.97); }
+        100% { transform: translate(0, 0) scale(1); }
       }
-      .cb-arrive { animation: cb-arrive 0.18s ease-out; }
+      .cb-slide { animation: cb-slide 0.22s cubic-bezier(.2,.8,.3,1); }
     `;
     document.head.appendChild(el);
   }, []);
@@ -153,6 +156,29 @@ export function ChessBoard({
     const c = flipped ? 7 - colIdx : colIdx;
     return `${FILES[c]}${8 - r}`;
   }
+
+  function squareDisplayRowCol(square: string): [number, number] {
+    const file = FILES.indexOf(square[0]);
+    const rank = parseInt(square[1], 10);
+    const r = 8 - rank;
+    const c = file;
+    return flipped ? [7 - r, 7 - c] : [r, c];
+  }
+
+  // Yurish MANBASIDAN qat'i nazar (o'zi bosdimi, raqib/kompyuter `fen` prop
+  // orqali yubordimi) ishlaydi — shu bilan avval faqat o'z yurishida
+  // ishlagan "kelish" belgilanishi va tovush endi RAQIB yurishida ham
+  // ko'rinadi/eshitiladi ("qayerga yurdi payqash qiyin" muammosi shu edi).
+  useEffect(() => {
+    const prevFen = prevFenRef.current;
+    prevFenRef.current = fen;
+    if (prevFen === fen) return;
+    const diff = diffFenMove(prevFen, fen);
+    if (!diff) return;
+    setLastMove({ from: diff.from, to: diff.to });
+    playMoveSound(diff.captured ? "capture" : "move");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fen]);
 
   function getSquareAt(clientX: number, clientY: number): string | null {
     const rect = boardRef.current?.getBoundingClientRect();
@@ -169,8 +195,10 @@ export function ChessBoard({
   }
 
   function commit(from: string, to: string) {
+    // `lastMove` va tovush endi `fen` prop o'zgarganda (fen-diff effekti
+    // orqali) belgilanadi — shu bilan o'z va raqib yurishi bir xil yo'l
+    // bilan ishlanadi, takror chaqirilmaydi.
     onMove(from, to);
-    setLastMove({ from, to });
     setSelected(null);
     setLegalSquares(new Set());
   }
@@ -290,8 +318,20 @@ export function ChessBoard({
                   {piece && (
                     <div
                       onMouseDown={(e) => handleMouseDown(e, piece, square)}
-                      className={isLastTo && !drag ? "cb-arrive" : undefined}
-                      style={{ position: "absolute", inset: 0 }}
+                      className={isLastTo && !drag ? "cb-slide" : undefined}
+                      style={
+                        isLastTo && !drag && lastMove
+                          ? (() => {
+                              const [tr, tc] = squareDisplayRowCol(lastMove.to);
+                              const [fr, fc] = squareDisplayRowCol(lastMove.from);
+                              return {
+                                position: "absolute", inset: 0,
+                                "--cb-dx": `${(fc - tc) * 100}%`,
+                                "--cb-dy": `${(fr - tr) * 100}%`,
+                              } as React.CSSProperties;
+                            })()
+                          : { position: "absolute", inset: 0 }
+                      }
                     >
                       <PieceImg piece={piece} dimmed={isDragSrc} />
                     </div>

@@ -12,6 +12,7 @@ import {
 } from "../../lib/queries.js";
 import { PuzzleBoard } from "../../components/PuzzleBoard.js";
 import { PromotionModal } from "../../components/PromotionModal.js";
+import { SoundToggle } from "../../components/SoundToggle.js";
 import { isPromotionMove, pieceAt } from "../../lib/chessMaterial.js";
 import { SECTIONS } from "./PuzzlesPage.js";
 
@@ -222,6 +223,11 @@ function PuzzleBoardBlock({ section, puzzle, isLoading, notFound, autoAdvance, o
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
   const posRef = useRef<Chess | null>(null);
   const revealTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Raqib javobini biroz kechiktirib qo'yishda (submitMove) foydalanuvchi
+  // shu orada "Keyingisi"ni bosib boshqa masalaga o'tib ketgan bo'lishi
+  // mumkin — shu holatda eskirgan javobni yangi masala ustiga qo'llamaslik
+  // uchun joriy masala id'si shu yerda kuzatiladi.
+  const currentPuzzleIdRef = useRef<string | undefined>(undefined);
 
   const activeFen = fen ?? puzzle?.fen ?? "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   // O'quvchining o'zi qaysi rangda o'ynayotgani — masalaning BOSHLANG'ICH
@@ -247,6 +253,7 @@ function PuzzleBoardBlock({ section, puzzle, isLoading, notFound, autoAdvance, o
     setHintSquare(undefined);
     setSanList([]);
     setPendingPromotion(null);
+    currentPuzzleIdRef.current = puzzle?.id;
     if (!puzzle) { posRef.current = null; return; }
     try {
       const setup = parseFen(puzzle.fen).unwrap();
@@ -324,21 +331,35 @@ function PuzzleBoardBlock({ section, puzzle, isLoading, notFound, autoAdvance, o
       setRevertKey((k) => k + 1);
       return;
     }
+    const puzzleIdAtStart = puzzle.id;
     const studentSan = applyStudentMove(from, to, promotion);
-    const newSans = studentSan ? [studentSan] : [];
-    setFen(res.fenAfter);
+    if (studentSan) setSanList((prev) => [...prev, studentSan]);
+
     if (res.finished) {
-      if (newSans.length) setSanList((prev) => [...prev, ...newSans]);
+      // Masala shu yurish bilan tugadi — raqib javobi yo'q, to'g'ridan-to'g'ri
+      // yakuniy holatga o'tiladi.
+      setFen(res.fenAfter);
       setSolved(true);
       setFeedback(`✅ To'g'ri! +${res.xpAwarded} XP`);
-    } else {
-      const replySan = applyReplyMove(res.fenAfter);
-      if (replySan) newSans.push(replySan);
-      if (newSans.length) setSanList((prev) => [...prev, ...newSans]);
-      if (isMateSection) setMovesRemaining(res.movesRemaining);
-      else setMoveIndex(moveIndex + 2);
-      setFeedback("To'g'ri yurish! Davom eting.");
+      return;
     }
+
+    // Server res.fenAfter'da ALLAQACHON raqibning javobi ham bor — buni
+    // to'g'ridan-to'g'ri qo'ysak, ikki yarim-yurish (o'zimiz + raqib) bitta
+    // sakrash bo'lib ko'rinib, "raqib qayerga yurdi" tushunarsiz bo'lardi.
+    // Shuning uchun avval faqat o'z yurishimizdan keyingi holatni ko'rsatamiz,
+    // keyin qisqa pauzadan so'ng raqib javobini alohida animatsiya bilan qo'yamiz.
+    if (posRef.current) setFen(fenFromPos(posRef.current));
+    setFeedback("To'g'ri yurish! Davom eting.");
+
+    await new Promise((resolve) => setTimeout(resolve, 380));
+    if (currentPuzzleIdRef.current !== puzzleIdAtStart) return; // shu orada boshqa masalaga o'tib ketilgan
+
+    const replySan = applyReplyMove(res.fenAfter);
+    if (replySan) setSanList((prev) => [...prev, replySan]);
+    setFen(res.fenAfter);
+    if (isMateSection) setMovesRemaining(res.movesRemaining);
+    else setMoveIndex(moveIndex + 2);
   }
 
   async function handleHint() {
@@ -608,6 +629,8 @@ export default function PuzzleSolvePage() {
             </div>
           </div>
         </div>
+
+        <SoundToggle style={{ marginLeft: "auto" }} />
       </div>
 
       {wide ? (

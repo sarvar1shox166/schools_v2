@@ -38,6 +38,36 @@ export function pieceAt(fen: string, square: string): string | null {
   return null;
 }
 
+export interface FenMoveDiff { from: string; to: string; captured: boolean }
+
+/** Ikkita FEN orasidagi farqdan "qaysi katakdan qaysi katakka" yurilganini
+ *  taxmin qiladi — bu real yurish tekshiruvi emas, faqat vizual signal
+ *  (kelish animatsiyasi, tovush) uchun ishlatiladi, shuning uchun yurish
+ *  manbasidan (o'zi bosdimi, raqib/kompyuter fen prop orqali yubordimi)
+ *  qat'i nazar bir xil ishlaydi. Bir nechta katak o'zgaradigan holatlarda
+ *  (rokirovka, en-passant) birinchi mos juftlik olinadi — kosmetik maqsad
+ *  uchun yetarli. */
+export function diffFenMove(prevFen: string, nextFen: string): FenMoveDiff | null {
+  let from: string | null = null;
+  let to: string | null = null;
+  let captured = false;
+  for (const file of FILES) {
+    for (let rank = 1; rank <= 8; rank++) {
+      const square = `${file}${rank}`;
+      const before = pieceAt(prevFen, square);
+      const after = pieceAt(nextFen, square);
+      if (before === after) continue;
+      if (before && !after) {
+        if (!from) from = square;
+      } else if (after) {
+        if (!to) { to = square; captured = !!before; }
+      }
+    }
+  }
+  if (!from || !to) return null;
+  return { from, to, captured };
+}
+
 /** True when moving the piece at `from` to `to` is a pawn promotion. */
 export function isPromotionMove(fen: string, from: string, to: string): boolean {
   const piece = pieceAt(fen, from);
