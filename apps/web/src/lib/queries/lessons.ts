@@ -66,5 +66,13 @@ export function useTelegramLinkUrl() {
   });
 }
 
+export function useTelegramUnlink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await api.post<{ linked: boolean }>("/me/telegram-unlink")).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["telegramStatus"] }),
+  });
+}
+
 // ---- Notifications ----
 

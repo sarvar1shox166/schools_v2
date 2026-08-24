@@ -1,9 +1,10 @@
 import { Avatar, Card, Icon, PageHead } from "@chess-school/ui";
-import { useMyProfile, useMyRatingBreakdown, useTelegramLinkUrl, useTelegramStatus } from "../../lib/queries.js";
+import { useMyProfile, useMyRatingBreakdown, useTelegramLinkUrl, useTelegramStatus, useTelegramUnlink } from "../../lib/queries.js";
 
 function TelegramLinkCard() {
   const { data: status } = useTelegramStatus();
   const linkUrl = useTelegramLinkUrl();
+  const unlink = useTelegramUnlink();
 
   if (!status?.botConfigured) return null;
 
@@ -13,15 +14,25 @@ function TelegramLinkCard() {
     });
   };
 
+  const handleUnlink = () => {
+    if (!window.confirm("Telegram hisobini uzasizmi? Dars eslatmalari endi kelmaydi.")) return;
+    unlink.mutate();
+  };
+
   return (
     <Card className="card-pad fade-up">
       <div style={{ fontWeight: 750, fontSize: 15, marginBottom: 14, display: "flex", alignItems: "center", gap: 9 }}>
         <Icon name="message2" size={17} style={{ color: "var(--accent-text)" }} /> Telegram bot
       </div>
       {status.linked ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-dim)" }}>
-          <Icon name="check" size={16} style={{ color: "#22c55e" }} /> Hisobingiz ulangan — dars eslatmalari Telegramga yuboriladi.
-        </div>
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-dim)", marginBottom: 12 }}>
+            <Icon name="check" size={16} style={{ color: "#22c55e" }} /> Hisobingiz ulangan — dars eslatmalari Telegramga yuboriladi.
+          </div>
+          <button className="btn" disabled={unlink.isPending} onClick={handleUnlink} style={{ color: "#ef4444" }}>
+            {unlink.isPending ? "Uzilmoqda..." : "Ulanishni uzish"}
+          </button>
+        </>
       ) : (
         <>
           <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 12 }}>

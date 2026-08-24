@@ -114,6 +114,11 @@ export async function authRoutes(app: FastifyInstance) {
     return { linked: !!rows[0]?.telegramId, botConfigured: !!env.TELEGRAM_BOT_TOKEN };
   });
 
+  app.post("/me/telegram-unlink", { onRequest: [app.authenticate] }, async (request) => {
+    await pool.query(`UPDATE users SET telegram_id = NULL WHERE id = $1`, [request.user.sub]);
+    return { linked: false };
+  });
+
   app.post("/auth/refresh", async (request, reply) => {
     const { refreshToken } = request.body as { refreshToken?: string };
     if (!refreshToken) {

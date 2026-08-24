@@ -1,6 +1,6 @@
 import { Icon } from "@chess-school/ui";
 import { useAuthStore } from "../../lib/auth-store.js";
-import { useMyXp, useEloHistory, useGameStats, useTelegramLinkUrl, useTelegramStatus, type EloPoint } from "../../lib/queries.js";
+import { useMyXp, useEloHistory, useGameStats, useTelegramLinkUrl, useTelegramStatus, useTelegramUnlink, type EloPoint } from "../../lib/queries.js";
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 function initials(name: string) {
@@ -136,6 +136,7 @@ function KpiCard({ icon, tint, value, label, delta }: { icon: React.ReactNode; t
 function TelegramLinkCard() {
   const { data: status } = useTelegramStatus();
   const linkUrl = useTelegramLinkUrl();
+  const unlink = useTelegramUnlink();
 
   if (!status?.botConfigured) return null;
 
@@ -143,6 +144,11 @@ function TelegramLinkCard() {
     linkUrl.mutate(undefined, {
       onSuccess: (data) => window.open(data.url, "_blank"),
     });
+  };
+
+  const handleUnlink = () => {
+    if (!window.confirm("Telegram hisobini uzasizmi? Dars eslatmalari endi kelmaydi.")) return;
+    unlink.mutate();
   };
 
   return (
@@ -154,9 +160,19 @@ function TelegramLinkCard() {
         <div style={{ color: "#f5f5f6", fontSize: 14.5, fontWeight: 700 }}>Telegram bot</div>
       </div>
       {status.linked ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#8b8d98" }}>
-          <Icon name="check" size={15} style={{ color: "#4ade80" }} /> Hisobingiz ulangan — dars eslatmalari Telegramga yuboriladi.
-        </div>
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#8b8d98", marginBottom: 14 }}>
+            <Icon name="check" size={15} style={{ color: "#4ade80" }} /> Hisobingiz ulangan — dars eslatmalari Telegramga yuboriladi.
+          </div>
+          <button
+            className="btn"
+            disabled={unlink.isPending}
+            onClick={handleUnlink}
+            style={{ width: "100%", justifyContent: "center", color: "#f87171" }}
+          >
+            {unlink.isPending ? "Uzilmoqda..." : "Ulanishni uzish"}
+          </button>
+        </>
       ) : (
         <>
           <div style={{ fontSize: 12.5, color: "#8b8d98", marginBottom: 14, lineHeight: 1.5 }}>

@@ -34,10 +34,6 @@
   animation: marquee 55s linear infinite;
 }
 
-.marqueeRow:hover .marqueeTrack {
-  animation-play-state: paused;
-}
-
 /* O'ngdan chapga siljiydi — kartalar o'ng tomondan kirib, chapga chiqadi.
    Keyframes shu faylning o'zida e'lon qilingan: CSS Modules animation-name'ni
    lokal qamrovga o'girib yuboradi, shuning uchun globals.css'dagi umumiy

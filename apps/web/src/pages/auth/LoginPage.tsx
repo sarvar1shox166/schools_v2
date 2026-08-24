@@ -193,7 +193,7 @@ export default function LoginPage() {
               Xush kelibsiz
             </div>
             <div style={{ fontSize:40, fontWeight:800, letterSpacing:"-.02em", marginTop:6, lineHeight:1 }}>
-              chess<span style={{ color:"#d9ccff" }}>.up</span>
+              Chess<span style={{ color:"#d9ccff" }}>on</span>
             </div>
             <div style={{ fontSize:13.5, fontWeight:600, color:"rgba(255,255,255,.7)", marginTop:8, letterSpacing:".02em" }}>
               Online shaxmat maktabi
@@ -241,7 +241,7 @@ export default function LoginPage() {
               }}>♟</div>
               <div>
                 <div style={{ fontSize:20, fontWeight:800, letterSpacing:"-.02em", color:"#4f14f2", lineHeight:1 }}>
-                  chess<span style={{ color:"#7a4cff" }}>.up</span>
+                  Chess<span style={{ color:"#7a4cff" }}>on</span>
                 </div>
                 <div style={{ fontSize:10, fontWeight:600, color:"#a79fc4", letterSpacing:".06em", marginTop:2 }}>
                   online shaxmat maktabi
