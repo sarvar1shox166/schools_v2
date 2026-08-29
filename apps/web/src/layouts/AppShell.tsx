@@ -48,6 +48,7 @@ const ADMIN_PAGE_META: Record<string, { title: string; sub: string }> = {
   "/admin/applications":   { title: "Arizalar",           sub: "CRM va ariza boshqaruvi" },
   "/admin/teacher-rating": { title: "Ustoz reytingi",     sub: "Baholar va izohlar" },
   "/admin/reports":        { title: "Hisobotlar",         sub: "Statistika va tahlil" },
+  "/admin/profile":        { title: "Mening profilim",    sub: "Shaxsiy ma'lumotlar" },
 };
 
 const TEACHER_PAGE_META: Record<string, { title: string; sub: string }> = {
@@ -76,6 +77,7 @@ const ADMIN_NAV_ROLES: Record<string, string[]> = {
   "/admin":               ["super_admin", "admin", "assistant_admin", "operator", "moderator"],
   "/admin/schedule":      ["super_admin", "admin", "assistant_admin", "operator", "moderator"],
   "/admin/attendance":    ["super_admin", "admin", "assistant_admin", "operator", "moderator"],
+  "/admin/profile":       ["super_admin", "admin", "assistant_admin", "operator", "moderator"],
   "/admin/applications":  ["super_admin", "admin", "assistant_admin", "operator"],
   "/admin/students":      ["super_admin", "admin", "assistant_admin", "operator"],
   "/admin/settings":      ["super_admin", "admin"],

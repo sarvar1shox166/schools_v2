@@ -22,6 +22,7 @@ import VideoCoursesPage from "./pages/admin/VideoCoursesPage.js";
 import VideoCourseDetailPage from "./pages/admin/VideoCourseDetailPage.js";
 import SettingsPage from "./pages/admin/SettingsPage.js";
 import XodimlarPage from "./pages/admin/XodimlarPage.js";
+import AdminProfilePage from "./pages/admin/AdminProfilePage.js";
 import NewStaffPage from "./pages/admin/NewStaffPage.js";
 import PackagesPage from "./pages/admin/PackagesPage.js";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard.js";
@@ -101,6 +102,12 @@ const ADMIN_NAV: NavSection[] = [
       { to: "/admin/settings",      label: "Sozlamalar",       icon: "settings" },
     ],
   },
+  {
+    group: "Profil",
+    items: [
+      { to: "/admin/profile", label: "Mening profilim", icon: "user" },
+    ],
+  },
 ];
 
 const TEACHER_NAV: NavSection[] = [
@@ -158,10 +165,11 @@ export default function App() {
 
       <Route element={<RequireAuth roles={["super_admin", "admin", "assistant_admin", "operator", "moderator"]} />}>
         <Route element={<AppShell title="Admin paneli" nav={ADMIN_NAV} />}>
-          {/* Dashboard, Jadval, Davomat — super_admin/admin/assistant_admin/operator/moderator */}
+          {/* Dashboard, Jadval, Davomat, Profil — super_admin/admin/assistant_admin/operator/moderator */}
           <Route path="/admin"                element={<AdminHome />} />
           <Route path="/admin/schedule"       element={<SchedulePage />} />
           <Route path="/admin/attendance"     element={<AttendancePage />} />
+          <Route path="/admin/profile"        element={<AdminProfilePage />} />
 
           {/* Arizalar, O'quvchilar — + operator (front-ofis/CRM) */}
           <Route element={<RequireAuth roles={["super_admin", "admin", "assistant_admin", "operator"]} />}>
