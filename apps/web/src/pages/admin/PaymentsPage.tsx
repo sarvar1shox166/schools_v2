@@ -14,7 +14,7 @@ import {
 
 const fmt = fmtSom;
 
-type TabKey = "all" | "paid" | "pending" | "debt";
+type TabKey = "all" | "paid" | "pending" | "deferred" | "debt";
 
 const METHOD_LABELS: Record<string, string> = {
   naqd:   "Naqd",
@@ -33,6 +33,7 @@ const METHOD_STYLE: Record<string, { bg: string; color: string }> = {
 function statusLabel(s: Transaction["displayStatus"]) {
   if (s === "paid")      return "to'langan";
   if (s === "pending")   return "kutilmoqda";
+  if (s === "deferred")  return "keyinroq to'laydi";
   if (s === "overdue")   return "qarzdor";
   if (s === "failed")    return "xato";
   if (s === "cancelled") return "bekor";
@@ -56,9 +57,10 @@ export default function PaymentsPage() {
   const deleteTx = useDeleteTransaction();
 
   const filtered = useMemo(() => {
-    if (tab === "paid")    return transactions.filter(t => t.displayStatus === "paid");
-    if (tab === "pending") return transactions.filter(t => t.displayStatus === "pending");
-    if (tab === "debt")    return transactions.filter(t => t.displayStatus === "overdue");
+    if (tab === "paid")     return transactions.filter(t => t.displayStatus === "paid");
+    if (tab === "pending")  return transactions.filter(t => t.displayStatus === "pending");
+    if (tab === "deferred") return transactions.filter(t => t.displayStatus === "deferred");
+    if (tab === "debt")     return transactions.filter(t => t.displayStatus === "overdue");
     return transactions;
   }, [tab, transactions]);
 
@@ -71,10 +73,11 @@ export default function PaymentsPage() {
   }
 
   const TABS: { key: TabKey; label: string }[] = [
-    { key: "all",     label: "Barchasi" },
-    { key: "paid",    label: "To'langan" },
-    { key: "pending", label: "Kutilmoqda" },
-    { key: "debt",    label: "Qarzdor" },
+    { key: "all",      label: "Barchasi" },
+    { key: "paid",     label: "To'langan" },
+    { key: "pending",  label: "Kutilmoqda" },
+    { key: "deferred", label: "Keyinroq to'laydi" },
+    { key: "debt",     label: "Qarzdor" },
   ];
 
   return (
@@ -200,6 +203,21 @@ export default function PaymentsPage() {
                               border: "1px solid #fde68a", fontSize: 12.5, fontWeight: 700,
                               width: "fit-content",
                             }}>⏳ kutilmoqda</span>
+                            {dueDateLabel(p.daysLeft) && (
+                              <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>
+                                {dueDateLabel(p.daysLeft)}
+                              </span>
+                            )}
+                          </div>
+                        ) : p.displayStatus === "deferred" ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              padding: "4px 12px", borderRadius: 99,
+                              background: "#ede9fe1a", color: "#7c3aed",
+                              border: "1px solid #ddd6fe", fontSize: 12.5, fontWeight: 700,
+                              width: "fit-content",
+                            }}>🕐 keyinroq to'laydi</span>
                             {dueDateLabel(p.daysLeft) && (
                               <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>
                                 {dueDateLabel(p.daysLeft)}

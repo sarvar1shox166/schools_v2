@@ -280,10 +280,11 @@ export async function paymentsRoutes(app: FastifyInstance) {
       [tenantId]
     );
 
-    // Qarzdorlik: muddati (due_date) o'tib ketgan, hali to'lanmagan (kutilmoqda) tranzaksiyalar.
+    // Qarzdorlik: muddati (due_date) o'tib ketgan tranzaksiyalar (to'langan bo'lsa ham —
+    // paket/obuna yangilanmagan degani, pending bo'lsa ham — hali to'lanmagan degani).
     const debtRes = await pool.query(
       `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-       WHERE tenant_id = $1 AND status = 'pending' AND due_date IS NOT NULL AND due_date < CURRENT_DATE`,
+       WHERE tenant_id = $1 AND status IN ('pending', 'paid') AND due_date IS NOT NULL AND due_date < CURRENT_DATE`,
       [tenantId]
     );
 
@@ -310,8 +311,17 @@ export async function paymentsRoutes(app: FastifyInstance) {
       `SELECT t.id, t.amount, t.method, t.status, t.provider_ref AS "providerRef",
               t.created_at AS "createdAt", t.due_date AS "dueDate",
               (t.due_date - CURRENT_DATE) AS "daysLeft",
-              CASE WHEN t.status = 'pending' AND t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE
-                   THEN 'overdue' ELSE t.status::text END AS "displayStatus",
+              CASE
+                -- Muddati o'tib ketgan (to'langan yoki hali to'lanmagan bo'lishidan qat'i nazar) — qarzdor.
+                WHEN t.status IN ('pending', 'paid') AND t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE
+                  THEN 'overdue'
+                -- Hali umuman to'lanmagan (keyinroq to'laydi yoki provider tasdiqlanishini kutmoqda).
+                WHEN t.status = 'pending' THEN 'deferred'
+                -- To'langan, lekin paket/obuna muddati 5 kun ichida tugaydi — yangilash kerak.
+                WHEN t.status = 'paid' AND t.due_date IS NOT NULL AND t.due_date <= CURRENT_DATE + 5
+                  THEN 'pending'
+                ELSE t.status::text
+              END AS "displayStatus",
               u.full_name AS "studentName",
               g.name AS "groupName"
        FROM transactions t

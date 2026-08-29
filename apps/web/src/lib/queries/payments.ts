@@ -32,7 +32,7 @@ export interface Transaction {
   amount: number;
   method: "click" | "payme" | "naqd" | "uzcard";
   status: "pending" | "paid" | "failed" | "cancelled";
-  displayStatus: "pending" | "paid" | "failed" | "cancelled" | "overdue";
+  displayStatus: "pending" | "paid" | "failed" | "cancelled" | "overdue" | "deferred";
   dueDate: string | null;
   daysLeft: number | null;
   providerRef: string | null;
