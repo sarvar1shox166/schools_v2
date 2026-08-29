@@ -40,6 +40,17 @@ const assignSchema = z.object({
   // O'tgan sanadagi to'lovni ro'yxatga olish uchun (masalan avvalroq qo'shilgan o'quvchi) —
   // bo'sh bo'lsa hozirgi vaqt ishlatiladi.
   paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // O'quvchi hoziroq emas, keyinroq to'lamoqchi bo'lsa — usul (naqd/uzcard) qat'i
+  // nazar tranzaksiya "kutilmoqda" holatida yaratiladi va muddati o'tsa "qarzdor"ga aylanadi.
+  payLater: z.boolean().optional(),
+});
+
+const transactionUpdateSchema = z.object({
+  amount: z.number().positive().optional(),
+  method: z.enum(["click", "payme", "naqd", "uzcard"]).optional(),
+  status: z.enum(["pending", "paid", "failed", "cancelled"]).optional(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  createdAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 // Allaqachon tayinlangan paketni tuzatish uchun — masalan "8 ta dars" deb sotib
@@ -191,11 +202,11 @@ export async function paymentsRoutes(app: FastifyInstance) {
       );
       const studentPackageId = spRes.rows[0].id;
 
-      const txStatus = body.method === "click" || body.method === "payme" ? "pending" : "paid";
+      const txStatus = body.payLater || body.method === "click" || body.method === "payme" ? "pending" : "paid";
       const txRes = await client.query(
-        `INSERT INTO transactions (tenant_id, student_id, student_package_id, amount, method, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, now())) RETURNING id`,
-        [tenantId, body.studentId, studentPackageId, pkg.price, body.method, txStatus, body.paidAt ?? null]
+        `INSERT INTO transactions (tenant_id, student_id, student_package_id, amount, method, status, due_date, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, now())) RETURNING id`,
+        [tenantId, body.studentId, studentPackageId, pkg.price, body.method, txStatus, body.expiresAt ?? null, body.paidAt ?? null]
       );
 
       await client.query("COMMIT");
@@ -269,14 +280,10 @@ export async function paymentsRoutes(app: FastifyInstance) {
       [tenantId]
     );
 
-    // Debt: students with active packages whose lessons are fully used but package not yet renewed,
-    // approximated as remaining unused lessons valued at per-lesson price for active packages near/at completion.
+    // Qarzdorlik: muddati (due_date) o'tib ketgan, hali to'lanmagan (kutilmoqda) tranzaksiyalar.
     const debtRes = await pool.query(
-      `SELECT COALESCE(SUM(p.price), 0) AS total
-       FROM student_packages sp
-       JOIN students s ON s.id = sp.student_id
-       JOIN packages p ON p.id = sp.package_id
-       WHERE s.tenant_id = $1 AND sp.status = 'active' AND sp.used_lessons >= sp.total_lessons`,
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
+       WHERE tenant_id = $1 AND status = 'pending' AND due_date IS NOT NULL AND due_date < CURRENT_DATE`,
       [tenantId]
     );
 
@@ -301,7 +308,11 @@ export async function paymentsRoutes(app: FastifyInstance) {
     }
     const { rows } = await pool.query(
       `SELECT t.id, t.amount, t.method, t.status, t.provider_ref AS "providerRef",
-              t.created_at AS "createdAt", u.full_name AS "studentName",
+              t.created_at AS "createdAt", t.due_date AS "dueDate",
+              (t.due_date - CURRENT_DATE) AS "daysLeft",
+              CASE WHEN t.status = 'pending' AND t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE
+                   THEN 'overdue' ELSE t.status::text END AS "displayStatus",
+              u.full_name AS "studentName",
               g.name AS "groupName"
        FROM transactions t
        JOIN students s ON s.id = t.student_id
@@ -318,6 +329,43 @@ export async function paymentsRoutes(app: FastifyInstance) {
       params
     );
     return rows;
+  });
+
+  app.patch("/transactions/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = transactionUpdateSchema.parse(request.body);
+    const { tenantId } = request.user;
+
+    const dueDateProvided = Object.prototype.hasOwnProperty.call(body, "dueDate");
+    const { rows } = await pool.query(
+      `UPDATE transactions SET
+         amount     = COALESCE($1, amount),
+         method     = COALESCE($2, method),
+         status     = COALESCE($3, status),
+         due_date   = CASE WHEN $4 THEN $5::date ELSE due_date END,
+         created_at = COALESCE($6::date, created_at)
+       WHERE id = $7 AND tenant_id = $8
+       RETURNING id`,
+      [
+        body.amount ?? null, body.method ?? null, body.status ?? null,
+        dueDateProvided, body.dueDate ?? null,
+        body.createdAt ?? null,
+        id, tenantId,
+      ]
+    );
+    if (rows.length === 0) return reply.code(404).send({ error: "To'lov topilmadi" });
+    return { ok: true };
+  });
+
+  app.delete("/transactions/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `DELETE FROM transactions WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+      [id, tenantId]
+    );
+    if (rows.length === 0) return reply.code(404).send({ error: "To'lov topilmadi" });
+    return { ok: true };
   });
 }
 

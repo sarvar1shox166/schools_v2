@@ -32,6 +32,9 @@ export interface Transaction {
   amount: number;
   method: "click" | "payme" | "naqd" | "uzcard";
   status: "pending" | "paid" | "failed" | "cancelled";
+  displayStatus: "pending" | "paid" | "failed" | "cancelled" | "overdue";
+  dueDate: string | null;
+  daysLeft: number | null;
   providerRef: string | null;
   createdAt: string;
   studentName: string;
@@ -223,12 +226,38 @@ export function useMarkTeacherAttendance() {
 export function useAssignPackage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { studentId: string; packageId: string; method: "click" | "payme" | "naqd" | "uzcard"; expiresAt?: string; paidAt?: string }) =>
+    mutationFn: async (payload: { studentId: string; packageId: string; method: "click" | "payme" | "naqd" | "uzcard"; expiresAt?: string; paidAt?: string; payLater?: boolean }) =>
       (await api.post("/student-packages", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
       qc.invalidateQueries({ queryKey: ["studentPackages"] });
       qc.invalidateQueries({ queryKey: ["students"] });
+      qc.invalidateQueries({ queryKey: ["paymentsStats"] });
+    },
+  });
+}
+
+export function useUpdateTransaction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: {
+      id: string; amount?: number; method?: "click" | "payme" | "naqd" | "uzcard";
+      status?: "pending" | "paid" | "failed" | "cancelled"; dueDate?: string | null; createdAt?: string;
+    }) => (await api.patch(`/transactions/${id}`, payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["paymentsStats"] });
+    },
+  });
+}
+
+export function useDeleteTransaction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/transactions/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["paymentsStats"] });
     },
   });
 }

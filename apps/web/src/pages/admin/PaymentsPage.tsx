@@ -6,6 +6,8 @@ import {
   usePaymentsStats,
   usePackages,
   useAssignPackage,
+  useUpdateTransaction,
+  useDeleteTransaction,
   useStudents,
   Transaction,
 } from "../../lib/queries.js";
@@ -28,27 +30,45 @@ const METHOD_STYLE: Record<string, { bg: string; color: string }> = {
   naqd:   { bg: "var(--surface-3)", color: "var(--text-dim)" },
 };
 
-function statusLabel(s: Transaction["status"]) {
+function statusLabel(s: Transaction["displayStatus"]) {
   if (s === "paid")      return "to'langan";
   if (s === "pending")   return "kutilmoqda";
+  if (s === "overdue")   return "qarzdor";
   if (s === "failed")    return "xato";
   if (s === "cancelled") return "bekor";
   return s;
 }
 
+function dueDateLabel(daysLeft: number | null): string | null {
+  if (daysLeft === null) return null;
+  if (daysLeft > 0) return `${daysLeft} kun qoldi`;
+  if (daysLeft === 0) return "bugun oxirgi kun";
+  return `${Math.abs(daysLeft)} kun kechikdi`;
+}
+
 export default function PaymentsPage() {
   const [tab, setTab]             = useState<TabKey>("all");
   const [showModal, setShowModal] = useState(false);
+  const [editTx, setEditTx]       = useState<Transaction | null>(null);
 
   const { data: transactions = [], isLoading } = useTransactions();
   const { data: stats } = usePaymentsStats();
+  const deleteTx = useDeleteTransaction();
 
   const filtered = useMemo(() => {
-    if (tab === "paid")    return transactions.filter(t => t.status === "paid");
-    if (tab === "pending") return transactions.filter(t => t.status === "pending");
-    if (tab === "debt")    return transactions.filter(t => t.status === "failed" || t.status === "cancelled");
+    if (tab === "paid")    return transactions.filter(t => t.displayStatus === "paid");
+    if (tab === "pending") return transactions.filter(t => t.displayStatus === "pending");
+    if (tab === "debt")    return transactions.filter(t => t.displayStatus === "overdue");
     return transactions;
   }, [tab, transactions]);
+
+  function handleDelete(t: Transaction) {
+    const msg = t.displayStatus === "paid"
+      ? "Bu to'lov to'langan deb belgilangan — o'chirilsa hisobotlardagi summalar ham o'zgaradi. Baribir o'chirilsinmi?"
+      : "To'lov yozuvini o'chirasizmi?";
+    if (!window.confirm(msg)) return;
+    deleteTx.mutate(t.id);
+  }
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: "all",     label: "Barchasi" },
@@ -110,7 +130,7 @@ export default function PaymentsPage() {
           <div style={{ padding: 40, textAlign: "center", color: "var(--text-faint)" }}>Yuklanmoqda...</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table className="tbl" style={{ minWidth: 820 }}>
+            <table className="tbl" style={{ minWidth: 900 }}>
               <thead>
                 <tr>
                   <th>ID</th>
@@ -120,6 +140,7 @@ export default function PaymentsPage() {
                   <th>SANA</th>
                   <th>USUL</th>
                   <th>STATUS</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -163,35 +184,74 @@ export default function PaymentsPage() {
                         </span>
                       </td>
                       <td>
-                        {p.status === "paid" ? (
+                        {p.displayStatus === "paid" ? (
                           <span style={{
                             display: "inline-flex", alignItems: "center", gap: 5,
                             padding: "4px 12px", borderRadius: 99,
                             background: "#dcfce71a", color: "#16a34a",
                             border: "1px solid #bbf7d0", fontSize: 12.5, fontWeight: 700,
                           }}><Icon name="check" size={11} /> to'langan</span>
-                        ) : p.status === "pending" ? (
-                          <span style={{
-                            display: "inline-flex", alignItems: "center", gap: 5,
-                            padding: "4px 12px", borderRadius: 99,
-                            background: "#fef3c71a", color: "#d97706",
-                            border: "1px solid #fde68a", fontSize: 12.5, fontWeight: 700,
-                          }}>⏳ kutilmoqda</span>
+                        ) : p.displayStatus === "pending" ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              padding: "4px 12px", borderRadius: 99,
+                              background: "#fef3c71a", color: "#d97706",
+                              border: "1px solid #fde68a", fontSize: 12.5, fontWeight: 700,
+                              width: "fit-content",
+                            }}>⏳ kutilmoqda</span>
+                            {dueDateLabel(p.daysLeft) && (
+                              <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>
+                                {dueDateLabel(p.daysLeft)}
+                              </span>
+                            )}
+                          </div>
+                        ) : p.displayStatus === "overdue" ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              padding: "4px 12px", borderRadius: 99,
+                              background: "#fee2e21a", color: "#ef4444",
+                              border: "1px solid #fecaca", fontSize: 12.5, fontWeight: 700,
+                              width: "fit-content",
+                            }}>⚠ qarzdor</span>
+                            {dueDateLabel(p.daysLeft) && (
+                              <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 600 }}>
+                                {dueDateLabel(p.daysLeft)}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span style={{
                             display: "inline-flex", alignItems: "center", gap: 5,
                             padding: "4px 12px", borderRadius: 99,
                             background: "#fee2e21a", color: "#ef4444",
                             border: "1px solid #fecaca", fontSize: 12.5, fontWeight: 700,
-                          }}>⚠ {statusLabel(p.status)}</span>
+                          }}>⚠ {statusLabel(p.displayStatus)}</span>
                         )}
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 5 }}>
+                          <button
+                            onClick={() => setEditTx(p)}
+                            style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center" }}
+                          >
+                            <Icon name="edit" size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(p)}
+                            style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "grid", placeItems: "center" }}
+                          >
+                            <Icon name="trash" size={13} style={{ color: "#ef4444" }} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="empty"><Icon name="wallet" size={26} /><div>To'lovlar topilmadi</div></div>
                     </td>
                   </tr>
@@ -203,6 +263,7 @@ export default function PaymentsPage() {
       </Card>
 
       {showModal && <AssignPaymentModal onClose={() => setShowModal(false)} />}
+      {editTx && <EditTransactionModal tx={editTx} onClose={() => setEditTx(null)} />}
     </div>
   );
 }
@@ -218,6 +279,7 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
   const [packageId, setPackageId]         = useState("");
   const [method, setMethod]               = useState<"naqd" | "click" | "payme" | "uzcard">("naqd");
   const [expiresAt, setExpiresAt]         = useState("");
+  const [payLater, setPayLater]           = useState(false);
   const [err, setErr]                     = useState("");
 
   const filteredStudents = students.filter(s =>
@@ -228,9 +290,10 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
   async function handleSubmit() {
     if (!studentId) { setErr("O'quvchini tanlang"); return; }
     if (!packageId) { setErr("Paketni tanlang"); return; }
+    if (payLater && !expiresAt) { setErr("Keyinroq to'lash uchun muddatni belgilang"); return; }
     setErr("");
     try {
-      await assignPkg.mutateAsync({ studentId, packageId, method, expiresAt: expiresAt || undefined });
+      await assignPkg.mutateAsync({ studentId, packageId, method, expiresAt: expiresAt || undefined, payLater: payLater || undefined });
       onClose();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
@@ -350,10 +413,10 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* Expires at (optional) */}
+          {/* Expires at / due date (optional) */}
           <div>
             <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
-              Tugash sanasi (ixtiyoriy)
+              To'lov muddati {payLater ? "*" : "(ixtiyoriy)"}
             </label>
             <input
               type="date"
@@ -363,6 +426,20 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
               style={{ width: "100%" }}
             />
           </div>
+
+          {/* Pay later */}
+          <label style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+            border: "1px solid var(--border)", borderRadius: 10, cursor: "pointer",
+          }}>
+            <input type="checkbox" checked={payLater} onChange={e => setPayLater(e.target.checked)} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Hozir emas, keyinroq to'laydi</div>
+              <div style={{ fontSize: 11.5, color: "var(--text-faint)" }}>
+                To'lov "kutilmoqda" holatida yaratiladi, muddati o'tsa avtomatik "qarzdor"ga o'tadi.
+              </div>
+            </div>
+          </label>
 
           {err && (
             <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>{err}</div>
@@ -380,6 +457,169 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
             >
               <Icon name="check" size={15} />
               {assignPkg.isPending ? "Saqlanmoqda..." : "Saqlash"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ─── Edit Transaction Modal ─── */
+function EditTransactionModal({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
+  const updateTx = useUpdateTransaction();
+
+  const [amount, setAmount]     = useState(String(tx.amount));
+  const [method, setMethod]     = useState(tx.method);
+  const [status, setStatus]     = useState<"pending" | "paid" | "failed" | "cancelled">(tx.status);
+  const [dueDate, setDueDate]   = useState(tx.dueDate ?? "");
+  const [createdAt, setCreatedAt] = useState(tx.createdAt.slice(0, 10));
+  const [err, setErr]           = useState("");
+
+  async function handleSubmit() {
+    const amountNum = Number(amount);
+    if (!amountNum || amountNum <= 0) { setErr("Summani kiriting"); return; }
+    setErr("");
+    try {
+      await updateTx.mutateAsync({
+        id: tx.id, amount: amountNum, method, status,
+        dueDate: dueDate || null, createdAt,
+      });
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    }
+  }
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        background: "rgba(0,0,0,.45)", backdropFilter: "blur(3px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+      }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: "var(--surface)", borderRadius: 18,
+        width: 480, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto",
+        boxShadow: "0 24px 64px rgba(0,0,0,.22)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 24px 18px" }}>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>To'lovni tahrirlash</div>
+          <button className="iconbtn" style={{ width: 32, height: 32 }} onClick={onClose}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ fontSize: 13, color: "var(--text-faint)" }}>{tx.studentName}</div>
+
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+              Summa
+            </label>
+            <input
+              type="number"
+              className="inp"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              style={{ width: "100%" }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+              To'lov usuli
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {(["naqd", "click", "payme", "uzcard"] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setMethod(m)}
+                  style={{
+                    flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    border: method === m ? "2px solid var(--accent)" : "1.5px solid var(--border)",
+                    background: method === m ? "var(--accent)" : "transparent",
+                    color: method === m ? "#fff" : "var(--text-dim)",
+                  }}
+                >
+                  {METHOD_LABELS[m]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+              Status
+            </label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {([
+                { key: "paid", label: "To'langan" },
+                { key: "pending", label: "Kutilmoqda" },
+                { key: "cancelled", label: "Bekor qilingan" },
+                { key: "failed", label: "Xato" },
+              ] as const).map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => setStatus(s.key)}
+                  style={{
+                    padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    border: status === s.key ? "2px solid var(--accent)" : "1.5px solid var(--border)",
+                    background: status === s.key ? "var(--accent)" : "transparent",
+                    color: status === s.key ? "#fff" : "var(--text-dim)",
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+              To'lov sanasi
+            </label>
+            <input
+              type="date"
+              className="inp"
+              value={createdAt}
+              onChange={e => setCreatedAt(e.target.value)}
+              style={{ width: "100%" }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+              To'lov muddati (ixtiyoriy)
+            </label>
+            <input
+              type="date"
+              className="inp"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              style={{ width: "100%" }}
+            />
+          </div>
+
+          {err && (
+            <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>{err}</div>
+          )}
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>
+              Bekor
+            </button>
+            <button
+              className="btn primary"
+              style={{ flex: 2, justifyContent: "center" }}
+              onClick={handleSubmit}
+              disabled={updateTx.isPending}
+            >
+              <Icon name="check" size={15} />
+              {updateTx.isPending ? "Saqlanmoqda..." : "Saqlash"}
             </button>
           </div>
         </div>
