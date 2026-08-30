@@ -36,13 +36,18 @@ const assignSchema = z.object({
   studentId: z.string().uuid(),
   packageId: z.string().uuid(),
   method: z.enum(["click", "payme", "naqd", "uzcard"]),
+  // PAKET (obuna) muddati — xizmat qachongacha amal qiladi. Faqat student_packages'da saqlanadi.
   expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   // O'tgan sanadagi to'lovni ro'yxatga olish uchun (masalan avvalroq qo'shilgan o'quvchi) —
   // bo'sh bo'lsa hozirgi vaqt ishlatiladi.
   paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   // O'quvchi hoziroq emas, keyinroq to'lamoqchi bo'lsa — usul (naqd/uzcard) qat'i
-  // nazar tranzaksiya "kutilmoqda" holatida yaratiladi va muddati o'tsa "qarzdor"ga aylanadi.
+  // nazar tranzaksiya "kutilmoqda" holatida yaratiladi.
   payLater: z.boolean().optional(),
+  // TO'LOV muddati — pul qachongacha kelishi kerak. Faqat to'lanmagan (payLater)
+  // to'lov uchun ma'noli; shu sana o'tib ketsa to'lov "qarzdor"ga aylanadi.
+  // Paket muddati bilan aralashtirilmaydi — bular ikki xil sana.
+  paymentDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 const transactionUpdateSchema = z.object({
@@ -203,10 +208,16 @@ export async function paymentsRoutes(app: FastifyInstance) {
       const studentPackageId = spRes.rows[0].id;
 
       const txStatus = body.payLater || body.method === "click" || body.method === "payme" ? "pending" : "paid";
+      // due_date — TO'LOV muddati, faqat hali to'lanmagan to'lovda ma'noli.
+      // Paket muddati (expiresAt) bu yerga umuman yozilmaydi: u student_packages'da.
+      const paymentDue = txStatus === "pending" ? (body.paymentDueDate ?? null) : null;
+      // Naqd/uzcard qo'lda kiritilganda ham haqiqiy to'lov vaqti yoziladi —
+      // hisobotlar created_at emas, shu maydonga tayanadi.
+      const paidAtValue = txStatus === "paid" ? (body.paidAt ?? new Date().toISOString()) : null;
       const txRes = await client.query(
-        `INSERT INTO transactions (tenant_id, student_id, student_package_id, amount, method, status, due_date, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, now())) RETURNING id`,
-        [tenantId, body.studentId, studentPackageId, pkg.price, body.method, txStatus, body.expiresAt ?? null, body.paidAt ?? null]
+        `INSERT INTO transactions (tenant_id, student_id, student_package_id, amount, method, status, due_date, paid_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, COALESCE($9::timestamptz, now())) RETURNING id`,
+        [tenantId, body.studentId, studentPackageId, pkg.price, body.method, txStatus, paymentDue, paidAtValue, body.paidAt ?? null]
       );
 
       await client.query("COMMIT");
@@ -275,16 +286,31 @@ export async function paymentsRoutes(app: FastifyInstance) {
       [tenantId]
     );
 
+    // Kutilayotgan: hali to'lanmagan, lekin to'lov muddati HALI O'TMAGAN.
+    // Qarzdorlik bilan kesishmasligi uchun muddati o'tganlari bu yerdan chiqarilgan —
+    // aks holda bitta to'lov ikkala ko'rsatkichda ham hisoblanib ketardi.
     const pendingRes = await pool.query(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE tenant_id = $1 AND status = 'pending'`,
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
+       WHERE tenant_id = $1 AND status = 'pending'
+         AND (due_date IS NULL OR due_date >= CURRENT_DATE)`,
       [tenantId]
     );
 
-    // Qarzdorlik: muddati (due_date) o'tib ketgan tranzaksiyalar (to'langan bo'lsa ham —
-    // paket/obuna yangilanmagan degani, pending bo'lsa ham — hali to'lanmagan degani).
+    // Haqiqiy qarzdorlik: pul hali kelmagan VA va'da qilingan to'lov muddati o'tib ketgan.
+    // To'langan (paid) to'lov — paket muddati tugagan bo'lsa ham — qarz emas.
     const debtRes = await pool.query(
       `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-       WHERE tenant_id = $1 AND status IN ('pending', 'paid') AND due_date IS NOT NULL AND due_date < CURRENT_DATE`,
+       WHERE tenant_id = $1 AND status = 'pending'
+         AND due_date IS NOT NULL AND due_date < CURRENT_DATE`,
+      [tenantId]
+    );
+
+    // Obunasi tugagan/tugayotgan, lekin qarzi yo'q o'quvchilar — yangilash uchun eslatma.
+    const expiringRes = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM student_packages sp
+       JOIN students s ON s.id = sp.student_id
+       WHERE s.tenant_id = $1 AND sp.status = 'active'
+         AND sp.expires_at IS NOT NULL AND sp.expires_at <= CURRENT_DATE + 5`,
       [tenantId]
     );
 
@@ -293,6 +319,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
       totalDebt: Number(debtRes.rows[0].total),
       totalPaidThisPeriod: Number(paidThisMonthRes.rows[0].total),
       totalPending: Number(pendingRes.rows[0].total),
+      expiringCount: Number(expiringRes.rows[0].count),
     };
   });
 
@@ -309,17 +336,25 @@ export async function paymentsRoutes(app: FastifyInstance) {
     }
     const { rows } = await pool.query(
       `SELECT t.id, t.amount, t.method, t.status, t.provider_ref AS "providerRef",
-              t.created_at AS "createdAt", t.due_date AS "dueDate",
-              (t.due_date - CURRENT_DATE) AS "daysLeft",
+              t.created_at AS "createdAt",
+              -- TO'LOV muddati (pul qachongacha kelishi kerak)
+              t.due_date AS "dueDate",
+              (t.due_date - CURRENT_DATE) AS "paymentDaysLeft",
+              -- PAKET (obuna) muddati — nusxa emas, to'g'ridan-to'g'ri paketning o'zidan
+              sp.expires_at AS "packageExpiresAt",
+              (sp.expires_at - CURRENT_DATE) AS "packageDaysLeft",
               CASE
-                -- Muddati o'tib ketgan (to'langan yoki hali to'lanmagan bo'lishidan qat'i nazar) — qarzdor.
-                WHEN t.status IN ('pending', 'paid') AND t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE
+                -- Pul hali kelmagan VA va'da qilingan muddat o'tgan — haqiqiy QARZDOR.
+                WHEN t.status = 'pending' AND t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE
                   THEN 'overdue'
-                -- Hali umuman to'lanmagan (keyinroq to'laydi yoki provider tasdiqlanishini kutmoqda).
+                -- Pul hali kelmagan, muddati hali kelmagan — keyinroq to'laydi.
                 WHEN t.status = 'pending' THEN 'deferred'
-                -- To'langan, lekin paket/obuna muddati 5 kun ichida tugaydi — yangilash kerak.
-                WHEN t.status = 'paid' AND t.due_date IS NOT NULL AND t.due_date <= CURRENT_DATE + 5
-                  THEN 'pending'
+                -- To'langan, lekin obuna muddati o'tgan — yangilash kerak (bu QARZ EMAS).
+                WHEN t.status = 'paid' AND sp.expires_at IS NOT NULL AND sp.expires_at < CURRENT_DATE
+                  THEN 'expired'
+                -- To'langan, obuna 5 kun ichida tugaydi — oldindan eslatma.
+                WHEN t.status = 'paid' AND sp.expires_at IS NOT NULL AND sp.expires_at <= CURRENT_DATE + 5
+                  THEN 'expiring'
                 ELSE t.status::text
               END AS "displayStatus",
               u.full_name AS "studentName",
@@ -327,6 +362,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
        FROM transactions t
        JOIN students s ON s.id = t.student_id
        JOIN users u ON u.id = s.user_id
+       LEFT JOIN student_packages sp ON sp.id = t.student_package_id
        LEFT JOIN LATERAL (
          SELECT gr.name FROM group_members gm
          JOIN groups gr ON gr.id = gm.group_id
@@ -353,13 +389,28 @@ export async function paymentsRoutes(app: FastifyInstance) {
          method     = COALESCE($2, method),
          status     = COALESCE($3, status),
          due_date   = CASE WHEN $4 THEN $5::date ELSE due_date END,
-         created_at = COALESCE($6::date, created_at)
-       WHERE id = $7 AND tenant_id = $8
+         -- Sana o'zgarmagan bo'lsa asl vaqt (soat/daqiqa) saqlanib qoladi —
+         -- forma faqat kun aniqligida yuboradi, shuning uchun ustiga yozmaymiz.
+         created_at = CASE
+                        WHEN $6::date IS NOT NULL AND $6::date <> created_at::date
+                          THEN $6::timestamptz
+                        ELSE created_at
+                      END,
+         -- Qo'lda "to'landi" qilinganda haqiqiy to'lov vaqti ham yoziladi,
+         -- boshqa holatga o'tkazilsa tozalanadi.
+         paid_at    = CASE
+                        WHEN $7::text = 'paid'
+                          THEN COALESCE(paid_at, COALESCE($6::timestamptz, now()))
+                        WHEN $7::text IS NOT NULL THEN NULL
+                        ELSE paid_at
+                      END
+       WHERE id = $8 AND tenant_id = $9
        RETURNING id`,
       [
         body.amount ?? null, body.method ?? null, body.status ?? null,
         dueDateProvided, body.dueDate ?? null,
         body.createdAt ?? null,
+        body.status ?? null,
         id, tenantId,
       ]
     );
@@ -370,12 +421,51 @@ export async function paymentsRoutes(app: FastifyInstance) {
   app.delete("/transactions/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
-    const { rows } = await pool.query(
-      `DELETE FROM transactions WHERE id = $1 AND tenant_id = $2 RETURNING id`,
-      [id, tenantId]
-    );
-    if (rows.length === 0) return reply.code(404).send({ error: "To'lov topilmadi" });
-    return { ok: true };
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const txRes = await client.query(
+        `SELECT t.id, t.student_package_id AS "studentPackageId",
+                sp.used_lessons AS "usedLessons"
+         FROM transactions t
+         LEFT JOIN student_packages sp ON sp.id = t.student_package_id
+         WHERE t.id = $1 AND t.tenant_id = $2
+         FOR UPDATE OF t`,
+        [id, tenantId]
+      );
+      if (txRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "To'lov topilmadi" });
+      }
+      const tx = txRes.rows[0];
+
+      // Paketdan darslar allaqachon sarflangan bo'lsa, o'chirish davomat tarixini
+      // buzadi (attendance_records.student_package_id NULL bo'lib qoladi) —
+      // shuning uchun taqiqlanadi, o'rniga "bekor qilingan" statusi ishlatiladi.
+      if (tx.studentPackageId && Number(tx.usedLessons) > 0) {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({
+          error: `Bu paketdan ${tx.usedLessons} ta dars allaqachon ishlatilgan — to'lovni o'chirib bo'lmaydi. Uni tahrirlab "Bekor qilingan" holatiga o'tkazing.`,
+        });
+      }
+
+      await client.query(`DELETE FROM transactions WHERE id = $1`, [id]);
+      // To'lov yozuvi bilan birga unga tayinlangan paket ham olib tashlanadi —
+      // aks holda o'quvchida to'lovi yo'q, "osilib qolgan" darslar qolib ketadi.
+      if (tx.studentPackageId) {
+        await client.query(`DELETE FROM student_packages WHERE id = $1`, [tx.studentPackageId]);
+      }
+
+      await client.query("COMMIT");
+      return { ok: true };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   });
 }
 

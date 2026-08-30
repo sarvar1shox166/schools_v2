@@ -32,9 +32,14 @@ export interface Transaction {
   amount: number;
   method: "click" | "payme" | "naqd" | "uzcard";
   status: "pending" | "paid" | "failed" | "cancelled";
-  displayStatus: "pending" | "paid" | "failed" | "cancelled" | "overdue" | "deferred";
+  /** Hisoblangan holat — "qarzdor" faqat pul kelmagan va muddati o'tganda. */
+  displayStatus: "paid" | "deferred" | "overdue" | "expiring" | "expired" | "failed" | "cancelled";
+  /** TO'LOV muddati — pul qachongacha kelishi kerak. */
   dueDate: string | null;
-  daysLeft: number | null;
+  paymentDaysLeft: number | null;
+  /** PAKET (obuna) muddati — paketning o'zidan olinadi, nusxa emas. */
+  packageExpiresAt: string | null;
+  packageDaysLeft: number | null;
   providerRef: string | null;
   createdAt: string;
   studentName: string;
@@ -92,6 +97,7 @@ export interface PaymentsStats {
   totalDebt: number;
   totalPaidThisPeriod: number;
   totalPending: number;
+  expiringCount: number;
 }
 
 export function usePaymentsStats() {
@@ -226,7 +232,7 @@ export function useMarkTeacherAttendance() {
 export function useAssignPackage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { studentId: string; packageId: string; method: "click" | "payme" | "naqd" | "uzcard"; expiresAt?: string; paidAt?: string; payLater?: boolean }) =>
+    mutationFn: async (payload: { studentId: string; packageId: string; method: "click" | "payme" | "naqd" | "uzcard"; expiresAt?: string; paidAt?: string; payLater?: boolean; paymentDueDate?: string }) =>
       (await api.post("/student-packages", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });

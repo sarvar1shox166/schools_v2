@@ -111,7 +111,7 @@ export function useUpdateGroup() {
 
 export interface StudentDetail extends Student {
   login: string | null;
-  paymentStatus: "active" | "debt" | "inactive" | "no_package" | null;
+  paymentStatus: "active" | "debt" | "expired" | "inactive" | "no_package" | null;
   activePackageExpires: string | null;
   xp: { xp: number; level: number; streak: number; elo: number } | null;
   totalLessons: number;

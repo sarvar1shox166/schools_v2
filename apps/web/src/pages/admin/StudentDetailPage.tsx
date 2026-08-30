@@ -20,12 +20,13 @@ const METHODS = [
 type PayMethod = "naqd" | "uzcard" | "click" | "payme";
 
 const PAY_STATUS_LABEL: Record<string, string> = {
-  active: "Kutilmoqda", debt: "Qarzdor",
+  active: "Faol", debt: "Qarzdor", expired: "Muddati tugagan",
   no_package: "Paket yo'q", inactive: "Nofaol",
 };
 const PAY_STATUS_COLOR: Record<string, { bg: string; color: string }> = {
   active:     { bg: "#d1fae5", color: "#059669" },
   debt:       { bg: "#fee2e2", color: "#dc2626" },
+  expired:    { bg: "#fef3c7", color: "#d97706" },
   no_package: { bg: "var(--surface-3)", color: "var(--text-faint)" },
   inactive:   { bg: "var(--surface-3)", color: "var(--text-faint)" },
 };

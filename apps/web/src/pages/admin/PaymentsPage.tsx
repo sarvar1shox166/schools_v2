@@ -14,7 +14,7 @@ import {
 
 const fmt = fmtSom;
 
-type TabKey = "all" | "paid" | "pending" | "deferred" | "debt";
+type TabKey = "all" | "paid" | "deferred" | "debt" | "expiring";
 
 const METHOD_LABELS: Record<string, string> = {
   naqd:   "Naqd",
@@ -30,21 +30,58 @@ const METHOD_STYLE: Record<string, { bg: string; color: string }> = {
   naqd:   { bg: "var(--surface-3)", color: "var(--text-dim)" },
 };
 
-function statusLabel(s: Transaction["displayStatus"]) {
-  if (s === "paid")      return "to'langan";
-  if (s === "pending")   return "kutilmoqda";
-  if (s === "deferred")  return "keyinroq to'laydi";
-  if (s === "overdue")   return "qarzdor";
-  if (s === "failed")    return "xato";
-  if (s === "cancelled") return "bekor";
-  return s;
+/** Holat ko'rinishi. Muhim: "qarzdor" — faqat pul kelmagan va to'lov muddati
+ *  o'tgan holat. To'lagan, lekin obunasi tugagan o'quvchi qarzdor emas. */
+const STATUS_META: Record<Transaction["displayStatus"], {
+  label: string; icon: string; bg: string; color: string; border: string;
+}> = {
+  paid:      { label: "to'langan",         icon: "✓",  bg: "#dcfce71a", color: "#16a34a", border: "#bbf7d0" },
+  deferred:  { label: "keyinroq to'laydi", icon: "🕐", bg: "#ede9fe1a", color: "#7c3aed", border: "#ddd6fe" },
+  overdue:   { label: "qarzdor",           icon: "⚠",  bg: "#fee2e21a", color: "#ef4444", border: "#fecaca" },
+  expiring:  { label: "obuna tugayapti",   icon: "⏳", bg: "#fef3c71a", color: "#d97706", border: "#fde68a" },
+  expired:   { label: "obuna tugagan",     icon: "⌛", bg: "#f3f4f61a", color: "#6b7280", border: "#e5e7eb" },
+  failed:    { label: "xato",              icon: "⚠",  bg: "#fee2e21a", color: "#ef4444", border: "#fecaca" },
+  cancelled: { label: "bekor qilingan",    icon: "✕",  bg: "#f3f4f61a", color: "#6b7280", border: "#e5e7eb" },
+};
+
+/** Holatga qarab TEGISHLI sanani izohlaydi: to'lov holatlarida to'lov muddatini,
+ *  obuna holatlarida paket muddatini — ikkalasi hech qachon aralashtirilmaydi. */
+function daysNote(t: Transaction): { text: string; danger: boolean } | null {
+  if (t.displayStatus === "overdue" || t.displayStatus === "deferred") {
+    const d = t.paymentDaysLeft;
+    if (d === null) return null;
+    if (d > 0)   return { text: `to'lashga ${d} kun qoldi`, danger: false };
+    if (d === 0) return { text: "bugun to'lash kerak", danger: false };
+    return { text: `to'lov ${Math.abs(d)} kun kechikdi`, danger: true };
+  }
+  if (t.displayStatus === "expiring" || t.displayStatus === "expired") {
+    const d = t.packageDaysLeft;
+    if (d === null) return null;
+    if (d > 0)   return { text: `obunaga ${d} kun qoldi`, danger: false };
+    if (d === 0) return { text: "obuna bugun tugaydi", danger: false };
+    return { text: `obuna ${Math.abs(d)} kun oldin tugagan`, danger: true };
+  }
+  return null;
 }
 
-function dueDateLabel(daysLeft: number | null): string | null {
-  if (daysLeft === null) return null;
-  if (daysLeft > 0) return `${daysLeft} kun qoldi`;
-  if (daysLeft === 0) return "bugun oxirgi kun";
-  return `${Math.abs(daysLeft)} kun kechikdi`;
+function StatusCell({ t }: { t: Transaction }) {
+  const meta = STATUS_META[t.displayStatus];
+  const note = daysNote(t);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 5,
+        padding: "4px 12px", borderRadius: 99, width: "fit-content",
+        background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`,
+        fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
+      }}>{meta.icon} {meta.label}</span>
+      {note && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: note.danger ? "#ef4444" : "var(--text-faint)" }}>
+          {note.text}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export default function PaymentsPage() {
@@ -58,26 +95,33 @@ export default function PaymentsPage() {
 
   const filtered = useMemo(() => {
     if (tab === "paid")     return transactions.filter(t => t.displayStatus === "paid");
-    if (tab === "pending")  return transactions.filter(t => t.displayStatus === "pending");
     if (tab === "deferred") return transactions.filter(t => t.displayStatus === "deferred");
     if (tab === "debt")     return transactions.filter(t => t.displayStatus === "overdue");
+    if (tab === "expiring") return transactions.filter(t => t.displayStatus === "expiring" || t.displayStatus === "expired");
     return transactions;
   }, [tab, transactions]);
 
   function handleDelete(t: Transaction) {
-    const msg = t.displayStatus === "paid"
-      ? "Bu to'lov to'langan deb belgilangan — o'chirilsa hisobotlardagi summalar ham o'zgaradi. Baribir o'chirilsinmi?"
-      : "To'lov yozuvini o'chirasizmi?";
+    // Pul allaqachon kelgan to'lovni o'chirish hisobotlarni o'zgartiradi —
+    // status nomidan qat'i nazar, asl status bo'yicha ogohlantiramiz.
+    const msg = t.status === "paid"
+      ? "Bu to'lov bo'yicha pul qabul qilingan — o'chirilsa hisobotlardagi summalar ham o'zgaradi va unga biriktirilgan paket bekor qilinadi. Baribir o'chirilsinmi?"
+      : "To'lov yozuvini va unga biriktirilgan paketni o'chirasizmi?";
     if (!window.confirm(msg)) return;
-    deleteTx.mutate(t.id);
+    deleteTx.mutate(t.id, {
+      onError: (e: unknown) => {
+        const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        window.alert(msg ?? "O'chirishda xatolik yuz berdi.");
+      },
+    });
   }
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: "all",      label: "Barchasi" },
     { key: "paid",     label: "To'langan" },
-    { key: "pending",  label: "Kutilmoqda" },
     { key: "deferred", label: "Keyinroq to'laydi" },
     { key: "debt",     label: "Qarzdor" },
+    { key: "expiring", label: "Obuna tugayapti" },
   ];
 
   return (
@@ -95,21 +139,24 @@ export default function PaymentsPage() {
       <div className="grid cols-4">
         <StatCard icon="wallet" tone="s"
           value={stats ? fmt(stats.totalReceived) : "–"}
-          label="Qabul qilingan (so'm)"
-          delta={<span style={{ fontSize: 12, fontWeight: 700, color: "var(--success)" }}>↗ bu oy</span>}
+          label="Jami qabul qilingan (so'm)"
+          delta={<span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-faint)" }}>butun davr</span>}
+        />
+        <StatCard icon="check" tone="i"
+          value={stats ? fmt(stats.totalPaidThisPeriod) : "–"}
+          label="Bu oy qabul qilingan (so'm)"
         />
         <StatCard icon="trendingDown" tone="d"
           value={stats ? fmt(stats.totalDebt) : "–"}
           label="Qarzdorlik (so'm)"
-          delta={<span style={{ fontSize: 12, fontWeight: 700, color: "var(--danger)" }}>⚠ qarzdorlar</span>}
-        />
-        <StatCard icon="check" tone="i"
-          value={stats ? fmt(stats.totalPaidThisPeriod) : "–"}
-          label="Bu davr to'lovlari"
+          delta={<span style={{ fontSize: 12, fontWeight: 700, color: "var(--danger)" }}>⚠ muddati o'tgan</span>}
         />
         <StatCard icon="clock" tone="w"
           value={stats ? fmt(stats.totalPending) : "–"}
-          label="Kutilayotgan"
+          label="Kutilayotgan to'lovlar (so'm)"
+          delta={stats && stats.expiringCount > 0
+            ? <span style={{ fontSize: 12, fontWeight: 700, color: "var(--warn, #d97706)" }}>⏳ {stats.expiringCount} obuna tugayapti</span>
+            : undefined}
         />
       </div>
 
@@ -186,68 +233,7 @@ export default function PaymentsPage() {
                           {METHOD_LABELS[p.method] ?? p.method}
                         </span>
                       </td>
-                      <td>
-                        {p.displayStatus === "paid" ? (
-                          <span style={{
-                            display: "inline-flex", alignItems: "center", gap: 5,
-                            padding: "4px 12px", borderRadius: 99,
-                            background: "#dcfce71a", color: "#16a34a",
-                            border: "1px solid #bbf7d0", fontSize: 12.5, fontWeight: 700,
-                          }}><Icon name="check" size={11} /> to'langan</span>
-                        ) : p.displayStatus === "pending" ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 5,
-                              padding: "4px 12px", borderRadius: 99,
-                              background: "#fef3c71a", color: "#d97706",
-                              border: "1px solid #fde68a", fontSize: 12.5, fontWeight: 700,
-                              width: "fit-content",
-                            }}>⏳ kutilmoqda</span>
-                            {dueDateLabel(p.daysLeft) && (
-                              <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>
-                                {dueDateLabel(p.daysLeft)}
-                              </span>
-                            )}
-                          </div>
-                        ) : p.displayStatus === "deferred" ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 5,
-                              padding: "4px 12px", borderRadius: 99,
-                              background: "#ede9fe1a", color: "#7c3aed",
-                              border: "1px solid #ddd6fe", fontSize: 12.5, fontWeight: 700,
-                              width: "fit-content",
-                            }}>🕐 keyinroq to'laydi</span>
-                            {dueDateLabel(p.daysLeft) && (
-                              <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>
-                                {dueDateLabel(p.daysLeft)}
-                              </span>
-                            )}
-                          </div>
-                        ) : p.displayStatus === "overdue" ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 5,
-                              padding: "4px 12px", borderRadius: 99,
-                              background: "#fee2e21a", color: "#ef4444",
-                              border: "1px solid #fecaca", fontSize: 12.5, fontWeight: 700,
-                              width: "fit-content",
-                            }}>⚠ qarzdor</span>
-                            {dueDateLabel(p.daysLeft) && (
-                              <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 600 }}>
-                                {dueDateLabel(p.daysLeft)}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span style={{
-                            display: "inline-flex", alignItems: "center", gap: 5,
-                            padding: "4px 12px", borderRadius: 99,
-                            background: "#fee2e21a", color: "#ef4444",
-                            border: "1px solid #fecaca", fontSize: 12.5, fontWeight: 700,
-                          }}>⚠ {statusLabel(p.displayStatus)}</span>
-                        )}
-                      </td>
+                      <td><StatusCell t={p} /></td>
                       <td>
                         <div style={{ display: "flex", gap: 5 }}>
                           <button
@@ -296,7 +282,8 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
   const [studentId, setStudentId]         = useState("");
   const [packageId, setPackageId]         = useState("");
   const [method, setMethod]               = useState<"naqd" | "click" | "payme" | "uzcard">("naqd");
-  const [expiresAt, setExpiresAt]         = useState("");
+  const [expiresAt, setExpiresAt]         = useState("");   // paket (obuna) muddati
+  const [paymentDue, setPaymentDue]       = useState("");   // to'lov muddati (faqat payLater)
   const [payLater, setPayLater]           = useState(false);
   const [err, setErr]                     = useState("");
 
@@ -308,10 +295,15 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
   async function handleSubmit() {
     if (!studentId) { setErr("O'quvchini tanlang"); return; }
     if (!packageId) { setErr("Paketni tanlang"); return; }
-    if (payLater && !expiresAt) { setErr("Keyinroq to'lash uchun muddatni belgilang"); return; }
+    if (payLater && !paymentDue) { setErr("Keyinroq to'lash uchun to'lov muddatini belgilang"); return; }
     setErr("");
     try {
-      await assignPkg.mutateAsync({ studentId, packageId, method, expiresAt: expiresAt || undefined, payLater: payLater || undefined });
+      await assignPkg.mutateAsync({
+        studentId, packageId, method,
+        expiresAt: expiresAt || undefined,
+        payLater: payLater || undefined,
+        paymentDueDate: payLater ? paymentDue : undefined,
+      });
       onClose();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
@@ -431,10 +423,10 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* Expires at / due date (optional) */}
+          {/* PAKET muddati — xizmat qachongacha amal qiladi */}
           <div>
             <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
-              To'lov muddati {payLater ? "*" : "(ixtiyoriy)"}
+              Paket (obuna) muddati <span style={{ fontWeight: 500, color: "var(--text-faint)" }}>— ixtiyoriy</span>
             </label>
             <input
               type="date"
@@ -443,6 +435,9 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
               onChange={e => setExpiresAt(e.target.value)}
               style={{ width: "100%" }}
             />
+            <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 5 }}>
+              Darslar qachongacha amal qilishi. Tugashiga 5 kun qolganda eslatma chiqadi.
+            </div>
           </div>
 
           {/* Pay later */}
@@ -454,10 +449,29 @@ function AssignPaymentModal({ onClose }: { onClose: () => void }) {
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Hozir emas, keyinroq to'laydi</div>
               <div style={{ fontSize: 11.5, color: "var(--text-faint)" }}>
-                To'lov "kutilmoqda" holatida yaratiladi, muddati o'tsa avtomatik "qarzdor"ga o'tadi.
+                Pul hali kelmagan deb belgilanadi. Va'da qilingan sana o'tsa — "Qarzdor".
               </div>
             </div>
           </label>
+
+          {/* TO'LOV muddati — faqat keyinroq to'laganda ma'noli */}
+          {payLater && (
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+                To'lov muddati *
+              </label>
+              <input
+                type="date"
+                className="inp"
+                value={paymentDue}
+                onChange={e => setPaymentDue(e.target.value)}
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 5 }}>
+                Pul qachongacha kelishi kerak. Bu paket muddatidan boshqa sana.
+              </div>
+            </div>
+          )}
 
           {err && (
             <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>{err}</div>
@@ -620,6 +634,11 @@ function EditTransactionModal({ tx, onClose }: { tx: Transaction; onClose: () =>
               onChange={e => setDueDate(e.target.value)}
               style={{ width: "100%" }}
             />
+            <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 5 }}>
+              Pul qachongacha kelishi kerak. Faqat to'lanmagan holatda ishlaydi —
+              shu sana o'tsa to'lov "Qarzdor"ga o'tadi. Paket muddati bu emas,
+              u o'quvchi kartochkasida o'zgartiriladi.
+            </div>
           </div>
 
           {err && (

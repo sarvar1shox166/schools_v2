@@ -22,7 +22,7 @@ type Student = {
   status: "yangi" | "faol" | "nofaol";
   joinedAt: string;
   groups: Array<{ id: string; name: string; teacherId?: string | null; teacherName?: string | null }>;
-  paymentStatus?: "active" | "debt" | "inactive" | "no_package" | null;
+  paymentStatus?: "active" | "debt" | "expired" | "inactive" | "no_package" | null;
   activePackageExpires?: string | null;
 };
 
@@ -40,9 +40,12 @@ const LEVEL_COLOR: Record<string, string> = {
 
 const ALL_TAB = "hammasi";
 
+// "Qarzdor" — faqat pul kelmagan va to'lov muddati o'tgan holat.
+// To'lagan, lekin obunasi tugagan o'quvchi "Muddati tugagan" bo'ladi.
 const PAY_STATUS_LABEL: Record<string, string> = {
-  active:     "Kutilmoqda",
+  active:     "Faol",
   debt:       "Qarzdor",
+  expired:    "Muddati tugagan",
   no_package: "Paket yo'q",
   inactive:   "Nofaol",
 };
@@ -50,6 +53,7 @@ const PAY_STATUS_LABEL: Record<string, string> = {
 const PAY_STATUS_COLOR: Record<string, { bg: string; color: string }> = {
   active:     { bg: "#d1fae5", color: "#059669" },
   debt:       { bg: "#fee2e2", color: "#dc2626" },
+  expired:    { bg: "#fef3c7", color: "#d97706" },
   no_package: { bg: "var(--surface-3)", color: "var(--text-faint)" },
   inactive:   { bg: "var(--surface-3)", color: "var(--text-faint)" },
 };
