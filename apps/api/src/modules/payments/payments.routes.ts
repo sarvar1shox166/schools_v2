@@ -50,12 +50,36 @@ const assignSchema = z.object({
   paymentDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
+// Bitta pul harakatini tahrirlash. To'lov muddati (dueDate) bu yerda yo'q —
+// u majburiyatga (charge) tegishli: bitta majburiyatga bir nechta to'lov
+// bo'lishi mumkin, muddat esa ularning har biriga emas, majburiyatga qo'yiladi.
 const transactionUpdateSchema = z.object({
   amount: z.number().positive().optional(),
   method: z.enum(["click", "payme", "naqd", "uzcard"]).optional(),
   status: z.enum(["pending", "paid", "failed", "cancelled"]).optional(),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   createdAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+const chargeCreateSchema = z.object({
+  studentId: z.string().uuid(),
+  amount: z.number().positive(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  note: z.string().max(500).optional(),
+  createdAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+const chargeUpdateSchema = z.object({
+  amount: z.number().positive().optional(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  note: z.string().max(500).optional(),
+  createdAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+// Majburiyatga to'lov qo'shish. amount berilmasa — qolgan qoldiq to'liq yopiladi.
+const paymentCreateSchema = z.object({
+  amount: z.number().positive().optional(),
+  method: z.enum(["click", "payme", "naqd", "uzcard"]).default("naqd"),
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 // Allaqachon tayinlangan paketni tuzatish uchun — masalan "8 ta dars" deb sotib
@@ -207,21 +231,41 @@ export async function paymentsRoutes(app: FastifyInstance) {
       );
       const studentPackageId = spRes.rows[0].id;
 
-      const txStatus = body.payLater || body.method === "click" || body.method === "payme" ? "pending" : "paid";
-      // due_date — TO'LOV muddati, faqat hali to'lanmagan to'lovda ma'noli.
-      // Paket muddati (expiresAt) bu yerga umuman yozilmaydi: u student_packages'da.
-      const paymentDue = txStatus === "pending" ? (body.paymentDueDate ?? null) : null;
-      // Naqd/uzcard qo'lda kiritilganda ham haqiqiy to'lov vaqti yoziladi —
-      // hisobotlar created_at emas, shu maydonga tayanadi.
-      const paidAtValue = txStatus === "paid" ? (body.paidAt ?? new Date().toISOString()) : null;
-      const txRes = await client.query(
-        `INSERT INTO transactions (tenant_id, student_id, student_package_id, amount, method, status, due_date, paid_at, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, COALESCE($9::timestamptz, now())) RETURNING id`,
-        [tenantId, body.studentId, studentPackageId, pkg.price, body.method, txStatus, paymentDue, paidAtValue, body.paidAt ?? null]
+      const isOnline = body.method === "click" || body.method === "payme";
+      const payNow = !body.payLater && !isOnline;
+
+      // 1) MAJBURIYAT — o'quvchi shu paket uchun qancha to'lashi kerak.
+      //    To'lov muddati faqat pul hali kelmaganda ma'noli.
+      const chargeRes = await client.query(
+        `INSERT INTO student_charges (tenant_id, student_id, student_package_id, amount, due_date, created_at)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now())) RETURNING id`,
+        [tenantId, body.studentId, studentPackageId, pkg.price,
+         payNow ? null : (body.paymentDueDate ?? null), body.paidAt ?? null]
       );
+      const chargeId = chargeRes.rows[0].id;
+
+      // 2) PUL HARAKATI — faqat pul haqiqatan kelgan bo'lsa yoziladi.
+      //    "Keyinroq to'laydi" da hech qanday to'lov yozilmaydi: majburiyat
+      //    to'lanmagan bo'lib qoladi, qoldiq avtomatik hisoblanadi.
+      //    Click/Payme da tasdiqlanishini kutayotgan yozuv qoldiriladi —
+      //    provayder webhook'i uni shu id bo'yicha topadi.
+      let transactionId: string | null = null;
+      if (payNow || isOnline) {
+        const txRes = await client.query(
+          `INSERT INTO transactions (tenant_id, student_id, student_package_id, charge_id,
+                                     amount, method, status, paid_at, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7,
+                   CASE WHEN $7 = 'paid' THEN COALESCE($8::timestamptz, now()) END,
+                   COALESCE($8::timestamptz, now()))
+           RETURNING id`,
+          [tenantId, body.studentId, studentPackageId, chargeId, pkg.price, body.method,
+           payNow ? "paid" : "pending", body.paidAt ?? null]
+        );
+        transactionId = txRes.rows[0].id;
+      }
 
       await client.query("COMMIT");
-      return reply.code(201).send({ studentPackageId, transactionId: txRes.rows[0].id });
+      return reply.code(201).send({ studentPackageId, chargeId, transactionId });
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;
@@ -286,22 +330,18 @@ export async function paymentsRoutes(app: FastifyInstance) {
       [tenantId]
     );
 
-    // Kutilayotgan: hali to'lanmagan, lekin to'lov muddati HALI O'TMAGAN.
-    // Qarzdorlik bilan kesishmasligi uchun muddati o'tganlari bu yerdan chiqarilgan —
-    // aks holda bitta to'lov ikkala ko'rsatkichda ham hisoblanib ketardi.
+    // Kutilayotgan va qarzdorlik endi majburiyat QOLDIG'idan olinadi, shuning
+    // uchun qisman to'lov ham to'g'ri hisoblanadi va bu ikki ko'rsatkich
+    // hech qachon bir-birini qoplamaydi (statuslar o'zaro istisno).
     const pendingRes = await pool.query(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-       WHERE tenant_id = $1 AND status = 'pending'
-         AND (due_date IS NULL OR due_date >= CURRENT_DATE)`,
+      `SELECT COALESCE(SUM(balance), 0) AS total FROM charge_balance
+       WHERE tenant_id = $1 AND status IN ('deferred', 'partial')`,
       [tenantId]
     );
 
-    // Haqiqiy qarzdorlik: pul hali kelmagan VA va'da qilingan to'lov muddati o'tib ketgan.
-    // To'langan (paid) to'lov — paket muddati tugagan bo'lsa ham — qarz emas.
     const debtRes = await pool.query(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-       WHERE tenant_id = $1 AND status = 'pending'
-         AND due_date IS NOT NULL AND due_date < CURRENT_DATE`,
+      `SELECT COALESCE(SUM(balance), 0) AS total FROM charge_balance
+       WHERE tenant_id = $1 AND status = 'overdue'`,
       [tenantId]
     );
 
@@ -323,46 +363,53 @@ export async function paymentsRoutes(app: FastifyInstance) {
     };
   });
 
-  // ---- Transactions ----
+  // ---- Charges (majburiyatlar) + to'lovlar ----
+  //
+  // Majburiyat = o'quvchi nima uchun qancha to'lashi kerak.
+  // Tranzaksiya = shu majburiyatga kelgan pul. Bitta majburiyatga bir nechta
+  // to'lov bo'lishi mumkin (qisman to'lov), qarz esa saqlanmaydi — hisoblanadi.
 
-  app.get("/transactions", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
+  app.get("/payments", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request) => {
     const { tenantId } = request.user;
-    const { studentId } = request.query as { studentId?: string };
+    const q = request.query as {
+      studentId?: string; status?: string; from?: string; to?: string;
+      limit?: string; offset?: string;
+    };
+
     const params: unknown[] = [tenantId];
-    let where = "t.tenant_id = $1";
-    if (studentId) {
-      params.push(studentId);
-      where += ` AND t.student_id = $${params.length}`;
-    }
+    let where = "cb.tenant_id = $1";
+    if (q.studentId) { params.push(q.studentId); where += ` AND cb.student_id = $${params.length}`; }
+    if (q.status)    { params.push(q.status);    where += ` AND cb.status = $${params.length}`; }
+    if (q.from)      { params.push(q.from);      where += ` AND cb.created_at >= $${params.length}::date`; }
+    if (q.to)        { params.push(q.to);        where += ` AND cb.created_at < $${params.length}::date + 1`; }
+
+    const limit = Math.min(Number(q.limit) || 100, 500);
+    const offset = Math.max(Number(q.offset) || 0, 0);
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM charge_balance cb WHERE ${where}`,
+      params
+    );
+
+    params.push(limit, offset);
     const { rows } = await pool.query(
-      `SELECT t.id, t.amount, t.method, t.status, t.provider_ref AS "providerRef",
-              t.created_at AS "createdAt",
-              -- TO'LOV muddati (pul qachongacha kelishi kerak)
-              t.due_date AS "dueDate",
-              (t.due_date - CURRENT_DATE) AS "paymentDaysLeft",
-              -- PAKET (obuna) muddati — nusxa emas, to'g'ridan-to'g'ri paketning o'zidan
+      `SELECT cb.charge_id AS "id", cb.amount, cb.paid, cb.balance, cb.status,
+              cb.note, cb.created_at AS "createdAt",
+              cb.due_date AS "dueDate",
+              (cb.due_date - CURRENT_DATE) AS "paymentDaysLeft",
               sp.expires_at AS "packageExpiresAt",
               (sp.expires_at - CURRENT_DATE) AS "packageDaysLeft",
-              CASE
-                -- Pul hali kelmagan VA va'da qilingan muddat o'tgan — haqiqiy QARZDOR.
-                WHEN t.status = 'pending' AND t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE
-                  THEN 'overdue'
-                -- Pul hali kelmagan, muddati hali kelmagan — keyinroq to'laydi.
-                WHEN t.status = 'pending' THEN 'deferred'
-                -- To'langan, lekin obuna muddati o'tgan — yangilash kerak (bu QARZ EMAS).
-                WHEN t.status = 'paid' AND sp.expires_at IS NOT NULL AND sp.expires_at < CURRENT_DATE
-                  THEN 'expired'
-                -- To'langan, obuna 5 kun ichida tugaydi — oldindan eslatma.
-                WHEN t.status = 'paid' AND sp.expires_at IS NOT NULL AND sp.expires_at <= CURRENT_DATE + 5
-                  THEN 'expiring'
-                ELSE t.status::text
-              END AS "displayStatus",
-              u.full_name AS "studentName",
-              g.name AS "groupName"
-       FROM transactions t
-       JOIN students s ON s.id = t.student_id
+              sp.id AS "studentPackageId",
+              sp.used_lessons AS "usedLessons", sp.total_lessons AS "totalLessons",
+              pk.name AS "packageName",
+              cb.student_id AS "studentId", u.full_name AS "studentName",
+              g.name AS "groupName",
+              COALESCE(pmt.payments, '[]'::json) AS payments
+       FROM charge_balance cb
+       JOIN students s ON s.id = cb.student_id
        JOIN users u ON u.id = s.user_id
-       LEFT JOIN student_packages sp ON sp.id = t.student_package_id
+       LEFT JOIN student_packages sp ON sp.id = cb.student_package_id
+       LEFT JOIN packages pk ON pk.id = sp.package_id
        LEFT JOIN LATERAL (
          SELECT gr.name FROM group_members gm
          JOIN groups gr ON gr.id = gm.group_id
@@ -370,94 +417,99 @@ export async function paymentsRoutes(app: FastifyInstance) {
          ORDER BY gm.joined_at
          LIMIT 1
        ) g ON true
+       LEFT JOIN LATERAL (
+         SELECT json_agg(json_build_object(
+                  'id', t.id, 'amount', t.amount, 'method', t.method,
+                  'status', t.status, 'paidAt', t.paid_at, 'createdAt', t.created_at
+                ) ORDER BY t.created_at) AS payments
+         FROM transactions t WHERE t.charge_id = cb.charge_id
+       ) pmt ON true
        WHERE ${where}
-       ORDER BY t.created_at DESC`,
+       ORDER BY cb.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
-    return rows;
+
+    return { items: rows, total: countRes.rows[0].total, limit, offset };
   });
 
-  app.patch("/transactions/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const body = transactionUpdateSchema.parse(request.body);
+  // Paketsiz majburiyat — masalan eski qarzni rasmiylashtirish yoki
+  // ro'yxatdan o'tish to'lovi. Paket bilan bog'lash shart emas.
+  app.post("/charges", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+    const body = chargeCreateSchema.parse(request.body);
     const { tenantId } = request.user;
 
-    const dueDateProvided = Object.prototype.hasOwnProperty.call(body, "dueDate");
+    const stu = await pool.query(`SELECT 1 FROM students WHERE id = $1 AND tenant_id = $2`, [body.studentId, tenantId]);
+    if (stu.rows.length === 0) return reply.code(404).send({ error: "O'quvchi topilmadi" });
+
     const { rows } = await pool.query(
-      `UPDATE transactions SET
-         amount     = COALESCE($1, amount),
-         method     = COALESCE($2, method),
-         status     = COALESCE($3, status),
-         due_date   = CASE WHEN $4 THEN $5::date ELSE due_date END,
-         -- Sana o'zgarmagan bo'lsa asl vaqt (soat/daqiqa) saqlanib qoladi —
-         -- forma faqat kun aniqligida yuboradi, shuning uchun ustiga yozmaymiz.
+      `INSERT INTO student_charges (tenant_id, student_id, amount, due_date, note, created_at)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now())) RETURNING id`,
+      [tenantId, body.studentId, body.amount, body.dueDate ?? null, body.note ?? null, body.createdAt ?? null]
+    );
+    return reply.code(201).send({ id: rows[0].id });
+  });
+
+  app.patch("/charges/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = chargeUpdateSchema.parse(request.body);
+    const { tenantId } = request.user;
+
+    const dueProvided = Object.prototype.hasOwnProperty.call(body, "dueDate");
+    const { rows } = await pool.query(
+      `UPDATE student_charges SET
+         amount   = COALESCE($1, amount),
+         due_date = CASE WHEN $2 THEN $3::date ELSE due_date END,
+         note     = COALESCE($4, note),
          created_at = CASE
-                        WHEN $6::date IS NOT NULL AND $6::date <> created_at::date
-                          THEN $6::timestamptz
+                        WHEN $5::date IS NOT NULL AND $5::date <> created_at::date
+                          THEN $5::timestamptz
                         ELSE created_at
-                      END,
-         -- Qo'lda "to'landi" qilinganda haqiqiy to'lov vaqti ham yoziladi,
-         -- boshqa holatga o'tkazilsa tozalanadi.
-         paid_at    = CASE
-                        WHEN $7::text = 'paid'
-                          THEN COALESCE(paid_at, COALESCE($6::timestamptz, now()))
-                        WHEN $7::text IS NOT NULL THEN NULL
-                        ELSE paid_at
                       END
-       WHERE id = $8 AND tenant_id = $9
+       WHERE id = $6 AND tenant_id = $7
        RETURNING id`,
-      [
-        body.amount ?? null, body.method ?? null, body.status ?? null,
-        dueDateProvided, body.dueDate ?? null,
-        body.createdAt ?? null,
-        body.status ?? null,
-        id, tenantId,
-      ]
+      [body.amount ?? null, dueProvided, body.dueDate ?? null, body.note ?? null, body.createdAt ?? null, id, tenantId]
     );
     if (rows.length === 0) return reply.code(404).send({ error: "To'lov topilmadi" });
     return { ok: true };
   });
 
-  app.delete("/transactions/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+  app.delete("/charges/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { tenantId } = request.user;
 
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-
-      const txRes = await client.query(
-        `SELECT t.id, t.student_package_id AS "studentPackageId",
-                sp.used_lessons AS "usedLessons"
-         FROM transactions t
-         LEFT JOIN student_packages sp ON sp.id = t.student_package_id
-         WHERE t.id = $1 AND t.tenant_id = $2
-         FOR UPDATE OF t`,
+      const res = await client.query(
+        `SELECT c.id, c.student_package_id AS "studentPackageId", sp.used_lessons AS "usedLessons"
+         FROM student_charges c
+         LEFT JOIN student_packages sp ON sp.id = c.student_package_id
+         WHERE c.id = $1 AND c.tenant_id = $2
+         FOR UPDATE OF c`,
         [id, tenantId]
       );
-      if (txRes.rows.length === 0) {
+      if (res.rows.length === 0) {
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "To'lov topilmadi" });
       }
-      const tx = txRes.rows[0];
+      const ch = res.rows[0];
 
-      // Paketdan darslar allaqachon sarflangan bo'lsa, o'chirish davomat tarixini
-      // buzadi (attendance_records.student_package_id NULL bo'lib qoladi) —
-      // shuning uchun taqiqlanadi, o'rniga "bekor qilingan" statusi ishlatiladi.
-      if (tx.studentPackageId && Number(tx.usedLessons) > 0) {
+      // Darslari ishlatilgan paketni o'chirish davomat tarixini buzadi
+      // (attendance_records.student_package_id NULL bo'lib qoladi).
+      if (ch.studentPackageId && Number(ch.usedLessons) > 0) {
         await client.query("ROLLBACK");
         return reply.code(409).send({
-          error: `Bu paketdan ${tx.usedLessons} ta dars allaqachon ishlatilgan — to'lovni o'chirib bo'lmaydi. Uni tahrirlab "Bekor qilingan" holatiga o'tkazing.`,
+          error: `Bu paketdan ${ch.usedLessons} ta dars ishlatilgan — o'chirib bo'lmaydi. Buning o'rniga to'lovni tahrirlang.`,
         });
       }
 
-      await client.query(`DELETE FROM transactions WHERE id = $1`, [id]);
-      // To'lov yozuvi bilan birga unga tayinlangan paket ham olib tashlanadi —
-      // aks holda o'quvchida to'lovi yo'q, "osilib qolgan" darslar qolib ketadi.
-      if (tx.studentPackageId) {
-        await client.query(`DELETE FROM student_packages WHERE id = $1`, [tx.studentPackageId]);
+      // To'lovlar CASCADE bilan o'zi ketadi; paketni ham olib tashlaymiz,
+      // aks holda to'lovsiz "osilib qolgan" darslar qoladi.
+      await client.query(`DELETE FROM student_charges WHERE id = $1`, [id]);
+      if (ch.studentPackageId) {
+        await client.query(`DELETE FROM student_packages WHERE id = $1`, [ch.studentPackageId]);
       }
-
       await client.query("COMMIT");
       return { ok: true };
     } catch (err) {
@@ -466,6 +518,84 @@ export async function paymentsRoutes(app: FastifyInstance) {
     } finally {
       client.release();
     }
+  });
+
+  // Majburiyatga to'lov qo'shish — qisman to'lov shu yerda ishlaydi.
+  // Summa berilmasa qolgan qoldiq to'liq yopiladi ("To'landi" tugmasi).
+  app.post("/charges/:id/payments", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = paymentCreateSchema.parse(request.body);
+    const { tenantId } = request.user;
+
+    const chRes = await pool.query(
+      `SELECT charge_id AS "id", student_id AS "studentId",
+              student_package_id AS "studentPackageId", balance
+       FROM charge_balance WHERE charge_id = $1 AND tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (chRes.rows.length === 0) return reply.code(404).send({ error: "To'lov topilmadi" });
+    const ch = chRes.rows[0];
+
+    const remaining = Number(ch.balance);
+    const amount = body.amount ?? remaining;
+    if (amount <= 0) return reply.code(400).send({ error: "Bu to'lov allaqachon to'liq yopilgan" });
+
+    const { rows } = await pool.query(
+      `INSERT INTO transactions (tenant_id, student_id, student_package_id, charge_id,
+                                 amount, method, status, paid_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'paid',
+               COALESCE($7::timestamptz, now()), COALESCE($7::timestamptz, now()))
+       RETURNING id`,
+      [tenantId, ch.studentId, ch.studentPackageId, id, amount, body.method, body.paidAt ?? null]
+    );
+    return reply.code(201).send({ id: rows[0].id });
+  });
+
+  // Bitta to'lovni (pul harakatini) tahrirlash — majburiyatga tegmaydi.
+  app.patch("/transactions/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = transactionUpdateSchema.parse(request.body);
+    const { tenantId } = request.user;
+
+    const { rows } = await pool.query(
+      `UPDATE transactions SET
+         amount = COALESCE($1, amount),
+         method = COALESCE($2, method),
+         status = COALESCE($3, status),
+         created_at = CASE
+                        WHEN $4::date IS NOT NULL AND $4::date <> created_at::date
+                          THEN $4::timestamptz
+                        ELSE created_at
+                      END,
+         paid_at = CASE
+                     WHEN $5::text = 'paid'
+                       THEN COALESCE(paid_at, COALESCE($4::timestamptz, now()))
+                     WHEN $5::text IS NOT NULL THEN NULL
+                     ELSE paid_at
+                   END
+       WHERE id = $6 AND tenant_id = $7
+       RETURNING id`,
+      [
+        body.amount ?? null, body.method ?? null, body.status ?? null,
+        body.createdAt ?? null, body.status ?? null,
+        id, tenantId,
+      ]
+    );
+    if (rows.length === 0) return reply.code(404).send({ error: "To'lov topilmadi" });
+    return { ok: true };
+  });
+
+  // Bitta to'lovni o'chirish endi xavfsiz: majburiyat va paket joyida qoladi,
+  // faqat to'langan summa kamayadi (qoldiq avtomatik qayta hisoblanadi).
+  app.delete("/transactions/:id", { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `DELETE FROM transactions WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+      [id, tenantId]
+    );
+    if (rows.length === 0) return reply.code(404).send({ error: "To'lov topilmadi" });
+    return { ok: true };
   });
 }
 

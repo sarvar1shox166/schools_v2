@@ -27,23 +27,113 @@ export interface StudentPackage {
   price: number;
 }
 
-export interface Transaction {
+/** Bitta pul harakati — majburiyatga kelgan to'lov. */
+export interface Payment {
   id: string;
   amount: number;
   method: "click" | "payme" | "naqd" | "uzcard";
   status: "pending" | "paid" | "failed" | "cancelled";
-  /** Hisoblangan holat — "qarzdor" faqat pul kelmagan va muddati o'tganda. */
-  displayStatus: "paid" | "deferred" | "overdue" | "expiring" | "expired" | "failed" | "cancelled";
+  paidAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * Majburiyat (charge) — o'quvchi nima uchun qancha to'lashi kerak.
+ * Qarz saqlanmaydi, hisoblanadi: amount − to'langan to'lovlar yig'indisi.
+ * To'lov holati (status) va obuna holati (packageDaysLeft) — ikki BOSHQA narsa.
+ */
+export interface Charge {
+  id: string;
+  amount: number;
+  paid: number;
+  balance: number;
+  /** To'lov holati — pul kelgan/kelmaganiga qarab. Obunaga aloqasi yo'q. */
+  status: "paid" | "partial" | "deferred" | "overdue";
+  note: string | null;
+  createdAt: string;
   /** TO'LOV muddati — pul qachongacha kelishi kerak. */
   dueDate: string | null;
   paymentDaysLeft: number | null;
-  /** PAKET (obuna) muddati — paketning o'zidan olinadi, nusxa emas. */
+  /** PAKET (obuna) muddati — paketning o'zidan, nusxa emas. */
   packageExpiresAt: string | null;
   packageDaysLeft: number | null;
-  providerRef: string | null;
-  createdAt: string;
+  studentPackageId: string | null;
+  usedLessons: number | null;
+  totalLessons: number | null;
+  packageName: string | null;
+  studentId: string;
   studentName: string;
   groupName: string | null;
+  payments: Payment[];
+}
+
+export interface ChargesPage {
+  items: Charge[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export function useCharges(params?: { studentId?: string; status?: string; limit?: number }) {
+  return useQuery({
+    queryKey: ["charges", params?.studentId, params?.status, params?.limit],
+    queryFn: async () =>
+      (await api.get<ChargesPage>("/payments", {
+        params: {
+          ...(params?.studentId ? { studentId: params.studentId } : {}),
+          ...(params?.status ? { status: params.status } : {}),
+          limit: params?.limit ?? 500,
+        },
+      })).data,
+  });
+}
+
+/** Majburiyat/to'lov o'zgarganda qayta yuklanishi kerak bo'lgan hamma narsa. */
+function invalidatePayments(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["charges"] });
+  qc.invalidateQueries({ queryKey: ["paymentsStats"] });
+  qc.invalidateQueries({ queryKey: ["studentPackages"] });
+  qc.invalidateQueries({ queryKey: ["students"] });
+}
+
+/** Paketsiz majburiyat — eski qarzni rasmiylashtirish, ro'yxatdan o'tish to'lovi va h.k. */
+export function useCreateCharge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      studentId: string; amount: number; dueDate?: string; note?: string; createdAt?: string;
+    }) => (await api.post("/charges", payload)).data,
+    onSuccess: () => invalidatePayments(qc),
+  });
+}
+
+export function useUpdateCharge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: {
+      id: string; amount?: number; dueDate?: string | null; note?: string; createdAt?: string;
+    }) => (await api.patch(`/charges/${id}`, payload)).data,
+    onSuccess: () => invalidatePayments(qc),
+  });
+}
+
+export function useDeleteCharge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/charges/${id}`)).data,
+    onSuccess: () => invalidatePayments(qc),
+  });
+}
+
+/** To'lov qo'shish. amount berilmasa — qolgan qoldiq to'liq yopiladi. */
+export function useAddPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ chargeId, ...payload }: {
+      chargeId: string; amount?: number; method?: "click" | "payme" | "naqd" | "uzcard"; paidAt?: string;
+    }) => (await api.post(`/charges/${chargeId}/payments`, payload)).data,
+    onSuccess: () => invalidatePayments(qc),
+  });
 }
 
 export function usePackages() {
@@ -81,14 +171,6 @@ export function useDeletePackage() {
   return useMutation({
     mutationFn: async (id: string) => (await api.patch(`/packages/${id}`, { active: false })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["packages"] }),
-  });
-}
-
-export function useTransactions(studentId?: string) {
-  return useQuery({
-    queryKey: ["transactions", studentId],
-    queryFn: async () =>
-      (await api.get<Transaction[]>("/transactions", { params: studentId ? { studentId } : {} })).data,
   });
 }
 
@@ -234,37 +316,29 @@ export function useAssignPackage() {
   return useMutation({
     mutationFn: async (payload: { studentId: string; packageId: string; method: "click" | "payme" | "naqd" | "uzcard"; expiresAt?: string; paidAt?: string; payLater?: boolean; paymentDueDate?: string }) =>
       (await api.post("/student-packages", payload)).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["transactions"] });
-      qc.invalidateQueries({ queryKey: ["studentPackages"] });
-      qc.invalidateQueries({ queryKey: ["students"] });
-      qc.invalidateQueries({ queryKey: ["paymentsStats"] });
-    },
+    onSuccess: () => invalidatePayments(qc),
   });
 }
 
+/** Bitta pul harakatini tahrirlash — majburiyatga (va uning muddatiga) tegmaydi. */
 export function useUpdateTransaction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...payload }: {
       id: string; amount?: number; method?: "click" | "payme" | "naqd" | "uzcard";
-      status?: "pending" | "paid" | "failed" | "cancelled"; dueDate?: string | null; createdAt?: string;
+      status?: "pending" | "paid" | "failed" | "cancelled"; createdAt?: string;
     }) => (await api.patch(`/transactions/${id}`, payload)).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["transactions"] });
-      qc.invalidateQueries({ queryKey: ["paymentsStats"] });
-    },
+    onSuccess: () => invalidatePayments(qc),
   });
 }
 
+/** Bitta to'lovni o'chirish — majburiyat va paket joyida qoladi,
+ *  faqat to'langan summa kamayadi va qoldiq qayta hisoblanadi. */
 export function useDeleteTransaction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => (await api.delete(`/transactions/${id}`)).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["transactions"] });
-      qc.invalidateQueries({ queryKey: ["paymentsStats"] });
-    },
+    onSuccess: () => invalidatePayments(qc),
   });
 }
 
