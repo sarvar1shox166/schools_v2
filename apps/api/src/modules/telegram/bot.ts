@@ -97,11 +97,24 @@ export async function telegramBotRoutes(app: FastifyInstance) {
   botUsername = b.botInfo.username;
   app.post("/telegram/webhook", webhookCallback(b, "fastify", { secretToken: webhookSecret() }));
 
-  if (env.APP_URL) {
-    try {
-      await b.api.setWebhook(`${env.APP_URL}/api/v1/telegram/webhook`, { secret_token: webhookSecret() });
-    } catch (err) {
-      app.log.error(err, "Telegram webhook o'rnatilmadi");
-    }
+  // Webhook FAQAT productionda o'rnatiladi. Bot tokeni bitta bo'lgani uchun
+  // localdan setWebhook chaqirilsa Telegram prod webhook'ini almashtirib
+  // (yoki bekor qilib) yuboradi va jonli bot xabarlarga javob bermay qoladi.
+  // Shuning uchun dev/test'da bot faqat o'qish uchun ishlaydi, webhook'ga tegmaydi.
+  const isProd = env.NODE_ENV === "production";
+  const isHttps = !!env.APP_URL && env.APP_URL.startsWith("https://");
+
+  if (!isProd || !isHttps) {
+    app.log.info(
+      { nodeEnv: env.NODE_ENV, appUrl: env.APP_URL },
+      "Telegram webhook o'rnatilmadi (faqat production + https da o'rnatiladi) — jonli bot tegilmadi"
+    );
+    return;
+  }
+
+  try {
+    await b.api.setWebhook(`${env.APP_URL}/api/v1/telegram/webhook`, { secret_token: webhookSecret() });
+  } catch (err) {
+    app.log.error(err, "Telegram webhook o'rnatilmadi");
   }
 }
