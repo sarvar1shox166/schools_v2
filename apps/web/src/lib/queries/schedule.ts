@@ -207,13 +207,19 @@ export function useGroupStudents(groupId: string | null) {
 export function useAwardXp() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ studentId, amount, note }: { studentId: string; amount: number; note?: string }) =>
+    mutationFn: async (
+      { studentId, amount, note, scheduleSlotId, date }:
+      { studentId: string; amount: number; note?: string; scheduleSlotId: string; date: string }
+    ) =>
       (await api.post<{ xp: number; level: number; streak: number; xpAwarded: number }>(
-        `/teacher/students/${studentId}/xp`, { amount, note }
+        `/teacher/students/${studentId}/xp`, { amount, note, scheduleSlotId, date }
       )).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["myStudentsProgress"] });
       qc.invalidateQueries({ queryKey: ["myStudents"] });
+      // "activityXpAwarded" shu yerdan yangilanadi — TMaterialsPage wizard'ni
+      // qayta ochishda XP qadami bloklanishi uchun.
+      qc.invalidateQueries({ queryKey: ["scheduleToday"] });
     },
   });
 }

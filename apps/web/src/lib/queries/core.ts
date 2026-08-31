@@ -69,6 +69,10 @@ export interface ScheduleSlot {
   lessonId?: string | null;
   isEnded?: boolean;
   isStarted?: boolean;
+  /** /schedule/today ga xos (o'qituvchi): shu darsda (schedule_slot_id + bugungi
+   *  sana) kimgadir qo'lda XP allaqachon berilganmi (lesson_activity_xp) — TMaterialsPage
+   *  "3. XP berish" qadamini shu bilan bloklaydi (qayta yubormaslik uchun). */
+  activityXpAwarded?: boolean;
   /** /schedule/today ga xos: bu dars boshqa kundan bugunga ko'chirilganmi. */
   isRescheduled?: boolean;
   /** Bugun uchun o'qituvchi tomonidan allaqachon yakunlangan darsmi (lessons jadvali orqali). */

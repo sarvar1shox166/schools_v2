@@ -251,15 +251,17 @@ export async function paymentsRoutes(app: FastifyInstance) {
       //    provayder webhook'i uni shu id bo'yicha topadi.
       let transactionId: string | null = null;
       if (payNow || isOnline) {
+        // paid_at faqat pul haqiqatan kelganda to'ldiriladi (CASE SQL da emas,
+        // JS da hisoblanadi — aks holda $7 ikki xil tipda ishlatilib, Postgres
+        // 42P08 xatosini beradi: text versus transaction_status)
+        const paidAtValue = payNow ? (body.paidAt ?? new Date().toISOString()) : null;
         const txRes = await client.query(
           `INSERT INTO transactions (tenant_id, student_id, student_package_id, charge_id,
                                      amount, method, status, paid_at, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7,
-                   CASE WHEN $7 = 'paid' THEN COALESCE($8::timestamptz, now()) END,
-                   COALESCE($8::timestamptz, now()))
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, COALESCE($9::timestamptz, now()))
            RETURNING id`,
           [tenantId, body.studentId, studentPackageId, chargeId, pkg.price, body.method,
-           payNow ? "paid" : "pending", body.paidAt ?? null]
+           payNow ? "paid" : "pending", paidAtValue, body.paidAt ?? null]
         );
         transactionId = txRes.rows[0].id;
       }

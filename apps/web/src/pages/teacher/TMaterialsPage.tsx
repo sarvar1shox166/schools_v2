@@ -4,6 +4,7 @@ import {
   useHomework, useCreateHomework, useUpdateHomework, useDeleteHomework,
   useHomeworkCompletions, useMarkHomeworkDoneByTeacher,
   useTeacherSchedule, useTodaySchedule, useGroupStudents, useMarkAttendance, useAwardXp,
+  useAttendance,
   type Homework, type ScheduleSlot,
 } from "../../lib/queries.js";
 
@@ -112,6 +113,17 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
   const [expanded, setExpanded] = useState(false);
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const { data: students = [] } = useGroupStudents(slot.groupId);
+  const lessonDate = todayStr();
+  // Mavjud davomatni serverdan yuklaymiz — TLiveLessonPage'dagi kabi.
+  // Teginilmagan o'quvchiga hech narsa "Keldi" deb majburan belgilanmaydi;
+  // ilgari "Sababli" (yoki boshqa) deb belgilangan bo'lsa shu holat ko'rinadi
+  // va jimgina "Keldi"ga aylanib, paketdan dars yechilib qolmaydi.
+  const { data: existingAttendance = [] } = useAttendance(expanded ? slot.id : null, lessonDate);
+  const existingAttendanceMap = useMemo(() => {
+    const m: Record<string, AttStatus> = {};
+    for (const r of existingAttendance) m[r.studentId] = r.status;
+    return m;
+  }, [existingAttendance]);
   const [attendance, setAttendance] = useState<Record<string, AttStatus>>({});
   const [hwItems, setHwItems] = useState<{ id: number; title: string; text: string }[]>([]);
   const [nextItemId, setNextItemId] = useState(1);
@@ -125,6 +137,8 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
   // tugaguncha tugmani band qilib turish uchun alohida lokal holat ishlatiladi.
   const [savingHomework, setSavingHomework] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState("");
+  const xpAlreadyAwarded = !!slot.activityXpAwarded;
 
   function toggleExpand() {
     if (!ended) return;
@@ -159,8 +173,15 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
   }
 
   async function handleAttendanceContinue() {
-    const records = students.map((s) => ({ studentId: s.id, status: attendance[s.id] ?? "p" as const }));
-    await markAttendance.mutateAsync({ scheduleSlotId: slot.id, date: todayStr(), records });
+    // Faqat teginilgan (lokal `attendance`) yoki serverdan allaqachon mavjud
+    // bo'lgan yozuvlar yuboriladi — o'qituvchi umuman belgilamagan
+    // o'quvchiga hech narsa tegilmaydi (majburan "Keldi" qilinmaydi).
+    const records = students
+      .map((s) => ({ studentId: s.id, status: attendance[s.id] ?? existingAttendanceMap[s.id] }))
+      .filter((r): r is { studentId: string; status: AttStatus } => !!r.status);
+    if (records.length > 0) {
+      await markAttendance.mutateAsync({ scheduleSlotId: slot.id, date: lessonDate, records });
+    }
     setStep(1);
   }
 
@@ -187,13 +208,28 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
   }
 
   async function handleFinish() {
-    if (finishing) return;
+    // Bu dars uchun XP allaqachon berilgan bo'lsa (masalan kartani yopib-ochib,
+    // qayta "Yakunlash" bosilsa) — umuman qayta yubormaymiz, server ham 409
+    // bilan rad etadi (0075 migratsiyasi, lesson_activity_xp).
+    if (finishing || xpAlreadyAwarded) return;
     setFinishing(true);
+    setFinishError("");
     try {
-      await Promise.all(students.map((s) => {
+      const results = await Promise.allSettled(students.map((s) => {
         const amt = xpAmounts[s.id] ?? 0;
-        return amt > 0 ? awardXp.mutateAsync({ studentId: s.id, amount: amt, note: "Darsdagi faollik" }) : Promise.resolve();
+        return amt > 0
+          ? awardXp.mutateAsync({ studentId: s.id, amount: amt, note: "Darsdagi faollik", scheduleSlotId: slot.id, date: lessonDate })
+          : Promise.resolve();
       }));
+      const realFailures = results.filter((r) => {
+        if (r.status !== "rejected") return false;
+        const status = (r.reason as { response?: { status?: number } })?.response?.status;
+        return status !== 409; // 409 — "allaqachon berilgan", bu xatolik emas
+      });
+      if (realFailures.length > 0) {
+        setFinishError("XP berishda xatolik yuz berdi. Qaytadan urinib ko'ring.");
+        return;
+      }
       setExpanded(false); setStep(0); setHwItems([]); setAttendance({});
     } finally {
       setFinishing(false);
@@ -245,7 +281,7 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
           {step === 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {students.map((st, i) => {
-                const status = attendance[st.id] ?? "p";
+                const status = attendance[st.id] ?? existingAttendanceMap[st.id];
                 return (
                   <div key={st.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 4px", borderBottom: "1px solid var(--border)", flexWrap: "wrap", rowGap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -315,6 +351,16 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
 
           {step === 2 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {xpAlreadyAwarded && (
+                <div style={{ background: "rgba(139,92,246,0.12)", color: "#a78bfa", fontSize: 12.5, fontWeight: 600, padding: "10px 12px", borderRadius: 9, marginBottom: 10 }}>
+                  Bu dars uchun XP allaqachon berilgan
+                </div>
+              )}
+              {finishError && (
+                <div style={{ background: "rgba(239,68,68,0.12)", color: "#f87171", fontSize: 12.5, fontWeight: 600, padding: "10px 12px", borderRadius: 9, marginBottom: 10 }}>
+                  {finishError}
+                </div>
+              )}
               {students.map((st, i) => (
                 <div key={st.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 4px", borderBottom: "1px solid var(--border)", flexWrap: "wrap", rowGap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -325,17 +371,17 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="#fbbf24" stroke="none"><path d="M13 2L4 14h6l-1 8 9-12h-6z" /></svg>
-                    <input type="number" value={xpAmounts[st.id] ?? 15}
+                    <input type="number" value={xpAmounts[st.id] ?? 15} disabled={xpAlreadyAwarded}
                       onChange={(e) => setXpAmounts((x) => ({ ...x, [st.id]: Number(e.target.value) }))}
-                      style={{ width: 56, background: "var(--surface-3)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", color: "var(--text)", fontSize: 13.5, fontFamily: "inherit", textAlign: "center" }} />
+                      style={{ width: 56, background: "var(--surface-3)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", color: "var(--text)", fontSize: 13.5, fontFamily: "inherit", textAlign: "center", opacity: xpAlreadyAwarded ? 0.6 : 1 }} />
                   </div>
                 </div>
               ))}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
                 <div onClick={() => setStep(1)} style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--text-dim)", fontSize: 13, fontWeight: 600, padding: "9px 16px", borderRadius: 9, cursor: "pointer" }}>← Orqaga</div>
-                <button type="button" onClick={handleFinish} disabled={finishing}
-                  style={{ background: "#22c55e", color: "#fff", fontSize: 13, fontWeight: 700, padding: "9px 18px", borderRadius: 9, border: "none", cursor: finishing ? "default" : "pointer", opacity: finishing ? 0.6 : 1 }}>
-                  {finishing ? "Saqlanmoqda..." : "✓ Yakunlash"}
+                <button type="button" onClick={handleFinish} disabled={finishing || xpAlreadyAwarded}
+                  style={{ background: "#22c55e", color: "#fff", fontSize: 13, fontWeight: 700, padding: "9px 18px", borderRadius: 9, border: "none", cursor: (finishing || xpAlreadyAwarded) ? "default" : "pointer", opacity: (finishing || xpAlreadyAwarded) ? 0.6 : 1 }}>
+                  {finishing ? "Saqlanmoqda..." : xpAlreadyAwarded ? "XP allaqachon berilgan" : "✓ Yakunlash"}
                 </button>
               </div>
             </div>

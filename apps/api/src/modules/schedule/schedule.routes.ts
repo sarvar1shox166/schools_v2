@@ -110,7 +110,15 @@ export async function scheduleRoutes(app: FastifyInstance) {
     if (role === "teacher") {
       filter = `AND (g.teacher_id = (SELECT id FROM teachers WHERE user_id = $4) OR sl.teacher_id = (SELECT id FROM teachers WHERE user_id = $4))`;
       params.push(sub);
-      extraSelect = `l.id AS "lessonId", (l.id IS NOT NULL) AS "isEnded", (ta.id IS NOT NULL) AS "isStarted"`;
+      // "activityXpAwarded" — TMaterialsPage sehrgaridagi "3. XP berish"
+      // qadami shu darsda (schedule_slot_id + bugungi sana) allaqachon
+      // kimgadir XP berilganmi tekshiradi (0075 migratsiyasi,
+      // lesson_activity_xp) — frontend shu bilan wizard'ni qayta
+      // ochib "Yakunlash" bosishdan bloklaydi.
+      extraSelect = `l.id AS "lessonId", (l.id IS NOT NULL) AS "isEnded", (ta.id IS NOT NULL) AS "isStarted",
+        EXISTS (
+          SELECT 1 FROM lesson_activity_xp lax WHERE lax.schedule_slot_id = sl.id AND lax.date = CURRENT_DATE
+        ) AS "activityXpAwarded"`;
       extraJoin = `
         LEFT JOIN lessons l ON l.schedule_slot_id = sl.id AND l.conducted_at = CURRENT_DATE AND l.status = 'conducted'
         LEFT JOIN teacher_attendance ta ON ta.schedule_slot_id = sl.id AND ta.date = CURRENT_DATE

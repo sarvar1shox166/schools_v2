@@ -46,6 +46,10 @@ const attemptSchema = z.object({
 const awardXpSchema = z.object({
   amount: z.number().int().min(1).max(500),
   note: z.string().max(200).optional(),
+  // Bir xil o'quvchiga bir xil dars uchun qo'lda XP faqat bir marta berilishi
+  // uchun (lesson_activity_xp — 0075 migratsiyasi) — majburiy.
+  scheduleSlotId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
 async function getStudentIdForUser(userId: string): Promise<string | null> {
@@ -358,6 +362,21 @@ export async function gamificationRoutes(app: FastifyInstance) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+        // Shu o'quvchiga shu dars (schedule_slot_id + sana) uchun XP
+        // avvalroq berilgan bo'lsa — qator qaytmaydi va awardXp() UMUMAN
+        // chaqirilmaydi (0075 migratsiyasi, lesson_activity_xp).
+        const dedupRes = await client.query(
+          `INSERT INTO lesson_activity_xp (student_id, schedule_slot_id, date, amount, awarded_by)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT DO NOTHING
+           RETURNING student_id`,
+          [studentId, body.scheduleSlotId, body.date, body.amount, request.user.sub]
+        );
+        if (dedupRes.rows.length === 0) {
+          await client.query("ROLLBACK");
+          return reply.code(409).send({ error: "Bu dars uchun XP allaqachon berilgan" });
+        }
+
         const result = await awardXp(client, studentId, body.amount);
         await notifyStudent(
           client,

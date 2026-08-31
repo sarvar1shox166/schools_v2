@@ -136,9 +136,16 @@ export async function homeworkRoutes(app: FastifyInstance) {
     );
     if (groupCheck.rows.length === 0) return reply.code(400).send({ error: "Guruh topilmadi" });
 
+    // Sehrgar (yoki tarmoq xatosi) bir xil guruh/dars/sarlavha uchun qayta
+    // yuborilsa — yangi qator yaratmay, mavjudini yangilaymiz va O'SHA id ni
+    // qaytaramiz (0076 migratsiyadagi qisman UNIQUE indeksga mos ON CONFLICT).
     const { rows } = await pool.query(
       `INSERT INTO homework (tenant_id, group_id, title, description, due_date, xp_reward, schedule_slot_id, lesson_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (group_id, schedule_slot_id, lesson_date, lower(btrim(title)))
+         WHERE schedule_slot_id IS NOT NULL AND lesson_date IS NOT NULL
+       DO UPDATE SET description = EXCLUDED.description, due_date = EXCLUDED.due_date, xp_reward = EXCLUDED.xp_reward
+       RETURNING id`,
       [
         tenantId, body.groupId, body.title, body.description ?? null, body.dueDate ?? null, body.xpReward,
         body.scheduleSlotId ?? null, body.lessonDate ?? null,
