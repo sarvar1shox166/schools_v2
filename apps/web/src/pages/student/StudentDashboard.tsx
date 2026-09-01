@@ -157,9 +157,9 @@ export default function StudentDashboard() {
     <div style={{ fontFamily: "inherit" }}>
 
       {/* HERO */}
-      <div style={{
+      <div className="sdash-hero" style={{
         position: "relative", background: "linear-gradient(120deg,#0f1220 0%,#151a2e 50%,#1a1530 100%)",
-        border: "1px solid #232840", borderRadius: 18, padding: "26px 30px", marginBottom: 16, overflow: "hidden",
+        border: "1px solid #232840", borderRadius: 18, marginBottom: 16, overflow: "hidden",
       }}>
         <div style={{ position: "absolute", top: -80, right: -60, width: 340, height: 340, borderRadius: "50%", background: "radial-gradient(circle, rgba(99,102,241,.22) 0%, transparent 65%)", pointerEvents: "none" }} />
         <div style={{ position: "absolute", bottom: -120, left: "20%", width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, rgba(59,130,246,.15) 0%, transparent 65%)", pointerEvents: "none" }} />
@@ -169,63 +169,49 @@ export default function StudentDashboard() {
         <div style={{ position: "relative", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 260 }}>
             {streak > 0 && (
-              <div onClick={() => setStreakModalOpen(true)} style={{
-                display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
-                background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)",
-                color: "#a5b4fc", fontSize: 11, fontWeight: 600, padding: "5px 11px", borderRadius: 20, marginBottom: 14,
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", boxShadow: "0 0 8px #f97316" }} />
+              <div onClick={() => setStreakModalOpen(true)} className="sdash-streak-badge">
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", boxShadow: "0 0 8px #f97316", flexShrink: 0 }} />
                 {streak} kunlik streak · Davom ettir
               </div>
             )}
-            <div style={{ color: "#f5f5f6", fontSize: 26, fontWeight: 800, lineHeight: 1.15, letterSpacing: "-.01em" }}>
+            <div className="sdash-greet">
               Salom, {user?.fullName?.split(" ")[0] ?? "do'stim"} 👋
             </div>
-            <div style={{ color: "#c7d0e8", fontSize: 15, fontWeight: 500, marginTop: 6, lineHeight: 1.4 }}>Bugun shaxmat o'rganamizmi?</div>
+            <div className="sdash-sub">Bugun shaxmat o'rganamizmi?</div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
-              <button onClick={() => navigate("/student/pvp")} style={{
-                display: "flex", alignItems: "center", gap: 7, background: "#fff", color: "#0a0a0c",
-                fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 10, cursor: "pointer",
-                border: "none", boxShadow: "0 4px 14px rgba(255,255,255,.12)",
-              }}>
+            <div className="sdash-btn-row">
+              <button onClick={() => navigate("/student/pvp")} className="sdash-btn sdash-btn-primary">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="6 4 20 12 6 20 6 4" /></svg>
                 O'ynash
               </button>
-              <button onClick={() => navigate("/student/videos")} style={{
-                display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.1)",
-                color: "#f5f5f6", fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10, cursor: "pointer",
-              }}>
+              <button onClick={() => navigate("/student/videos")} className="sdash-btn sdash-btn-secondary">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10l5-3v10l-5-3z" /></svg>
                 Video dars
               </button>
-              <button onClick={() => navigate("/student/puzzles")} style={{
-                display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.1)",
-                color: "#f5f5f6", fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10, cursor: "pointer",
-              }}>
+              <button onClick={() => navigate("/student/puzzles")} className="sdash-btn sdash-btn-secondary">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M9 10l3 3 6-6" /></svg>
                 Masala
               </button>
             </div>
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, flexShrink: 0 }}>
+          <div className="sdash-stats">
             {[
               { v: elo, l: "ELO" },
               { v: solvedCount, l: "MASALA" },
               { v: `${attendancePercent}%`, l: "DAVOMAT" },
             ].map((s) => (
-              <div key={s.l} style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 12, padding: "12px 16px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 78 }}>
-                <div style={{ color: "#f5f5f6", fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{s.v}</div>
-                <div style={{ color: "#8b8d98", fontSize: 10.5, fontWeight: 600, marginTop: 4, letterSpacing: ".04em" }}>{s.l}</div>
+              <div key={s.l} className="sdash-stat">
+                <div className="sdash-stat-value">{s.v}</div>
+                <div className="sdash-stat-label">{s.l}</div>
               </div>
             ))}
-            <div style={{ background: "rgba(249,115,22,.1)", border: "1px solid rgba(249,115,22,.25)", borderRadius: 12, padding: "12px 16px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 78 }}>
+            <div className="sdash-stat sdash-stat-streak">
               <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="#f97316" stroke="none"><path d="M12 2c1 4-3 5-3 9a3 3 0 006 0c0-1.5-1-2.5-1-2.5 1.5 1 3 3 3 5.5a5 5 0 01-10 0c0-5 5-6 5-12z" /></svg>
-                <div style={{ color: "#fb923c", fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{streak}</div>
+                <div className="sdash-stat-value">{streak}</div>
               </div>
-              <div style={{ color: "#fb923c", fontSize: 10.5, fontWeight: 600, marginTop: 4, letterSpacing: ".04em" }}>STREAK</div>
+              <div className="sdash-stat-label">STREAK</div>
             </div>
           </div>
         </div>
