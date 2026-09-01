@@ -242,7 +242,7 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
               </div>
               <div className="kid-topbar-icons">
                 <button
-                  className="tb-btn"
+                  className="tb-btn tb-pvp"
                   title={pvp.incomingChallenge ? "Sizni o'yinga chaqirishmoqda!" : "Jonli o'yin"}
                   style={{ position: "relative" }}
                   onClick={() => (pvp.incomingChallenge ? setPvpModalOpen(true) : navigate("/student/pvp"))}
@@ -250,11 +250,11 @@ export function AppShell({ title, nav }: { title: string; nav?: NavSection[] }) 
                   <Icon name="swords" size={17} />
                   {!!pvp.incomingChallenge && <span className="dot" />}
                 </button>
-                <button className="tb-btn" onClick={() => navigate("/student/profile")} title="Sozlamalar">
+                <button className="tb-btn tb-settings" onClick={() => navigate("/student/profile")} title="Sozlamalar">
                   <Icon name="settings" size={17} />
                 </button>
                 <button
-                  className="tb-btn"
+                  className="tb-btn tb-notif"
                   onClick={() => (isStudent ? setNotifModalOpen(true) : notifRoute && navigate(notifRoute))}
                   title="Bildirishnomalar"
                   style={{ position: "relative" }}

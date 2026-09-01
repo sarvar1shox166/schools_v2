@@ -18,13 +18,7 @@ function avatarColor(name: string) {
 }
 
 const MEDALS = ["🥇", "🥈", "🥉"];
-const MEDAL_SIZES = [58, 48, 42];
-const AVATAR_SIZES = [86, 72, 62];
-const AVATAR_FONTS = [26, 22, 19];
-const NAME_SIZES = [23, 21, 19];
-const ELO_SIZES = [52, 40, 34];
 const ELO_COLORS = ["#facc15", "#e5e7eb", "#fdba74"];
-const RANK_COLORS = ["#facc15", "#e5e7eb", "#fdba74"];
 
 const TABS: { id: "elo" | "xp"; label: string }[] = [
   { id: "elo", label: "Reyting (ELO)" },
@@ -56,7 +50,8 @@ export default function LeaderboardPage() {
   const weekDiffStr = weekDiff >= 0 ? `+${weekDiff}` : `${weekDiff}`;
 
   const top3 = data.slice(0, 3);
-  const rest = data.slice(3);
+  // Faqat TOP 10 ko'rsatiladi — 4..10-o'rinlar shu yerda, 1..3 alohida panelda.
+  const rest = data.slice(3, 10);
 
   const gapToNext = myRank && myRank > 1 ? Math.max(0, (data[myRank - 2]?.[sortBy] ?? myValue) - myValue) : 0;
 
@@ -86,7 +81,7 @@ export default function LeaderboardPage() {
       {/* ── Top-3 + siz paneli ── */}
       <div className="grid l-2-1" style={{ gap: 20, marginBottom: 20, alignItems: "start" }}>
 
-        <div style={{ background: "linear-gradient(135deg,#141417 0%,#161620 100%)", border: "1px solid #232328", borderRadius: 22, padding: "34px 40px", position: "relative", overflow: "hidden" }}>
+        <div className="lb-top3-panel" style={{ background: "linear-gradient(135deg,#141417 0%,#161620 100%)", border: "1px solid #232328", borderRadius: 22, position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: -40, right: -40, width: 220, height: 220, borderRadius: "50%", background: "radial-gradient(circle,rgba(234,179,8,0.14),transparent 70%)" }} />
           <div style={{ position: "absolute", bottom: -30, right: -20, fontSize: 200, lineHeight: 1, color: "#fff", opacity: 0.03 }}>♛</div>
 
@@ -98,32 +93,28 @@ export default function LeaderboardPage() {
             const isMe = e.userId === user?.id;
             const online = onlineIds.has(e.userId);
             return (
-              <div key={e.userId} style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 0", borderBottom: i < top3.length - 1 ? "1px solid #232328" : "none" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 18, minWidth: 0 }}>
-                  <div style={{ fontSize: MEDAL_SIZES[i], lineHeight: 1 }}>{MEDALS[i]}</div>
+              <div key={e.userId} className={`lb-top3-row lb-rank-${i + 1}`} style={{ position: "relative", borderBottom: i < top3.length - 1 ? "1px solid #232328" : "none" }}>
+                <div className="lb-top3-left">
+                  <div className="lb-top3-medal">{MEDALS[i]}</div>
                   <div style={{ position: "relative", flexShrink: 0 }}>
-                    <div style={{
-                      width: AVATAR_SIZES[i], height: AVATAR_SIZES[i], borderRadius: 16, background: avatarColor(e.fullName),
-                      display: "flex", alignItems: "center", justifyContent: "center", color: "#0a0a0c", fontSize: AVATAR_FONTS[i], fontWeight: 800,
-                      boxShadow: "0 6px 18px rgba(0,0,0,.3)", overflow: "hidden",
-                    }}>
+                    <div className="lb-top3-avatar" style={{ background: avatarColor(e.fullName) }}>
                       {e.avatarUrl ? <img src={e.avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials(e.fullName)}
                     </div>
                     {online && <div style={{ position: "absolute", bottom: -2, right: -2, width: 14, height: 14, borderRadius: "50%", background: "#22c55e", border: "2.5px solid #141417", boxShadow: "0 0 8px rgba(34,197,94,.6)" }} />}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: NAME_SIZES[i], fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.1, color: "#f5f5f6", whiteSpace: "nowrap" }}>
+                    <div className="lb-top3-name">
                       {isMe ? "Siz" : e.fullName}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 3, color: "#fb923c", fontSize: 12, fontWeight: 700 }}>🔥 {e.streak}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 3, color: "#4ade80", fontSize: 12, fontWeight: 700 }}>✓ {e.wins} g'alaba</div>
+                      <div className="lb-top3-badge" style={{ color: "#fb923c" }}>🔥 {e.streak}</div>
+                      <div className="lb-top3-badge" style={{ color: "#4ade80" }}>✓ {e.wins} g'alaba</div>
                     </div>
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: ELO_SIZES[i], fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: ELO_COLORS[i] }}>{e[sortBy]}</div>
-                  <div style={{ fontSize: 11, color: "#65666f", marginTop: 6, fontWeight: 600 }}>
+                  <div className="lb-top3-value" style={{ color: ELO_COLORS[i] }}>{e[sortBy]}</div>
+                  <div className="lb-top3-value-sub">
                     {sortBy === "elo" ? `${e.xp} XP` : `${e.elo} ELO`}
                   </div>
                 </div>
@@ -167,16 +158,15 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* ── Full table ── */}
+      {/* ── TOP 10 ── */}
       <div>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em", color: "#f5f5f6" }}>Barcha o'quvchilar</div>
+          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em", color: "#f5f5f6" }}>TOP 10 o'quvchi</div>
         </div>
 
         <div style={{ background: "#141417", border: "1px solid #232328", borderRadius: 16, overflow: "hidden" }}>
-         <div style={{ overflowX: "auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "56px 1.7fr 0.9fr 1fr 0.7fr", minWidth: 480, padding: "14px 22px", background: "#18181c", color: "#8b8d98", fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: "0.15em", borderBottom: "1px solid #232328" }}>
-            <div>#</div><div>O'QUVCHI</div><div>ELO</div><div>XP</div><div>STREAK</div>
+          <div className="lb-row lb-head">
+            <div>#</div><div>O'QUVCHI</div><div style={{ textAlign: "right" }}>{valueLabel}</div><div style={{ textAlign: "right" }}>STREAK</div>
           </div>
 
           {isLoading && <div style={{ padding: 32, textAlign: "center", color: "#65666f", fontSize: 14 }}>Yuklanmoqda...</div>}
@@ -186,31 +176,32 @@ export default function LeaderboardPage() {
             const isMe = e.userId === user?.id;
             const online = onlineIds.has(e.userId);
             return (
-              <div key={e.userId} style={{
-                display: "grid", gridTemplateColumns: "56px 1.7fr 0.9fr 1fr 0.7fr", minWidth: 480, padding: "14px 22px", alignItems: "center",
+              <div key={e.userId} className="lb-row" style={{
                 borderBottom: i < rest.length - 1 ? "1px solid #1a1a1e" : "none",
                 background: isMe ? "linear-gradient(90deg,rgba(34,197,94,0.08),transparent)" : "transparent",
                 borderLeft: isMe ? "3px solid #22c55e" : "3px solid transparent",
               }}>
-                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, fontWeight: 800, color: "#65666f" }}>{String(rank).padStart(2, "0")}</div>
+                <div className="lb-rank">{String(rank).padStart(2, "0")}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                   <div style={{ position: "relative", flexShrink: 0 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: avatarColor(e.fullName), color: "#0a0a0c", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    <div className="lb-avatar" style={{ background: avatarColor(e.fullName) }}>
                       {e.avatarUrl ? <img src={e.avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials(e.fullName)}
                     </div>
                     {online && <div style={{ position: "absolute", bottom: -2, right: -2, width: 11, height: 11, borderRadius: "50%", background: "#22c55e", border: "2px solid #141417" }} />}
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.2, color: "#f5f5f6" }}>{e.fullName}</div>
-                      {isMe && <div style={{ background: "rgba(34,197,94,.2)", border: "1px solid rgba(34,197,94,.35)", color: "#4ade80", fontSize: 9.5, fontWeight: 800, padding: "1px 6px", borderRadius: 99, letterSpacing: "0.05em" }}>SIZ</div>}
+                      <div className="lb-name">{e.fullName}</div>
+                      {isMe && <div style={{ background: "rgba(34,197,94,.2)", border: "1px solid rgba(34,197,94,.35)", color: "#4ade80", fontSize: 9.5, fontWeight: 800, padding: "1px 6px", borderRadius: 99, letterSpacing: "0.05em", flexShrink: 0 }}>SIZ</div>}
                     </div>
-                    <div style={{ color: "#4ade80", fontSize: 10.5, fontWeight: 600, marginTop: 2 }}>{e.wins} g'alaba</div>
+                    <div className="lb-wins">{e.wins} g'alaba</div>
                   </div>
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "'JetBrains Mono',monospace", letterSpacing: "-0.02em", color: sortBy === "elo" ? "#4ade80" : "#f5f5f6" }}>{e.elo}</div>
-                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 800, color: sortBy === "xp" ? "#4ade80" : "#c7d0e8" }}>{e.xp}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "#fb923c" }}>🔥 {e.streak}</div>
+                <div style={{ textAlign: "right" }}>
+                  <div className="lb-value">{sortBy === "elo" ? e.elo : e.xp}</div>
+                  <div className="lb-value-sub">{sortBy === "elo" ? `${e.xp} XP` : `${e.elo} ELO`}</div>
+                </div>
+                <div className="lb-streak">🔥 {e.streak}</div>
               </div>
             );
           })}
@@ -218,12 +209,13 @@ export default function LeaderboardPage() {
           {!isLoading && data.length === 0 && (
             <div style={{ padding: 40, textAlign: "center", color: "#54555e", fontSize: 14 }}>Hali ma'lumot yo'q</div>
           )}
-         </div>
         </div>
 
-        <div style={{ color: "#65666f", fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: "0.05em", marginTop: 14 }}>
-          Jami {data.length} o'quvchi
-        </div>
+        {data.length > 10 && (
+          <div style={{ color: "#65666f", fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: "0.05em", marginTop: 14 }}>
+            {data.length} o'quvchidan TOP 10 ko'rsatilmoqda
+          </div>
+        )}
       </div>
     </div>
   );
