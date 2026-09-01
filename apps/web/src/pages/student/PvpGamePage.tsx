@@ -391,6 +391,22 @@ export default function PvpGamePage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Mobil/planshetda o'ng panel taxta ostiga tushib qolgani uchun
+       *  "Kompyuter o'ylayapti" indikatori ko'rinmay qolardi — shu
+       *  ekranlarda buni toast sifatida yuqorida ko'rsatamiz (CSS orqali
+       *  faqat <=900px da ko'rinadi, desktopda panel yonida ko'rinaveradi). */}
+      {thinking && createPortal(
+        <div className="pvp-thinking-toast">
+          <div style={{
+            width: 15, height: 15, borderRadius: "50%", flexShrink: 0,
+            border: "2px solid #3b82f6", borderTopColor: "transparent",
+            animation: "spin 0.7s linear infinite",
+          }} />
+          <span>Kompyuter o'ylayapti...</span>
+        </div>,
+        document.body
+      )}
+
       {/* Top bar — ilgari flexWrap yo'q edi: torroq ekranda badge'lar sig'may
           qolib, butun sahifa gorizontal aylantiriladigan bo'lib qolardi (shu
           holatda taxta ustida barmoq bilan sudrash ham donani emas, sahifani
@@ -478,9 +494,13 @@ export default function PvpGamePage() {
 
         {/* Right panel */}
         <div className="pvp-panel-col" style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
-          {/* Kompyuter o'ylayapti indikatori */}
+          {/* Kompyuter o'ylayapti indikatori — desktopda panel taxta yonida
+           *  doim ko'rinadi, shuning uchun shu yerda qoladi. Mobil/planshetda
+           *  panel taxtadan PASTGA tushib qoladi (stack bo'ladi), o'quvchi
+           *  taxtaga tikilib turganda buni ko'rmay qolardi — shu holatlarda
+           *  CSS bu blokni yashirib, o'rniga yuqoridagi toast ko'rsatiladi. */}
           {thinking && (
-            <div style={{
+            <div className="pvp-thinking-inline" style={{
               padding: "12px 16px", background: "#141417",
               border: "1px solid #232328", borderRadius: 12,
               display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 14,
