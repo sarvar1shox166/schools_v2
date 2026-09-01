@@ -1223,6 +1223,12 @@ body { transition: background .3s, color .3s; }
  * kelgan qoida g'olib chiqadi — shu qoida keyin kelsa, media so'rovdagi
  * "display:flex" ni bekor qilib qo'yardi va toast mobil/planshetda ham
  * hech qachon ko'rinmas edi. */
+/* Bazaviy (desktop) holat — display shu yerda, JSX'dagi inline style'da
+ * EMAS: aks holda inline style CSS'dan doim kuchli bo'lgani uchun
+ * pastdagi @media qoidasi uni yenga olmay, mobil/planshetda ham
+ * ko'rinaverar edi (toast bilan ikkalasi birga chiqib qolardi). */
+.pvp-thinking-inline { display: flex; }
+
 .pvp-thinking-toast {
   /* Desktopda yashirin — panel taxta yonida doim ko'rinib turadi. */
   display: none;

@@ -503,7 +503,12 @@ export default function PvpGamePage() {
             <div className="pvp-thinking-inline" style={{
               padding: "12px 16px", background: "#141417",
               border: "1px solid #232328", borderRadius: 12,
-              display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 14,
+              // display SHART inline'da bo'lmasligi kerak — bo'lsa CSS'dagi
+              // @media(max-width:900px) { display:none } uni yenga olmaydi
+              // (inline style har doim stylesheetdan kuchli), shuning uchun
+              // mobil/planshetda bu blok yashirilmay, toast bilan qo'shilib
+              // ikkalasi ham chiqib qolgan edi.
+              alignItems: "center", gap: 10, fontWeight: 700, fontSize: 14,
             }}>
               <div style={{
                 width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
