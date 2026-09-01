@@ -391,8 +391,11 @@ export default function PvpGamePage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Top bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#111114", border: "1px solid #1e1e22", borderRadius: 14, padding: "10px 14px" }}>
+      {/* Top bar — ilgari flexWrap yo'q edi: torroq ekranda badge'lar sig'may
+          qolib, butun sahifa gorizontal aylantiriladigan bo'lib qolardi (shu
+          holatda taxta ustida barmoq bilan sudrash ham donani emas, sahifani
+          gorizontal aylantirar edi). Endi sig'masa keyingi qatorga tushadi. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, rowGap: 8, flexWrap: "wrap", background: "#111114", border: "1px solid #1e1e22", borderRadius: 14, padding: "10px 14px" }}>
         <button onClick={() => { forfeitIfActive(); navigate("/student/pvp"); }}
           style={{
             display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 8px 10px",

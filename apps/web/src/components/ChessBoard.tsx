@@ -208,30 +208,46 @@ export function ChessBoard({
     setLegalSquares(new Set());
   }
 
-  // Drag: start
-  function handleMouseDown(e: React.MouseEvent, piece: string, square: string) {
+  // Yagona kirish nuqtasi — sichqoncha VA barmoq bilan bosishni bir xil
+  // ishlaydi (Pointer Events). Ilgari faqat "mousedown"/"mousemove"/"mouseup"
+  // ishlatilgan edi, shuning uchun telefonda taxta bilan umuman ishlab
+  // bo'lmasdi: teginish "click" hodisasini sintetik ravishda chiqarishiga
+  // umid qilingan edi, lekin sahifa gorizontal skroll qila olgani sabab
+  // brauzer teginishni "sudrash/aylantirish" ishorasi deb qabul qilib,
+  // hech qanday sichqoncha hodisasini chaqirmasdi. Endi bosilgan zahoti
+  // (qat'i nazar sichqoncha yoki barmoq) shu funksiya ishlaydi.
+  function handlePointerDown(e: React.PointerEvent, square: string, piece: string | null) {
     if (disabled) return;
-    e.preventDefault();
-    // A piece already selected and this square (occupied by an enemy piece) is a
-    // legal destination — treat it as a capture-by-click instead of re-selecting.
+
+    // Allaqachon tanlangan dona bor va shu katak qonuniy manzil (bo'sh yoki
+    // yeyiladigan) — darrov ko'chiriladi. Bo'sh manzil uchun ham ishlaydi,
+    // ilgari faqat piece bor kataklarga osilgan "mousedown" buni qamramasdi.
     if (selected && selected !== square && legalSquares.has(square)) {
       commit(selected, square);
       return;
     }
-    const cellSize = boardRef.current
-      ? boardRef.current.getBoundingClientRect().width / 8 : 64;
-    openLegal(square);
-    setDrag({ piece, from: square, x: e.clientX, y: e.clientY, over: null, cellSize });
+    if (selected === square) { clearSel(); return; }
+
+    if (piece) {
+      e.preventDefault();
+      const cellSize = boardRef.current
+        ? boardRef.current.getBoundingClientRect().width / 8 : 64;
+      openLegal(square);
+      setDrag({ piece, from: square, x: e.clientX, y: e.clientY, over: null, cellSize });
+      return;
+    }
+
+    if (selected) clearSel();
   }
 
-  // Drag: move & drop listeners
+  // Sudrab olib borish: harakat va qo'yib yuborish tinglovchilari
   useEffect(() => {
     if (!drag) return;
-    const onMouseMove = (e: MouseEvent) => {
+    const onPointerMove = (e: PointerEvent) => {
       const over = getSquareAt(e.clientX, e.clientY);
       setDrag(d => d ? { ...d, x: e.clientX, y: e.clientY, over } : null);
     };
-    const onMouseUp = (e: MouseEvent) => {
+    const onPointerUp = (e: PointerEvent) => {
       const target = getSquareAt(e.clientX, e.clientY);
       if (target && legalSquares.has(target)) {
         commit(drag.from, target);
@@ -240,25 +256,15 @@ export function ChessBoard({
       }
       setDrag(null);
     };
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerUp);
     return () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerUp);
     };
   }, [drag, legalSquares]);
-
-  // Click-to-move fallback
-  function handleClick(square: string, piece: string | null) {
-    if (disabled || drag) return;
-    if (selected) {
-      if (selected === square) { clearSel(); return; }
-      if (legalSquares.has(square)) { commit(selected, square); return; }
-      if (piece) { openLegal(square); return; }
-      clearSel(); return;
-    }
-    if (piece) openLegal(square);
-  }
 
   return (
     <>
@@ -274,6 +280,11 @@ export function ChessBoard({
             border: "2.5px solid rgba(0,0,0,.4)",
             boxShadow: "0 8px 36px rgba(0,0,0,.25)",
             cursor: drag ? "grabbing" : "default",
+            // Telefonda taxta ustida barmoq bilan sudrash brauzerning o'zi
+            // tomonidan sahifani aylantirish/kattalashtirish ishorasi sifatida
+            // "yeb qo'yilmasligi" uchun — aks holda pointerdown/move/up hech
+            // qachon to'g'ri ishlamas edi (donalar "yurilmasdi").
+            touchAction: "none",
           }}
         >
           {rows.map((row, rowIdx) =>
@@ -299,7 +310,7 @@ export function ChessBoard({
               return (
                 <div
                   key={square}
-                  onClick={() => handleClick(square, piece)}
+                  onPointerDown={(e) => handlePointerDown(e, square, piece)}
                   style={{
                     aspectRatio: "1",
                     position: "relative",
@@ -317,7 +328,6 @@ export function ChessBoard({
                 >
                   {piece && (
                     <div
-                      onMouseDown={(e) => handleMouseDown(e, piece, square)}
                       className={isLastTo && !drag ? "cb-slide" : undefined}
                       style={
                         isLastTo && !drag && lastMove
