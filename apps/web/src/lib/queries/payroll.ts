@@ -86,7 +86,10 @@ export function useGeneratePayroll() {
 export interface TeacherPayrollSummary {
   teacherId: string;
   teacherName: string;
-  earnedThisPeriod: number;
+  salaryType: "per_lesson" | "monthly_fixed" | "percent_income";
+  earned: number;
+  lessonEarned?: number;
+  manualEarned?: number;
   totalPaid: number;
   balance: number;
 }
@@ -134,6 +137,47 @@ export function useDeleteTeacherPayout() {
       (await api.delete(`/teachers/${teacherId}/payouts/${payoutId}`)).data,
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["teacherPayouts", vars.teacherId] });
+      qc.invalidateQueries({ queryKey: ["payrollSummary"] });
+    },
+  });
+}
+
+export interface TeacherManualEarning {
+  id: string;
+  amount: number;
+  note: string | null;
+  entryDate: string;
+  createdAt: string;
+  createdByName: string | null;
+}
+
+export function useTeacherManualEarnings(teacherId: string | null) {
+  return useQuery({
+    queryKey: ["teacherManualEarnings", teacherId],
+    enabled: !!teacherId,
+    queryFn: async () => (await api.get<TeacherManualEarning[]>(`/teachers/${teacherId}/manual-earnings`)).data,
+  });
+}
+
+export function useAddManualEarning() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ teacherId, ...payload }: { teacherId: string; amount: number; note?: string; date?: string }) =>
+      (await api.post(`/teachers/${teacherId}/manual-earnings`, payload)).data,
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["teacherManualEarnings", vars.teacherId] });
+      qc.invalidateQueries({ queryKey: ["payrollSummary"] });
+    },
+  });
+}
+
+export function useDeleteManualEarning() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ teacherId, entryId }: { teacherId: string; entryId: string }) =>
+      (await api.delete(`/teachers/${teacherId}/manual-earnings/${entryId}`)).data,
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["teacherManualEarnings", vars.teacherId] });
       qc.invalidateQueries({ queryKey: ["payrollSummary"] });
     },
   });

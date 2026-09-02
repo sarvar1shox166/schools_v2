@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
-import { computeTeacherEarnings } from "./payroll.service.js";
+import { computeTeacherEarnings, computeAccumulatedEarnings } from "./payroll.service.js";
 
 const rateSchema = z.object({
   groupRate: z.number().nonnegative().optional(),
@@ -155,14 +155,20 @@ export async function payrollRoutes(app: FastifyInstance) {
       const { period } = periodSchema.parse(request.query);
       const { tenantId } = request.user;
 
-      const earnings = await computeTeacherEarnings(pool, tenantId!, period);
-      const earningsByTeacher = new Map(earnings.map((e) => [e.teacherId, e.totalAmount]));
+      // Davr bo'yicha (faqat "oylik"/"foizdan" turidagi ustozlar uchun kerak —
+      // "har dars uchun" turida endi umr bo'yi (lifetime) hisoblanadi).
+      const periodEarnings = await computeTeacherEarnings(pool, tenantId!, period);
+      const periodByTeacher = new Map(periodEarnings.map((e) => [e.teacherId, e.totalAmount]));
+      const accumulated = await computeAccumulatedEarnings(pool, tenantId!);
+      const accumulatedByTeacher = new Map(accumulated.map((a) => [a.teacherId, a]));
 
       const { rows } = await pool.query(
         `SELECT t.id AS "teacherId", u.full_name AS "teacherName",
+                COALESCE(tr.salary_type, 'per_lesson') AS "salaryType",
                 COALESCE(po.total_paid, 0) AS "totalPaid"
          FROM teachers t
          JOIN users u ON u.id = t.user_id
+         LEFT JOIN teacher_rates tr ON tr.teacher_id = t.id
          LEFT JOIN (
            SELECT teacher_id, SUM(amount) AS total_paid
            FROM teacher_payouts
@@ -174,14 +180,21 @@ export async function payrollRoutes(app: FastifyInstance) {
       );
 
       return rows.map((r) => {
-        const earnedThisPeriod = earningsByTeacher.get(r.teacherId) ?? 0;
         const totalPaid = Number(r.totalPaid);
+        const isPerLesson = r.salaryType === "per_lesson";
+        const acc = accumulatedByTeacher.get(r.teacherId);
+        // per_lesson: umr bo'yi yig'ilgan (lesson_sessions + qo'lda tuzatishlar).
+        // monthly_fixed/percent_income: hozircha eskicha, faqat tanlangan davr uchun.
+        const earned = isPerLesson ? (acc?.accumulatedEarned ?? 0) : (periodByTeacher.get(r.teacherId) ?? 0);
         return {
           teacherId: r.teacherId,
           teacherName: r.teacherName,
-          earnedThisPeriod,
+          salaryType: r.salaryType,
+          earned,
+          lessonEarned: isPerLesson ? (acc?.lessonEarned ?? 0) : undefined,
+          manualEarned: isPerLesson ? (acc?.manualEarned ?? 0) : undefined,
           totalPaid,
-          balance: earnedThisPeriod - totalPaid,
+          balance: earned - totalPaid,
         };
       });
     }
@@ -247,6 +260,74 @@ export async function payrollRoutes(app: FastifyInstance) {
          USING teachers t
          WHERE tp.id = $1 AND tp.teacher_id = $2 AND tp.teacher_id = t.id AND t.tenant_id = $3`,
         [payoutId, id, tenantId]
+      );
+      if (!rowCount) return reply.code(404).send({ error: "Not found" });
+      return { ok: true };
+    }
+  );
+
+  // ---- Manual earning tuzatishlari (yig'ilgan summaga qo'lda qo'shish/ayirish) ----
+
+  app.get(
+    "/teachers/:id/manual-earnings",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { tenantId } = request.user;
+      const teacherRes = await pool.query(`SELECT id FROM teachers WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+      if (!teacherRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+
+      const { rows } = await pool.query(
+        `SELECT me.id, me.amount, me.note, me.entry_date AS "entryDate", me.created_at AS "createdAt",
+                u.full_name AS "createdByName"
+         FROM teacher_manual_earnings me
+         LEFT JOIN users u ON u.id = me.created_by
+         WHERE me.teacher_id = $1
+         ORDER BY me.entry_date DESC, me.created_at DESC`,
+        [id]
+      );
+      return rows;
+    }
+  );
+
+  const manualEarningSchema = z.object({
+    amount: z.number().refine((n) => n !== 0, "Summa 0 bo'lishi mumkin emas"),
+    note: z.string().optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  });
+
+  app.post(
+    "/teachers/:id/manual-earnings",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { tenantId, sub } = request.user;
+      const body = manualEarningSchema.parse(request.body);
+
+      const teacherRes = await pool.query(`SELECT id FROM teachers WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+      if (!teacherRes.rows[0]) return reply.code(404).send({ error: "Not found" });
+
+      const { rows } = await pool.query(
+        `INSERT INTO teacher_manual_earnings (tenant_id, teacher_id, amount, note, entry_date, created_by)
+         VALUES ($1, $2, $3, $4, COALESCE($5, CURRENT_DATE), $6)
+         RETURNING id`,
+        [tenantId, id, body.amount, body.note ?? null, body.date ?? null, sub]
+      );
+      return reply.code(201).send({ id: rows[0].id });
+    }
+  );
+
+  app.delete(
+    "/teachers/:id/manual-earnings/:entryId",
+    { onRequest: [app.requireRole("super_admin", "admin", "assistant_admin")] },
+    async (request, reply) => {
+      const { id, entryId } = request.params as { id: string; entryId: string };
+      const { tenantId } = request.user;
+      const { rowCount } = await pool.query(
+        `DELETE FROM teacher_manual_earnings me
+         USING teachers t
+         WHERE me.id = $1 AND me.teacher_id = $2 AND me.teacher_id = t.id AND t.tenant_id = $3`,
+        [entryId, id, tenantId]
       );
       if (!rowCount) return reply.code(404).send({ error: "Not found" });
       return { ok: true };

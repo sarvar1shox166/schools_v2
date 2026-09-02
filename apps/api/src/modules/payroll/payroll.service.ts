@@ -69,3 +69,40 @@ export async function computeTeacherEarnings(pool: Pool, tenantId: string, perio
   }
   return results;
 }
+
+export interface TeacherAccumulated {
+  teacherId: string;
+  lessonEarned: number;
+  manualEarned: number;
+  accumulatedEarned: number;
+}
+
+/** Ustozning UMR BO'YI (lifetime, davrga bog'liq emas) yig'ilgan summasi —
+ *  darslardan (lesson_sessions) va qo'lda kiritilgan tuzatishlardan
+ *  (teacher_manual_earnings). Faqat "har dars uchun stavka" (per_lesson)
+ *  turidagi ustozlar uchun ma'noli — chaqiruvchi shu turga tegishli
+ *  ustozlarni o'zi filtrlaydi. */
+export async function computeAccumulatedEarnings(pool: Pool, tenantId: string): Promise<TeacherAccumulated[]> {
+  const { rows } = await pool.query(
+    `SELECT t.id AS "teacherId",
+            COALESCE(ls.total, 0) AS "lessonEarned",
+            COALESCE(me.total, 0) AS "manualEarned"
+     FROM teachers t
+     LEFT JOIN (
+       SELECT teacher_id, SUM(amount) AS total FROM lesson_sessions
+       WHERE teacher_id IS NOT NULL GROUP BY teacher_id
+     ) ls ON ls.teacher_id = t.id
+     LEFT JOIN (
+       SELECT teacher_id, SUM(amount) AS total FROM teacher_manual_earnings
+       GROUP BY teacher_id
+     ) me ON me.teacher_id = t.id
+     WHERE t.tenant_id = $1`,
+    [tenantId]
+  );
+  return rows.map((r) => ({
+    teacherId: r.teacherId as string,
+    lessonEarned: Number(r.lessonEarned),
+    manualEarned: Number(r.manualEarned),
+    accumulatedEarned: Number(r.lessonEarned) + Number(r.manualEarned),
+  }));
+}
