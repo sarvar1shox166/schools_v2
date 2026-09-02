@@ -530,12 +530,18 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const body = updateSchema.parse(request.body);
     const { tenantId } = request.user;
 
+    const existing = await pool.query(
+      `SELECT meeting_url AS "meetingUrl", meeting_platform AS "meetingPlatform", specific_date AS "specificDate"
+       FROM schedule_slots WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (existing.rows.length === 0) return reply.code(404).send({ error: "Not found" });
+    const oldSpecificDate: string | null = existing.rows[0].specificDate
+      ? toDateStr(new Date(existing.rows[0].specificDate))
+      : null;
+
     let meetingUrl = body.meetingUrl || null;
     if (body.isOnline && !meetingUrl) {
-      const existing = await pool.query(
-        `SELECT meeting_url AS "meetingUrl", meeting_platform AS "meetingPlatform" FROM schedule_slots WHERE id = $1 AND tenant_id = $2`,
-        [id, tenantId]
-      );
       const platform = body.meetingPlatform ?? existing.rows[0]?.meetingPlatform ?? "zoom";
       meetingUrl = existing.rows[0]?.meetingUrl ?? (
         platform === "meet"
@@ -567,6 +573,48 @@ export async function scheduleRoutes(app: FastifyInstance) {
       ]
     );
     if (!rowCount) return reply.code(404).send({ error: "Not found" });
+
+    // Bir martalik (individual/diagnostika, specific_date) dars yangi sanaga
+    // ko'chirilganda — teacher_attendance/attendance_records ESKI sanaga bog'liq
+    // holicha qoladi (bu jadvallar o'z "date" ustuniga ega, slot.specific_date
+    // o'zgarishi ularni avtomatik surmaydi). Tozalamasak, eski "kelmadi" yozuvi
+    // "Hal qilinmagan darslar" ro'yxatida abadiy qolib ketadi. Guruh (takrorlanuvchi)
+    // shablon uchun bu yerga kirilmaydi — specificDate === undefined bo'ladi.
+    if (oldSpecificDate && body.specificDate !== undefined && body.specificDate !== oldSpecificDate) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `DELETE FROM teacher_attendance WHERE schedule_slot_id = $1 AND date = $2`,
+          [id, oldSpecificDate]
+        );
+        const staleRecords = await client.query(
+          `SELECT student_id AS "studentId", status, student_package_id AS "studentPackageId"
+           FROM attendance_records WHERE schedule_slot_id = $1 AND date = $2`,
+          [id, oldSpecificDate]
+        );
+        for (const r of staleRecords.rows) {
+          if (r.status !== "ae") {
+            await refundLesson(client, r.studentId, r.studentPackageId);
+          }
+        }
+        await client.query(
+          `DELETE FROM attendance_records WHERE schedule_slot_id = $1 AND date = $2`,
+          [id, oldSpecificDate]
+        );
+        await client.query(
+          `DELETE FROM lesson_sessions WHERE schedule_slot_id = $1 AND date = $2`,
+          [id, oldSpecificDate]
+        );
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+    }
+
     return { ok: true };
   });
 

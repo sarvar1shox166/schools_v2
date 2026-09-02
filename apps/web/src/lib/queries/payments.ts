@@ -267,6 +267,7 @@ export interface DaySlot {
   lessonType: "guruh" | "individual" | "diagnostika";
   customName: string | null;
   startTime: string;
+  specificDate: string | null;
   studentsCount: number;
   status: "p" | "a" | "l" | null;
 }
@@ -287,6 +288,7 @@ export interface UnresolvedAbsence {
   groupLabel: string;
   startTime: string;
   date: string;
+  specificDate: string | null;
 }
 
 export function useUnresolvedAbsences() {

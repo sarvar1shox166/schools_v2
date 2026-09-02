@@ -485,6 +485,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
                 sl.group_id AS "groupId", g.name AS "groupName",
                 sl.lesson_type AS "lessonType", sl.custom_name AS "customName",
                 sl.start_time AS "startTime",
+                to_char(sl.specific_date, 'YYYY-MM-DD') AS "specificDate",
                 COALESCE(gm.cnt, 0)::int AS "studentsCount",
                 ta.status
          FROM schedule_slots sl
@@ -539,6 +540,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         `SELECT ta.schedule_slot_id AS "scheduleSlotId", ta.teacher_id AS "teacherId",
                 to_char(ta.date, 'YYYY-MM-DD') AS "date",
                 u.full_name AS "teacherName", sl.start_time AS "startTime",
+                to_char(sl.specific_date, 'YYYY-MM-DD') AS "specificDate",
                 COALESCE(g.name, sl.custom_name, 'Dars') AS "groupLabel"
          FROM teacher_attendance ta
          JOIN schedule_slots sl ON sl.id = ta.schedule_slot_id

@@ -14,9 +14,12 @@ import {
   useMarkTeacherAttendance,
   useCreateScheduleException,
   useUnresolvedAbsences,
+  useDeleteScheduleSlot,
+  useUpdateScheduleSlot,
   type DaySlot,
   type UnresolvedAbsence,
 } from "../../lib/queries.js";
+import { extractErrorMessage } from "../../lib/errorToast.js";
 
 /* ─── Types ─── */
 type AttStatus = "keldi" | "kech" | "kelmadi";
@@ -473,6 +476,7 @@ export default function AttendancePage() {
         <ResolveAbsenceModal
           scheduleSlotId={resolvingAbsence.scheduleSlotId}
           date={resolvingAbsence.date}
+          specificDate={resolvingAbsence.specificDate}
           defaultTime={resolvingAbsence.startTime.slice(0, 5)}
           label={`${resolvingAbsence.groupLabel} — ${resolvingAbsence.teacherName}`}
           onClose={() => setResolvingAbsence(null)}
@@ -779,6 +783,7 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
         <ResolveAbsenceModal
           scheduleSlotId={resolvingSlot.scheduleSlotId}
           date={date}
+          specificDate={resolvingSlot.specificDate}
           defaultTime={resolvingSlot.startTime.slice(0, 5)}
           label={`${slotLabel(resolvingSlot)} — ${resolvingSlot.teacherName ?? ""}`}
           onClose={() => setResolvingSlot(null)}
@@ -789,11 +794,21 @@ function TeacherMarkModal({ date, onClose }: { date: string; onClose: () => void
   );
 }
 
-/* ─── O'qituvchi kelmagan darsni hal qilish: bekor qilish yoki ko'chirish ─── */
-function ResolveAbsenceModal({ scheduleSlotId, date, defaultTime, label, onClose }: {
-  scheduleSlotId: string; date: string; defaultTime: string; label: string; onClose: () => void;
+/* ─── O'qituvchi kelmagan darsni hal qilish: bekor qilish yoki ko'chirish ───
+ * Bir martalik (individual/diagnostika, specificDate bor) darslar uchun
+ * "istisno" (schedule_exceptions) YARATIB BO'LMAYDI — bu mexanizm faqat
+ * takrorlanuvchi haftalik shablonning bitta kunini bekor qilish uchun.
+ * Shu sabab bunday darslar uchun boshqa yo'l ishlatiladi: bekor qilish =
+ * slotni butunlay o'chirish, ko'chirish = slotning specificDate/startTime'ini
+ * to'g'ridan-to'g'ri yangilash. */
+function ResolveAbsenceModal({ scheduleSlotId, date, specificDate, defaultTime, label, onClose }: {
+  scheduleSlotId: string; date: string; specificDate: string | null; defaultTime: string; label: string; onClose: () => void;
 }) {
+  const isOneTime = !!specificDate;
   const createException = useCreateScheduleException();
+  const deleteSlot = useDeleteScheduleSlot();
+  const updateSlot = useUpdateScheduleSlot();
+  const isPending = createException.isPending || deleteSlot.isPending || updateSlot.isPending;
   const [action, setAction] = useState<"cancelled" | "rescheduled">("cancelled");
   const [newDate, setNewDate] = useState(date);
   const [newTime, setNewTime] = useState(defaultTime);
@@ -803,7 +818,13 @@ function ResolveAbsenceModal({ scheduleSlotId, date, defaultTime, label, onClose
   async function handleSubmit() {
     setErr("");
     try {
-      if (action === "cancelled") {
+      if (isOneTime) {
+        if (action === "cancelled") {
+          await deleteSlot.mutateAsync(scheduleSlotId);
+        } else {
+          await updateSlot.mutateAsync({ id: scheduleSlotId, specificDate: newDate, startTime: newTime });
+        }
+      } else if (action === "cancelled") {
         await createException.mutateAsync({ scheduleSlotId, date, kind: "cancelled", reason: reason || undefined });
       } else {
         await createException.mutateAsync({
@@ -813,7 +834,7 @@ function ResolveAbsenceModal({ scheduleSlotId, date, defaultTime, label, onClose
       }
       onClose();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Xatolik yuz berdi");
+      setErr(extractErrorMessage(e) || "Xatolik yuz berdi");
     }
   }
 
@@ -867,11 +888,19 @@ function ResolveAbsenceModal({ scheduleSlotId, date, defaultTime, label, onClose
           </div>
         )}
 
-        <div style={{ marginBottom: 18 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)" }}>SABAB</label>
-          <input className="inp" style={{ width: "100%" }} value={reason}
-            onChange={(e) => setReason(e.target.value)} />
-        </div>
+        {!isOneTime && (
+          <div style={{ marginBottom: 18 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)" }}>SABAB</label>
+            <input className="inp" style={{ width: "100%" }} value={reason}
+              onChange={(e) => setReason(e.target.value)} />
+          </div>
+        )}
+
+        {isOneTime && action === "cancelled" && (
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 18 }}>
+            Bu bir martalik dars (individual/diagnostika) — bekor qilinsa jadvaldan butunlay o'chiriladi.
+          </div>
+        )}
 
         {err && (
           <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{err}</div>
@@ -880,8 +909,8 @@ function ResolveAbsenceModal({ scheduleSlotId, date, defaultTime, label, onClose
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Keyinroq</button>
           <button className="btn primary" style={{ flex: 2, justifyContent: "center" }}
-            disabled={createException.isPending} onClick={handleSubmit}>
-            <Icon name="check" size={14} /> {createException.isPending ? "Saqlanmoqda..." : "Tasdiqlash"}
+            disabled={isPending} onClick={handleSubmit}>
+            <Icon name="check" size={14} /> {isPending ? "Saqlanmoqda..." : "Tasdiqlash"}
           </button>
         </div>
       </div>

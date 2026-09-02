@@ -63,6 +63,8 @@ export function useUpdateScheduleSlot() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
+      qc.invalidateQueries({ queryKey: ["unresolvedAbsences"] });
+      qc.invalidateQueries({ queryKey: ["daySlots"] });
     },
   });
 }
@@ -74,6 +76,8 @@ export function useDeleteScheduleSlot() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["scheduleOccurrences"] });
+      qc.invalidateQueries({ queryKey: ["unresolvedAbsences"] });
+      qc.invalidateQueries({ queryKey: ["daySlots"] });
     },
   });
 }
