@@ -161,15 +161,29 @@ export async function homeworkRoutes(app: FastifyInstance) {
     const teacherId = await getTeacherIdForUser(request.user.sub);
     if (!teacherId) return reply.code(403).send({ error: "Forbidden" });
 
+    // Frontend maydonni tozalaganda `null` yuboradi (bo'sh satr emas) — avvalgi
+    // `NULLIF($n, '')` triki faqat bo'sh satrni tozalardi, `null` kelganda esa
+    // "maydon berilmagan, o'zgartirilmasin" deb noto'g'ri talqin qilinardi va
+    // muddat/izohni tozalab saqlab bo'lmasdi (jim no-op). Endi "so'rovda maydon
+    // umuman bor-yo'qligi" tekshiriladi — shu bilan uch holat aniq ajratiladi:
+    // berilmagan (o'zgarmasin), null/bo'sh (tozalansin), qiymat bilan (yozilsin).
+    const descProvided = Object.prototype.hasOwnProperty.call(request.body as object, "description");
+    const dueProvided = Object.prototype.hasOwnProperty.call(request.body as object, "dueDate");
+
     const { rowCount } = await pool.query(
       `UPDATE homework h SET
          title = COALESCE($1, h.title),
-         description = CASE WHEN $2::text IS NOT NULL THEN NULLIF($2, '') ELSE h.description END,
-         due_date = CASE WHEN $3::text IS NOT NULL THEN NULLIF($3, '')::date ELSE h.due_date END,
-         xp_reward = COALESCE($4, h.xp_reward)
+         description = CASE WHEN $2 THEN $3 ELSE h.description END,
+         due_date = CASE WHEN $4 THEN $5::date ELSE h.due_date END,
+         xp_reward = COALESCE($6, h.xp_reward)
        FROM groups g
-       WHERE h.id = $5 AND h.group_id = g.id AND g.teacher_id = $6`,
-      [body.title ?? null, body.description ?? null, body.dueDate ?? null, body.xpReward ?? null, id, teacherId]
+       WHERE h.id = $7 AND h.group_id = g.id AND g.teacher_id = $8`,
+      [
+        body.title ?? null,
+        descProvided, body.description ?? null,
+        dueProvided, body.dueDate ?? null,
+        body.xpReward ?? null, id, teacherId,
+      ]
     );
     if (!rowCount) return reply.code(404).send({ error: "Not found" });
     return { ok: true };

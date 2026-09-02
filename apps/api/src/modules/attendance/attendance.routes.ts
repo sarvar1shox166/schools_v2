@@ -206,15 +206,21 @@ export async function attendanceRoutes(app: FastifyInstance) {
       const userId = request.user.sub;
       const { tenantId, role } = request.user;
 
+      // Slotga biriktirilgan ustozni endi HAR DOIM (faqat moderator uchun emas)
+      // so'raymiz — pastda shu ustozning "darsga keldi" yozuvini avtomatik
+      // to'ldirish uchun kerak (guruh davomati kim tomonidan belgilanayotgani
+      // — admin/operator ham bo'lishi mumkin — emas, slotdagi ustozning o'zi).
+      const slotRes = await pool.query(
+        `SELECT COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId"
+         FROM schedule_slots sl LEFT JOIN groups g ON g.id = sl.group_id
+         WHERE sl.id = $1 AND sl.tenant_id = $2`,
+        [body.scheduleSlotId, tenantId]
+      );
+      const slotTeacherId: string | undefined = slotRes.rows[0]?.teacherId;
+
       if (role === "moderator") {
-        const slotRes = await pool.query(
-          `SELECT COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId"
-           FROM schedule_slots sl LEFT JOIN groups g ON g.id = sl.group_id
-           WHERE sl.id = $1 AND sl.tenant_id = $2`,
-          [body.scheduleSlotId, tenantId]
-        );
         const ids = await assignedTeacherIds(tenantId!, userId);
-        if (!slotRes.rows[0] || !ids.includes(slotRes.rows[0].teacherId)) {
+        if (!slotTeacherId || !ids.includes(slotTeacherId)) {
           return reply.code(403).send({ error: "Forbidden" });
         }
       }
@@ -283,6 +289,27 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
           await bumpAttendanceStreak(client, r.studentId, body.date, r.status);
           await checkAchievements(client, r.studentId);
+        }
+
+        // O'quvchilar davomati belgilandi = dars haqiqatan o'tildi. Ustoz
+        // "Darsga kirish"ni bosmasdan to'g'ridan-to'g'ri shu (guruh) davomatni
+        // belgilagan bo'lishi mumkin ("Uy vazifalari" sahifasi orqali) — bu
+        // holda teacher_attendance yozuvi yo'q bo'lib, pastdagi
+        // recordLessonSession() maoshni jimgina yozmay qoladi. Shu sabab
+        // yozuvni shu yerda avtomatik to'ldiramiz: agar umuman yo'q bo'lsa
+        // yoki fon jarayoni (sweep, marked_by IS NULL) uni xato "kelmadi"
+        // deb qo'ygan bo'lsa — 'p'ga o'rnatamiz. Admin/moderator
+        // POST /attendance/teacher orqali QO'LDA qo'ygan "kelmadi"ga esa
+        // (marked_by to'ldirilgan) ASLO tegilmaydi.
+        if (slotTeacherId) {
+          await client.query(
+            `INSERT INTO teacher_attendance (tenant_id, teacher_id, schedule_slot_id, date, status, marked_by)
+             VALUES ($1, $2, $3, $4, 'p', NULL)
+             ON CONFLICT (teacher_id, schedule_slot_id, date)
+             DO UPDATE SET status = 'p'
+             WHERE teacher_attendance.status = 'a' AND teacher_attendance.marked_by IS NULL`,
+            [tenantId, slotTeacherId, body.scheduleSlotId, body.date]
+          );
         }
         await recordLessonSession(client, body.scheduleSlotId, body.date);
         await client.query("COMMIT");

@@ -216,7 +216,11 @@ function TodayGroupCard({ slot, studentsCount }: { slot: ScheduleSlot; studentsC
     setFinishError("");
     try {
       const results = await Promise.allSettled(students.map((s) => {
-        const amt = xpAmounts[s.id] ?? 0;
+        // Standart qiymat ekrandagi input bilan bir xil (15) bo'lishi kerak —
+        // aks holda "3. XP berish" tabiga to'g'ridan-to'g'ri (2-qadamni
+        // bosib o'tmasdan) kirilsa, inputda "15" ko'rinib turgan holda
+        // haqiqatda 0 yuborilar edi (o'qituvchiga xato ko'rinmasdi).
+        const amt = xpAmounts[s.id] ?? 15;
         return amt > 0
           ? awardXp.mutateAsync({ studentId: s.id, amount: amt, note: "Darsdagi faollik", scheduleSlotId: slot.id, date: lessonDate })
           : Promise.resolve();
