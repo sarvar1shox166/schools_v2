@@ -25,6 +25,7 @@ export interface StudentPackage {
   expiresAt: string | null;
   packageName: string;
   price: number;
+  lessonType: "group" | "individual";
 }
 
 /** Bitta pul harakati — majburiyatga kelgan to'lov. */

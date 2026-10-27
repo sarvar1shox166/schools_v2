@@ -1,14 +1,34 @@
 import type { PoolClient } from "pg";
 import { notifyStudent } from "../notifications/notify.js";
 
-/** Returns the id of the package the credit was consumed from, or null if the student has no active package. */
-export async function consumeLesson(client: PoolClient, studentId: string): Promise<string | null> {
+/** Paket turi (packages.lesson_type) — dars turiga mos paketdan yechish uchun. */
+export type PackageLessonType = "group" | "individual";
+
+/** Jadvaldagi dars turi (schedule_slots.lesson_type) → shu darsni qoplaydigan paket turi.
+ *  Diagnostika (bepul sinov darsi) hech qaysi paketdan yechilmaydi — null. */
+export function packageTypeForSlot(slotLessonType: string | null | undefined): PackageLessonType | null {
+  if (slotLessonType === "individual") return "individual";
+  if (slotLessonType === "diagnostika") return null;
+  return "group";
+}
+
+/**
+ * Returns the id of the package the credit was consumed from, or null if the student has no active
+ * package OF THE MATCHING TYPE. Individual lessons are charged only to individual packages and
+ * group lessons only to group packages — a student's group package is never silently spent on an
+ * individual lesson (or vice versa).
+ */
+export async function consumeLesson(
+  client: PoolClient, studentId: string, packageType: PackageLessonType = "group"
+): Promise<string | null> {
   const { rows } = await client.query(
-    `SELECT id, used_lessons, total_lessons FROM student_packages
-     WHERE student_id = $1 AND status = 'active' AND used_lessons < total_lessons
-       AND (expires_at IS NULL OR expires_at >= CURRENT_DATE)
-     ORDER BY purchased_at ASC LIMIT 1 FOR UPDATE`,
-    [studentId]
+    `SELECT sp.id, sp.used_lessons, sp.total_lessons FROM student_packages sp
+     JOIN packages p ON p.id = sp.package_id
+     WHERE sp.student_id = $1 AND sp.status = 'active' AND sp.used_lessons < sp.total_lessons
+       AND (sp.expires_at IS NULL OR sp.expires_at >= CURRENT_DATE)
+       AND p.lesson_type = $2
+     ORDER BY sp.purchased_at ASC LIMIT 1 FOR UPDATE OF sp`,
+    [studentId, packageType]
   );
   if (rows.length === 0) return null;
 
@@ -37,7 +57,12 @@ export async function consumeLesson(client: PoolClient, studentId: string): Prom
  * longer accept a refund — this heuristic can misattribute the credit if the student has
  * multiple packages, which is exactly the bug the exact-package path avoids.
  */
-export async function refundLesson(client: PoolClient, studentId: string, studentPackageId?: string | null) {
+export async function refundLesson(
+  client: PoolClient, studentId: string, studentPackageId?: string | null,
+  // Berilsa, fallback faqat shu turdagi paketga qaytaradi; null — fallback umuman yo'q
+  // (faqat aniq paketga qaytariladi). undefined — eski xatti-harakat (turga qaramasdan).
+  fallbackType?: PackageLessonType | null
+) {
   if (studentPackageId) {
     const { rows } = await client.query(
       `SELECT id, used_lessons FROM student_packages WHERE id = $1 AND used_lessons > 0 FOR UPDATE`,
@@ -52,11 +77,15 @@ export async function refundLesson(client: PoolClient, studentId: string, studen
     }
   }
 
+  if (fallbackType === null) return;
+
   const { rows } = await client.query(
-    `SELECT id, used_lessons, total_lessons, status FROM student_packages
-     WHERE student_id = $1 AND status IN ('active', 'finished') AND used_lessons > 0
-     ORDER BY purchased_at DESC LIMIT 1 FOR UPDATE`,
-    [studentId]
+    `SELECT sp.id, sp.used_lessons, sp.total_lessons, sp.status FROM student_packages sp
+     JOIN packages p ON p.id = sp.package_id
+     WHERE sp.student_id = $1 AND sp.status IN ('active', 'finished') AND sp.used_lessons > 0
+       AND ($2::text IS NULL OR p.lesson_type = $2)
+     ORDER BY sp.purchased_at DESC LIMIT 1 FOR UPDATE OF sp`,
+    [studentId, fallbackType ?? null]
   );
   if (rows.length === 0) return;
 

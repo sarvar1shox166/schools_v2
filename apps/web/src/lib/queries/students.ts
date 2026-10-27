@@ -41,6 +41,60 @@ export function useDeleteStudent() {
   });
 }
 
+export interface StudentDeletionImpact {
+  student: { id: string; fullName: string; phone: string; status: "yangi" | "faol" | "nofaol"; isActive: boolean };
+  counts: {
+    transactions: number;
+    paidTotal: number;
+    charges: number;
+    outstandingDebt: number;
+    packages: number;
+    activePackages: number;
+    remainingLessons: number;
+    attendanceRecords: number;
+    groups: { id: string; name: string }[];
+    lessonHistory: number;
+    futureEmptySlots: number;
+    homeworkCompletions: number;
+    achievements: number;
+    xp: number;
+  };
+  blockers: { code: string; message: string }[];
+  canDelete: boolean;
+}
+
+/** O'chirishdan oldin nima yo'qolishini/bloklanishini oladi (tasdiqlash oynasi uchun). */
+export function useStudentDeletionImpact(studentId: string) {
+  return useQuery({
+    queryKey: ["studentDeletionImpact", studentId],
+    queryFn: async () => (await api.get<StudentDeletionImpact>(`/students/${studentId}/deletion-impact`)).data,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+export function useDeactivateStudent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.post(`/students/${id}/deactivate`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["students"] });
+      qc.invalidateQueries({ queryKey: ["student"] });
+    },
+  });
+}
+
+export function useActivateStudent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.post(`/students/${id}/activate`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["students"] });
+      qc.invalidateQueries({ queryKey: ["student"] });
+    },
+  });
+}
+
 export function useGroups() {
   return useQuery({
     queryKey: ["groups"],

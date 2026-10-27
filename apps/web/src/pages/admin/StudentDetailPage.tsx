@@ -4,11 +4,12 @@ import { createPortal } from "react-dom";
 import { Avatar, Card, Icon, fmtSom } from "@chess-school/ui";
 import { DateField } from "../../components/DateField.js";
 import {
-  useStudent, useUpdateStudent, useDeleteStudent, useSetStudentGroup,
+  useStudent, useUpdateStudent, useSetStudentGroup,
   useResetStudentPassword, useStudentPackages, useAssignPackage, useUpdateStudentPackage,
   useGroups, usePackages, useUploadImage,
   type Package, type StudentDetail, type StudentPackage,
 } from "../../lib/queries.js";
+import { DeleteStudentModal } from "../../components/DeleteStudentModal.js";
 
 const LEVELS = ["Boshlang'ich", "1-razryad", "2-razryad", "3-razryad", "4-razryad", "Nomzod"];
 const METHODS = [
@@ -40,7 +41,6 @@ export default function StudentDetailPage() {
   const { data: packages = [] } = usePackages();
   const updateStudent = useUpdateStudent();
   const setStudentGroup = useSetStudentGroup();
-  const deleteStudent = useDeleteStudent();
   const resetPassword = useResetStudentPassword();
   const assignPackage = useAssignPackage();
   const updateStudentPackage = useUpdateStudentPackage();
@@ -163,12 +163,6 @@ export default function StudentDetailPage() {
       status: editDraft.status,
     });
     setEditingPkg(null);
-  }
-
-  async function handleDelete() {
-    if (!id) return;
-    await deleteStudent.mutateAsync(id);
-    navigate("/admin/students");
   }
 
   return (
@@ -416,6 +410,29 @@ export default function StudentDetailPage() {
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {/* Dars krediti tur bo'yicha: individual dars faqat individual paketdan, guruh darsi faqat guruh paketidan yechiladi */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {(["group", "individual"] as const).map((t) => {
+                    const left = pkgHistory
+                      .filter((p) => p.lessonType === t && p.status === "active" && (!p.expiresAt || new Date(p.expiresAt) >= new Date(new Date().toDateString())))
+                      .reduce((sum, p) => sum + Math.max(0, p.totalLessons - p.usedLessons), 0);
+                    return (
+                      <div key={t} style={{
+                        flex: "1 1 160px", padding: "10px 12px", borderRadius: 10, fontSize: 12.5,
+                        background: left > 0 ? "rgba(34,197,94,.10)" : "rgba(245,158,11,.12)",
+                        border: `1px solid ${left > 0 ? "rgba(34,197,94,.35)" : "rgba(245,158,11,.4)"}`,
+                      }}>
+                        <div style={{ fontWeight: 800 }}>{t === "group" ? "Guruh darslari" : "Individual darslar"}</div>
+                        <div style={{ marginTop: 2, color: "var(--text-dim)" }}>
+                          {left > 0 ? `${left} ta dars krediti qolgan` : "Faol paket yo'q — bu turdagi darslar yechilmaydi"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
+                  Individual dars faqat individual paketdan, guruh darsi faqat guruh paketidan yechiladi. Diagnostika bepul.
+                </div>
                 {pkgHistory.map((pkg) => {
                   const pct = Math.round((pkg.usedLessons / pkg.totalLessons) * 100);
                   const statusColor = pkg.status === "active" ? "#22c55e" : pkg.status === "finished" ? "#f59e0b" : "#ef4444";
@@ -426,7 +443,16 @@ export default function StudentDetailPage() {
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", rowGap: 8, marginBottom: 10 }}>
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: 14 }}>{pkg.packageName}</div>
+                          <div style={{ fontWeight: 700, fontSize: 14 }}>
+                            {pkg.packageName}
+                            <span style={{
+                              marginLeft: 8, padding: "1px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                              background: pkg.lessonType === "individual" ? "#ede9fe" : "#d1fae5",
+                              color: pkg.lessonType === "individual" ? "#7c3aed" : "#059669",
+                            }}>
+                              {pkg.lessonType === "individual" ? "Individual" : "Guruh"}
+                            </span>
+                          </div>
                           <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
                             {new Date(pkg.purchasedAt).toLocaleDateString("uz-Latn-UZ")}
                             {pkg.expiresAt && ` — ${new Date(pkg.expiresAt).toLocaleDateString("uz-Latn-UZ")}`}
@@ -631,30 +657,13 @@ export default function StudentDetailPage() {
       )}
 
       {/* ── Delete confirm ── */}
-      {showDeleteConfirm && (
-        <Overlay onClose={() => setShowDeleteConfirm(false)}>
-          <ModalBox width={420}>
-            <ModalHead title="O'chirishni tasdiqlash" onClose={() => setShowDeleteConfirm(false)} />
-            <div style={{ padding: "8px 24px 24px", textAlign: "center" }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>{student.fullName}</div>
-              <div style={{ fontSize: 13.5, color: "var(--text-faint)", marginBottom: 24 }}>
-                Bu o'quvchini o'chirsangiz barcha ma'lumotlari (davomat, paketlar) ham o'chadi.
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => setShowDeleteConfirm(false)}>Bekor</button>
-                <button style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  height: 42, borderRadius: 10, border: "none", cursor: "pointer",
-                  background: "#ef4444", color: "#fff", fontWeight: 700, fontSize: 14,
-                  opacity: deleteStudent.isPending ? 0.7 : 1,
-                }} disabled={deleteStudent.isPending} onClick={handleDelete}>
-                  <Icon name="trash" size={14} /> {deleteStudent.isPending ? "..." : "O'chirish"}
-                </button>
-              </div>
-            </div>
-          </ModalBox>
-        </Overlay>
+      {showDeleteConfirm && id && (
+        <DeleteStudentModal
+          studentId={id}
+          studentName={student.fullName}
+          onClose={() => setShowDeleteConfirm(false)}
+          onDone={(result) => { if (result === "deleted") navigate("/admin/students"); }}
+        />
       )}
     </div>
   );

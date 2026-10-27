@@ -176,7 +176,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const { rows } = await pool.query(
       `SELECT sp.id, sp.total_lessons AS "totalLessons", sp.used_lessons AS "usedLessons",
               sp.status, sp.purchased_at AS "purchasedAt", sp.expires_at AS "expiresAt",
-              p.name AS "packageName", p.price
+              p.name AS "packageName", p.price, p.lesson_type AS "lessonType"
        FROM student_packages sp
        JOIN packages p ON p.id = sp.package_id
        JOIN students s ON s.id = sp.student_id

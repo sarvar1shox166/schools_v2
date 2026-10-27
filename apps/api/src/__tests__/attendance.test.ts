@@ -229,3 +229,108 @@ describe("POST /attendance auto-credits teacher_attendance for payroll", () => {
     expect(ls.rows.length).toBe(1);
   });
 });
+
+/** Dars krediti dars turiga mos paketdan yechilishini tekshiradi: individual dars
+ *  guruh paketidan YECHILMASLIGI (va aksincha), diagnostika esa bepul bo'lishi kerak. */
+describe("POST /attendance charges the package matching the lesson type", () => {
+  let app: FastifyInstance;
+  let tenant: TestTenant;
+  let groupPackageId: string;
+  let individualPackageId: string;
+  let groupSlotId: string;
+  let individualSlotId: string;
+  let diagnosticSlotId: string;
+
+  async function usedLessons(studentPackageId: string): Promise<number> {
+    const { rows } = await pool.query(`SELECT used_lessons FROM student_packages WHERE id = $1`, [studentPackageId]);
+    return rows[0].used_lessons;
+  }
+
+  async function mark(date: string, slotId: string, status: "p" | "a" | "l" | "ae") {
+    const token = await loginAs(app, tenant.admin.phone);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/attendance",
+      headers: authHeader(token),
+      payload: { scheduleSlotId: slotId, date, records: [{ studentId: tenant.studentId, status }] },
+    });
+    expect(res.statusCode).toBe(200);
+  }
+
+  async function addPackage(type: "group" | "individual", lessons: number): Promise<string> {
+    const pkg = await pool.query(
+      `INSERT INTO packages (tenant_id, name, lessons_count, price, lesson_type) VALUES ($1, $2, $3, 100000, $4) RETURNING id`,
+      [tenant.tenantId, `${type} pkg`, lessons, type]
+    );
+    const sp = await pool.query(
+      `INSERT INTO student_packages (student_id, package_id, total_lessons, used_lessons, status, purchased_at)
+       VALUES ($1, $2, $3, 0, 'active', now()) RETURNING id`,
+      [tenant.studentId, pkg.rows[0].id, lessons]
+    );
+    return sp.rows[0].id;
+  }
+
+  async function addSlot(lessonType: string, withGroup: boolean): Promise<string> {
+    const res = await pool.query(
+      `INSERT INTO schedule_slots (tenant_id, group_id, teacher_id, student_id, lesson_type, custom_name, day_of_week, start_time, duration_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, 1, '10:00', 60) RETURNING id`,
+      [tenant.tenantId, withGroup ? tenant.groupId : null, tenant.teacherId, withGroup ? null : tenant.studentId, lessonType, withGroup ? null : `${lessonType} test`]
+    );
+    return res.rows[0].id;
+  }
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    tenant = await createTestTenant("att-type");
+    groupPackageId = await addPackage("group", 8);
+    individualPackageId = await addPackage("individual", 4);
+    groupSlotId = await addSlot("guruh", true);
+    individualSlotId = await addSlot("individual", false);
+    diagnosticSlotId = await addSlot("diagnostika", false);
+  });
+
+  afterAll(async () => {
+    await destroyTestTenant(tenant.tenantId);
+    await app.close();
+  });
+
+  it("charges an individual lesson to the individual package, not the group package", async () => {
+    await mark("2099-04-01", individualSlotId, "p");
+    expect(await usedLessons(individualPackageId)).toBe(1);
+    expect(await usedLessons(groupPackageId)).toBe(0);
+  });
+
+  it("charges a group lesson to the group package, not the individual package", async () => {
+    await mark("2099-04-02", groupSlotId, "p");
+    expect(await usedLessons(groupPackageId)).toBe(1);
+    expect(await usedLessons(individualPackageId)).toBe(1);
+  });
+
+  it("never charges a diagnostic (free trial) lesson", async () => {
+    await mark("2099-04-03", diagnosticSlotId, "p");
+    expect(await usedLessons(groupPackageId)).toBe(1);
+    expect(await usedLessons(individualPackageId)).toBe(1);
+  });
+
+  it("refunds an individual lesson back to the individual package", async () => {
+    await mark("2099-04-01", individualSlotId, "ae");
+    expect(await usedLessons(individualPackageId)).toBe(0);
+    expect(await usedLessons(groupPackageId)).toBe(1);
+  });
+
+  it("does not touch the group package when the student has no individual package", async () => {
+    await pool.query(`UPDATE student_packages SET status = 'expired' WHERE id = $1`, [individualPackageId]);
+    await mark("2099-04-05", individualSlotId, "p");
+    expect(await usedLessons(groupPackageId)).toBe(1);
+
+    // Paketsiz belgilangan darsni keyin "sababli" qilinsa, guruh paketiga noto'g'ri qaytarilmasligi kerak.
+    await mark("2099-04-05", individualSlotId, "ae");
+    expect(await usedLessons(groupPackageId)).toBe(1);
+
+    const notif = await pool.query(
+      `SELECT body FROM notifications WHERE tenant_id = $1 AND type = 'no_package'`,
+      [tenant.tenantId]
+    );
+    expect(notif.rows.some((n) => String(n.body).includes("individual"))).toBe(true);
+  });
+});

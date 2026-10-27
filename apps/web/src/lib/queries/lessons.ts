@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api.js";
-
+import { showWarning, showInfo } from "../errorToast.js";
 
 export function useMarkAttendance() {
   const qc = useQueryClient();
@@ -9,8 +9,24 @@ export function useMarkAttendance() {
       scheduleSlotId: string;
       date: string;
       records: { studentId: string; status: "p" | "a" | "l" | "ae"; reason?: string }[];
-    }) => (await api.post("/attendance", payload)).data,
-    onSuccess: (_data, vars) => {
+    }) =>
+      (await api.post<{
+        ok: boolean;
+        warnings?: { code: "no_package"; studentId: string; studentName: string; packageType: "group" | "individual" }[];
+        notice?: "free_diagnostic" | null;
+      }>("/attendance", payload)).data,
+    onSuccess: (data, vars) => {
+      // Dars krediti yechilmagan o'quvchilar haqida belgilovchiga darhol ogohlantirish.
+      for (const w of data.warnings ?? []) {
+        showWarning(
+          w.packageType === "individual"
+            ? `${w.studentName}: faol INDIVIDUAL paket yo'q — dars hech qaysi paketdan yechilmadi (guruh paketiga tegilmadi). Admin ogohlantirildi; individual paket sotilishi kerak.`
+            : `${w.studentName}: faol paketi yo'q — dars kreditdan yechilmadi. Admin ogohlantirildi.`
+        );
+      }
+      if (data.notice === "free_diagnostic") {
+        showInfo("Diagnostika — bepul sinov darsi: davomat saqlandi, hech qaysi paketdan yechilmadi.");
+      }
       qc.invalidateQueries({ queryKey: ["attendance", vars.scheduleSlotId, vars.date] });
       qc.invalidateQueries({ queryKey: ["attendanceStats"] });
     },

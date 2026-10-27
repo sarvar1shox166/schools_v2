@@ -5,10 +5,10 @@ import { Avatar, Card, Icon } from "@chess-school/ui";
 import {
   useStudents,
   useCreateStudent,
-  useDeleteStudent,
   useUpdateStudent,
   useGroups,
 } from "../../lib/queries.js";
+import { DeleteStudentModal } from "../../components/DeleteStudentModal.js";
 
 /* ─── Types ─── */
 type Student = {
@@ -64,6 +64,9 @@ export default function StudentsPage() {
   const { data: students = [], isLoading } = useStudents();
   const [tab, setTab] = useState<string>(ALL_TAB);
   const [q, setQ] = useState("");
+  // Nofaol o'quvchilar (kira olmaydi, tarixi saqlangan) odatda yashirin — kerak bo'lsa ko'rsatiladi.
+  const [showInactive, setShowInactive] = useState(false);
+  const inactiveCount = (students as Student[]).filter((s) => s.status === "nofaol").length;
 
   type Modal =
     | { mode: "add" }
@@ -87,6 +90,7 @@ export default function StudentsPage() {
 
   const filtered = useMemo(() => {
     let rows = students as Student[];
+    if (!showInactive) rows = rows.filter((s) => s.status !== "nofaol");
     if (tab !== ALL_TAB) rows = rows.filter((s) => s.groups.some((g) => g.teacherId === tab));
     if (q) {
       const lq = q.toLowerCase();
@@ -97,7 +101,7 @@ export default function StudentsPage() {
       );
     }
     return rows;
-  }, [students, tab, q]);
+  }, [students, tab, q, showInactive]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -105,9 +109,20 @@ export default function StudentsPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>
-          O'quvchilar — {(students as Student[]).length} ta
+          O'quvchilar — {(students as Student[]).length - inactiveCount} ta
+          {inactiveCount > 0 && (
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-faint)", marginLeft: 8 }}>
+              (+ {inactiveCount} ta nofaol)
+            </span>
+          )}
         </h2>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {inactiveCount > 0 && (
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--text-dim)", cursor: "pointer" }}>
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+              Nofaollarni ko'rsatish
+            </label>
+          )}
           <button className="btn primary" onClick={() => navigate("/admin/students/new")}>
             <Icon name="plus" size={15} /> Qo'shish
           </button>
@@ -335,8 +350,9 @@ export default function StudentsPage() {
         />
       )}
       {modal?.mode === "delete" && (
-        <DeleteModal
-          student={modal.student}
+        <DeleteStudentModal
+          studentId={modal.student.id}
+          studentName={modal.student.fullName}
           onClose={() => setModal(null)}
         />
       )}
@@ -524,72 +540,6 @@ function StudentModal({ mode, student, onClose, onCreated }: StudentModalProps) 
             <Icon name="check" size={15} /> {isPending ? "Saqlanmoqda..." : isAdd ? "Qo'shish" : "Saqlash"}
           </button>
         </div>
-      </div>
-    </ModalShell>
-  );
-}
-
-/* ─── Delete confirmation modal ─── */
-function DeleteModal({ student, onClose }: {
-  student: Student;
-  onClose: () => void;
-}) {
-  const deleteStudent = useDeleteStudent();
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleConfirm() {
-    setError(null);
-    try {
-      await deleteStudent.mutateAsync(student.id);
-      onClose();
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg ?? "Xatolik yuz berdi");
-    }
-  }
-
-  return (
-    <ModalShell onClose={onClose} width={420}>
-      <div style={{ padding: "22px 24px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontWeight: 800, fontSize: 17 }}>O'chirishni tasdiqlash</div>
-        <button className="iconbtn" style={{ width: 32, height: 32 }} onClick={onClose}>
-          <Icon name="x" size={16} />
-        </button>
-      </div>
-
-      <div style={{ padding: "10px 24px 32px", textAlign: "center" }}>
-        <div style={{
-          width: 72, height: 72, margin: "0 auto 18px",
-          borderRadius: 18, background: "var(--surface-3)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Icon name="trash" size={32} style={{ color: "var(--text-faint)" }} />
-        </div>
-        <div style={{ fontWeight: 750, fontSize: 16, marginBottom: 8 }}>{student.fullName}</div>
-        <div style={{ fontSize: 13.5, color: "var(--text-faint)" }}>
-          Haqiqatan ham bu o'quvchini o'chirmoqchimisiz?
-        </div>
-        {error && <div style={{ color: "#ef4444", fontSize: 13, marginTop: 12, fontWeight: 600 }}>{error}</div>}
-      </div>
-
-      <div style={{ height: 1, background: "var(--border)" }} />
-
-      <div style={{ display: "flex", gap: 12, padding: "18px 24px" }}>
-        <button className="btn" style={{ flex: 1, justifyContent: "center", fontWeight: 700 }} onClick={onClose}>
-          Bekor
-        </button>
-        <button
-          style={{
-            flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            padding: "0 20px", height: 42, borderRadius: 10,
-            background: "#ef4444", color: "#fff", fontWeight: 700, fontSize: 14,
-            border: "none", cursor: "pointer", opacity: deleteStudent.isPending ? 0.7 : 1,
-          }}
-          onClick={handleConfirm}
-          disabled={deleteStudent.isPending}
-        >
-          <Icon name="trash" size={14} /> {deleteStudent.isPending ? "O'chirilmoqda..." : "O'chirish"}
-        </button>
       </div>
     </ModalShell>
   );

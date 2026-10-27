@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 
+type ToastKind = "error" | "warning" | "info";
+
 interface ErrorToastItem {
   id: number;
   message: string;
+  kind: ToastKind;
 }
 
 let toasts: ErrorToastItem[] = [];
@@ -12,14 +15,27 @@ function emit() {
   for (const l of listeners) l();
 }
 
-export function showError(message: string) {
+function push(message: string, kind: ToastKind, ttl: number) {
   const id = nextId++;
-  toasts = [...toasts, { id, message }];
+  toasts = [...toasts, { id, message, kind }];
   emit();
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);
     emit();
-  }, 4500);
+  }, ttl);
+}
+
+export function showError(message: string) {
+  push(message, "error", 4500);
+}
+
+/** Muvaffaqiyatli bo'lgan, lekin e'tibor talab qiladigan holat (masalan, paket yo'qligi) — uzoqroq turadi. */
+export function showWarning(message: string) {
+  push(message, "warning", 9000);
+}
+
+export function showInfo(message: string) {
+  push(message, "info", 6000);
 }
 
 export function useErrorToasts() {

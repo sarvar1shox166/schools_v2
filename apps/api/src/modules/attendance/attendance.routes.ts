@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { pool } from "../../db/pool.js";
-import { consumeLesson, refundLesson } from "../payments/lessons.js";
+import { consumeLesson, refundLesson, packageTypeForSlot } from "../payments/lessons.js";
 import { createNotification } from "../notifications/notify.js";
 import { recordLessonSession } from "../payroll/lesson-sessions.js";
 import { assignedTeacherIds } from "../../lib/moderator.js";
@@ -211,12 +211,15 @@ export async function attendanceRoutes(app: FastifyInstance) {
       // to'ldirish uchun kerak (guruh davomati kim tomonidan belgilanayotgani
       // — admin/operator ham bo'lishi mumkin — emas, slotdagi ustozning o'zi).
       const slotRes = await pool.query(
-        `SELECT COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId"
+        `SELECT COALESCE(sl.teacher_id, g.teacher_id) AS "teacherId", sl.lesson_type AS "lessonType"
          FROM schedule_slots sl LEFT JOIN groups g ON g.id = sl.group_id
          WHERE sl.id = $1 AND sl.tenant_id = $2`,
         [body.scheduleSlotId, tenantId]
       );
       const slotTeacherId: string | undefined = slotRes.rows[0]?.teacherId;
+      // Dars turiga mos paket: individual -> individual paket, guruh -> guruh paketi,
+      // diagnostika -> null (bepul sinov darsi, hech qaysi paketdan yechilmaydi).
+      const slotPackageType = packageTypeForSlot(slotRes.rows[0]?.lessonType);
 
       if (role === "moderator") {
         const ids = await assignedTeacherIds(tenantId!, userId);
@@ -224,6 +227,10 @@ export async function attendanceRoutes(app: FastifyInstance) {
           return reply.code(403).send({ error: "Forbidden" });
         }
       }
+
+      // Davomat belgilagan kishiga ko'rsatiladigan ogohlantirishlar (adminlarga bildirishnoma
+      // alohida ketadi): dars krediti yechilmagan o'quvchilar.
+      const warnings: { code: "no_package"; studentId: string; studentName: string; packageType: "group" | "individual" }[] = [];
 
       const client = await pool.connect();
       try {
@@ -236,19 +243,21 @@ export async function attendanceRoutes(app: FastifyInstance) {
           ]);
 
           const existing = await client.query(
-            `SELECT status, student_package_id AS "studentPackageId" FROM attendance_records
+            `SELECT status, lesson_counted AS "lessonCounted", student_package_id AS "studentPackageId"
+             FROM attendance_records
              WHERE student_id = $1 AND schedule_slot_id = $2 AND date = $3`,
             [r.studentId, body.scheduleSlotId, body.date]
           );
-          const oldStatus = existing.rows[0]?.status as string | undefined;
           const oldPackageId = existing.rows[0]?.studentPackageId as string | null | undefined;
-          const oldCounted = oldStatus ? isCounted(oldStatus) : false;
-          const newCounted = isCounted(r.status);
+          // Saqlangan lesson_counted — haqiqatda yechilgan-yechilmaganini aniq aytadi
+          // (diagnostika kabi bepul darslar status 'p' bo'lsa ham hisoblanmaydi).
+          const oldCounted = existing.rows[0] ? Boolean(existing.rows[0].lessonCounted) : false;
+          const newCounted = isCounted(r.status) && slotPackageType !== null;
 
           let newPackageId: string | null = oldCounted ? (oldPackageId ?? null) : null;
 
           if (!oldCounted && newCounted) {
-            newPackageId = await consumeLesson(client, r.studentId);
+            newPackageId = await consumeLesson(client, r.studentId, slotPackageType!);
             if (!newPackageId && tenantId) {
               // Paket yo'q — adminlarga ogohlantirish
               const studentRes = await client.query(
@@ -256,6 +265,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
                 [r.studentId]
               );
               const studentName = studentRes.rows[0]?.full_name ?? "O'quvchi";
+              warnings.push({ code: "no_package", studentId: r.studentId, studentName, packageType: slotPackageType! });
               const adminRes = await client.query(
                 `SELECT id FROM users WHERE tenant_id = $1 AND role IN ('admin','super_admin')`,
                 [tenantId]
@@ -267,12 +277,16 @@ export async function attendanceRoutes(app: FastifyInstance) {
                   type: "no_package",
                   icon: "alert",
                   title: "To'lov talab qilinadi",
-                  body: `${studentName} davomatga belgilandi, lekin faol paketi yo'q. To'lovni rasmiylashtiring.`,
+                  body: slotPackageType === "individual"
+                    ? `${studentName} individual darsga belgilandi, lekin faol individual paketi yo'q. Individual paket sotib, to'lovni rasmiylashtiring.`
+                    : `${studentName} davomatga belgilandi, lekin faol paketi yo'q. To'lovni rasmiylashtiring.`,
                 });
               }
             }
           } else if (oldCounted && !newCounted) {
-            await refundLesson(client, r.studentId, oldPackageId);
+            // Aniq paketga qaytariladi; paket noma'lum bo'lsa (eski yozuv) — faqat shu
+            // dars turidagi paketga, diagnostikada esa umuman fallback yo'q.
+            await refundLesson(client, r.studentId, oldPackageId, slotPackageType);
             newPackageId = null;
           }
 
@@ -320,7 +334,12 @@ export async function attendanceRoutes(app: FastifyInstance) {
         client.release();
       }
 
-      return { ok: true };
+      return {
+        ok: true,
+        warnings,
+        // Diagnostika — bepul sinov darsi: davomat belgilandi, lekin hech qaysi paketdan yechilmadi.
+        notice: slotPackageType === null ? "free_diagnostic" : null,
+      };
     }
   );
 
